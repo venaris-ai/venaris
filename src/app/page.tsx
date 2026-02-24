@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
 
@@ -16,6 +17,12 @@ type AssetRow = {
   relevant: boolean;
 };
 
+type CameraRow = {
+  id: string;
+  name: string;
+  location_name: string | null;
+};
+
 export default function Home() {
   const [cameraId, setCameraId] = useState("");
   const [file, setFile] = useState<File | null>(null);
@@ -23,6 +30,7 @@ export default function Home() {
   const [urls, setUrls] = useState<Record<string, string>>({});
   const [msg, setMsg] = useState("");
   const [onlyRelevant, setOnlyRelevant] = useState(false);
+  const [cameras, setCameras] = useState<CameraRow[]>([]);
 
   async function loadUrls(items: AssetRow[]) {
     const next: Record<string, string> = {};
@@ -40,6 +48,26 @@ export default function Home() {
     }
 
     setUrls(next);
+  }
+
+  async function loadCameras() {
+    const { data, error } = await supabase
+      .from("cameras")
+      .select("id, name, location_name")
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      setMsg(error.message);
+      return;
+    }
+
+    const list = (data ?? []) as CameraRow[];
+    setCameras(list);
+
+    // Default selection if none selected yet
+    if (!cameraId && list.length > 0) {
+      setCameraId(list[0].id);
+    }
   }
 
   async function loadAssets() {
@@ -65,15 +93,23 @@ export default function Home() {
     await loadUrls(list);
   }
 
+  // Load cameras once on mount
+  useEffect(() => {
+    loadCameras();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Reload assets when filter changes
   useEffect(() => {
     loadAssets();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [onlyRelevant]);
 
   async function upload() {
     setMsg("");
 
     if (!file || !cameraId) {
-      setMsg("Bitte file + cameraId setzen.");
+      setMsg("Bitte file + Camera auswählen.");
       return;
     }
 
@@ -118,18 +154,38 @@ export default function Home() {
   return (
     <main className="min-h-screen p-8">
       <div className="mx-auto max-w-3xl space-y-6">
-        <h1 className="text-3xl font-semibold">
-          venaris – Upload Test
-        </h1>
+        {/* Header */}
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-semibold">Venaris</h1>
+            <p className="text-sm text-gray-600">Debug Upload & Recent Assets</p>
+          </div>
+
+          <Link href="/cameras" className="rounded-md border px-3 py-2 text-sm">
+            Cameras →
+          </Link>
+        </div>
 
         {/* Upload Box */}
         <div className="rounded-xl border p-4 space-y-3">
-          <input
-            className="w-full rounded-md border p-2"
-            placeholder="cameraId (UUID)"
-            value={cameraId}
-            onChange={(e) => setCameraId(e.target.value)}
-          />
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Camera</label>
+            <select
+              className="w-full rounded-md border p-2"
+              value={cameraId}
+              onChange={(e) => setCameraId(e.target.value)}
+            >
+              {cameras.length === 0 && (
+                <option value="">(keine Kameras)</option>
+              )}
+              {cameras.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                  {c.location_name ? ` – ${c.location_name}` : ""}
+                </option>
+              ))}
+            </select>
+          </div>
 
           <label className="inline-block cursor-pointer rounded-md border px-4 py-2">
             JPG auswählen
@@ -137,16 +193,12 @@ export default function Home() {
               className="hidden"
               type="file"
               accept="image/*"
-              onChange={(e) =>
-                setFile(e.target.files?.[0] ?? null)
-              }
+              onChange={(e) => setFile(e.target.files?.[0] ?? null)}
             />
           </label>
 
           {file && (
-            <div className="text-sm text-gray-700">
-              Ausgewählt: {file.name}
-            </div>
+            <div className="text-sm text-gray-700">Ausgewählt: {file.name}</div>
           )}
 
           <button
@@ -162,18 +214,14 @@ export default function Home() {
         {/* Assets */}
         <div className="rounded-xl border p-4">
           <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-xl font-medium">
-              Assets
-            </h2>
+            <h2 className="text-xl font-medium">Assets</h2>
 
             <div className="flex items-center gap-4">
               <label className="flex items-center gap-2 text-sm">
                 <input
                   type="checkbox"
                   checked={onlyRelevant}
-                  onChange={(e) =>
-                    setOnlyRelevant(e.target.checked)
-                  }
+                  onChange={(e) => setOnlyRelevant(e.target.checked)}
                 />
                 Nur relevante anzeigen
               </label>
@@ -189,41 +237,25 @@ export default function Home() {
 
           <ul className="space-y-4 text-sm">
             {assets.map((a) => (
-              <li
-                key={a.id}
-                className="rounded-md border p-3"
-              >
-                <div className="font-mono text-xs text-gray-500">
-                  {a.id}
-                </div>
+              <li key={a.id} className="rounded-md border p-3">
+                <div className="font-mono text-xs text-gray-500">{a.id}</div>
 
-                <div className="break-all">
-                  {a.storage_path}
-                </div>
+                <div className="break-all">{a.storage_path}</div>
 
                 <div className="text-gray-600">
-                  {a.status} ·{" "}
-                  {new Date(
-                    a.created_at
-                  ).toLocaleString()}
+                  {a.status} · {new Date(a.created_at).toLocaleString()}
                 </div>
 
                 <div className="mt-2 flex items-center gap-3">
                   <span className="text-xs">
-                    {a.relevant
-                      ? "✅ relevant"
-                      : "🚫 irrelevant"}
+                    {a.relevant ? "✅ relevant" : "🚫 irrelevant"}
                   </span>
 
                   <button
-                    onClick={() =>
-                      toggleRelevant(a)
-                    }
+                    onClick={() => toggleRelevant(a)}
                     className="rounded-md border px-3 py-1 text-xs"
                   >
-                    {a.relevant
-                      ? "Irrelevant"
-                      : "Relevant"}
+                    {a.relevant ? "Irrelevant" : "Relevant"}
                   </button>
                 </div>
 
@@ -238,9 +270,7 @@ export default function Home() {
             ))}
 
             {assets.length === 0 && (
-              <li className="text-gray-600">
-                Noch keine Uploads.
-              </li>
+              <li className="text-gray-600">Noch keine Uploads.</li>
             )}
           </ul>
         </div>

@@ -61,15 +61,16 @@ export async function POST(req: Request) {
 
     // 3) Create batch
     const { data: batch, error: batchError } = await supabase
-      .from("ingest_batches")
-      .insert({
-        camera_id: camera.id,
-        source: "token-ingest",
-        file_count: files.length,
-        status: "processing",
-      })
-      .select()
-      .single();
+  .from("ingest_batches")
+  .insert({
+    camera_id: camera.id,
+    source: "token-ingest",
+    file_count: files.length,
+    status: "processing",
+    meta: metadata ?? null,
+  })
+  .select()
+  .single();
 
     if (batchError || !batch?.id) {
       return NextResponse.json({ error: batchError?.message ?? "failed to create batch" }, { status: 500 });

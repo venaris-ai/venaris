@@ -4,6 +4,24 @@ Last updated: 2026-02-24
 
 ---
 
+## Home Refactor + Ingest Metadata
+
+### Changes
+- Home page refactored (clean header, camera dropdown instead of UUID input)
+- Duplicate header/link issue fixed
+- ingest_batches.meta (jsonb) added
+- Ingest API stores metadata in batch
+- is_relevant column removed from assets
+
+### System Status
+- Token ingest working
+- Batch tracking working
+- Dedup working
+- Camera health working
+- Relevance toggle working
+- Storage verified
+
+
 ## 1️⃣ Infrastructure
 
 ### Repository
