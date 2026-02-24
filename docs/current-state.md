@@ -52,6 +52,7 @@ Last updated: 2026-02-24
 - status
 - relevant
 - created_at
+- ingest_batch_id
 
 ### detections
 - id
@@ -92,6 +93,13 @@ Last updated: 2026-02-24
 
 ### POST /api/asset-relevant
 - Updates `assets.relevant`
+
+### POST /api/ingest
+- Auth via `x-ingest-token`
+- Supports single and multiple file uploads
+- Creates ingest batch
+- Deduplicates via sha256
+- Updates camera `last_seen_at`
 
 ---
 
