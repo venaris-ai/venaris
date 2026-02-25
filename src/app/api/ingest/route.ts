@@ -39,21 +39,18 @@ export async function POST(req: Request) {
     // 2) Parse multipart form
     const formData = await req.formData();
 
-    // Support single: file
     const single = formData.get("file");
-    // Support multi: files (can be repeated or files[])
     const multi = formData.getAll("files");
     const multiAlt = formData.getAll("files[]");
-    const filesRaw = [
-      ...(single ? [single] : []),
-      ...multi,
-      ...multiAlt,
-    ].filter(Boolean);
+    const filesRaw = ([...(single ? [single] : []), ...multi, ...multiAlt] as any[]).filter(Boolean);
 
     const files = filesRaw.filter((v): v is File => v instanceof File);
 
     if (files.length === 0) {
-      return NextResponse.json({ error: "no files provided (file or files/files[])" }, { status: 400 });
+      return NextResponse.json(
+        { error: "no files provided (file or files/files[])" },
+        { status: 400 }
+      );
     }
 
     const metadata = safeJsonParse(formData.get("metadata") as string | null);
@@ -61,23 +58,29 @@ export async function POST(req: Request) {
 
     // 3) Create batch
     const { data: batch, error: batchError } = await supabase
-  .from("ingest_batches")
-  .insert({
-    camera_id: camera.id,
-    source: "token-ingest",
-    file_count: files.length,
-    status: "processing",
-    meta: metadata ?? null,
-  })
-  .select()
-  .single();
+      .from("ingest_batches")
+      .insert({
+        camera_id: camera.id,
+        source: "token-ingest",
+        file_count: files.length,
+        status: "processing",
+        meta: metadata ?? null,
+      })
+      .select()
+      .single();
 
     if (batchError || !batch?.id) {
-      return NextResponse.json({ error: batchError?.message ?? "failed to create batch" }, { status: 500 });
+      return NextResponse.json(
+        { error: batchError?.message ?? "failed to create batch" },
+        { status: 500 }
+      );
     }
 
     let accepted = 0;
     let skippedDuplicates = 0;
+
+    // Sammle Hinweise, ohne am Ende alles zu überschreiben
+    const warnings: string[] = [];
 
     // 4) Process each file
     for (const file of files) {
@@ -93,10 +96,27 @@ export async function POST(req: Request) {
         .eq("file_hash", hash)
         .limit(1);
 
-      if (!existErr && existing && existing.length > 0) {
-        skippedDuplicates++;
-        continue;
-      }
+if (!existErr && existing && existing.length > 0) {
+  skippedDuplicates++;
+
+  // captured_at ggf. nachtragen (wenn wir jetzt eine bessere Zeit haben)
+  const deviceTime =
+    metadata && typeof (metadata as any).device_time === "string"
+      ? String((metadata as any).device_time)
+      : null;
+
+  const capturedAt = capturedAtOverride ?? deviceTime;
+
+  if (capturedAt) {
+    await supabase
+      .from("assets")
+      .update({ captured_at: capturedAt })
+      .eq("id", existing[0].id)
+      .is("captured_at", null);
+  }
+
+  continue;
+}
 
       const storagePath = `${camera.id}/${Date.now()}-${hash.slice(0, 12)}.${ext}`;
 
@@ -106,13 +126,15 @@ export async function POST(req: Request) {
         .upload(storagePath, bytes, { contentType: file.type || "image/jpeg" });
 
       if (uploadError) {
-        // Mark batch failed and stop (strict). Could be changed to partial.
         await supabase
           .from("ingest_batches")
           .update({ status: "failed", error_summary: uploadError.message })
           .eq("id", batch.id);
 
-        return NextResponse.json({ error: uploadError.message, batchId: batch.id }, { status: 500 });
+        return NextResponse.json(
+          { error: uploadError.message, batchId: batch.id },
+          { status: 500 }
+        );
       }
 
       // 4c) Insert asset
@@ -121,45 +143,91 @@ export async function POST(req: Request) {
         storage_path: storagePath,
         file_hash: hash,
         status: "queued",
-        relevant: false, // default
+        relevant: false,
         ingest_batch_id: batch.id,
       };
 
-      // Optional captured_at if you have that column; otherwise ignore.
-      // If your "assets" table DOES have captured_at, uncomment next lines:
-      // if (capturedAtOverride) insertPayload.captured_at = capturedAtOverride;
+      // captured_at Priorität:
+      // 1) capturedAt (FormData)
+      // 2) metadata.device_time (ISO String)
+      // 3) sonst nichts -> DB created_at
+      const deviceTime =
+        metadata && typeof (metadata as any).device_time === "string"
+          ? String((metadata as any).device_time)
+          : null;
 
-      // Optional: if you have a jsonb 'meta' column, you can store metadata there.
-      // If not present, ignore it.
-      // if (metadata) insertPayload.meta = metadata;
+      const capturedAt = capturedAtOverride ?? deviceTime;
 
-      const { error: dbError } = await supabase.from("assets").insert(insertPayload);
+      if (capturedAt) {
+        insertPayload.captured_at = capturedAt;
+      }
 
-      if (dbError) {
-        // Cleanup storage object
+      const { data: insertedAsset, error: dbError } = await supabase
+        .from("assets")
+        .insert(insertPayload)
+        .select("id")
+        .single();
+
+      if (dbError || !insertedAsset?.id) {
         await supabase.storage.from("camera-assets").remove([storagePath]);
 
         await supabase
           .from("ingest_batches")
-          .update({ status: "failed", error_summary: dbError.message })
+          .update({
+            status: "failed",
+            error_summary: dbError?.message ?? "asset insert failed",
+          })
           .eq("id", batch.id);
 
-        return NextResponse.json({ error: dbError.message, batchId: batch.id }, { status: 500 });
+        return NextResponse.json(
+          { error: dbError?.message ?? "asset insert failed", batchId: batch.id },
+          { status: 500 }
+        );
+      }
+
+      // 4d) Event Clustering (non-fatal, damit Ingest stabil bleibt)
+      const { error: eventErr } = await supabase.rpc("upsert_event_for_asset", {
+        p_asset_id: insertedAsset.id,
+        p_window_minutes: 10,
+      });
+
+      if (eventErr) {
+        console.warn("Event clustering failed for asset", insertedAsset.id, eventErr.message);
+        warnings.push(`event_clustering_failed:${eventErr.message}`);
+      }
+
+      // 4e) Fake detection (DEV STUB, non-fatal)  ✅ genau einmal
+      const { error: fakeDetErr } = await supabase.from("detections").insert({
+        asset_id: insertedAsset.id,
+        label: "animal",
+        species: "test_species",
+        count: 1,
+        score: 0.75,
+        meta: { stub: true },
+      });
+
+      if (fakeDetErr) {
+        console.warn("Fake detection insert failed:", fakeDetErr.message);
+        warnings.push(`fake_detection_failed:${fakeDetErr.message}`);
       }
 
       accepted++;
     }
 
-    // 5) Update camera health + batch status
+    // 5) Update camera health
     const nowIso = new Date().toISOString();
-
     await supabase.from("cameras").update({ last_seen_at: nowIso }).eq("id", camera.id);
+
+    // 6) Batch final status + summary
+    const summaryParts: string[] = [];
+    if (skippedDuplicates > 0) summaryParts.push(`skipped duplicates: ${skippedDuplicates}`);
+    summaryParts.push(...warnings);
 
     await supabase
       .from("ingest_batches")
       .update({
         status: "completed",
-        error_summary: skippedDuplicates > 0 ? `skipped duplicates: ${skippedDuplicates}` : null,
+        error_summary: summaryParts.length > 0 ? summaryParts.join(" | ") : null,
       })
       .eq("id", batch.id);
 

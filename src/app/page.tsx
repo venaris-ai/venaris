@@ -2,12 +2,6 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { createClient } from "@supabase/supabase-js";
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
 
 type AssetRow = {
   id: string;
@@ -51,44 +45,34 @@ export default function Home() {
   }
 
   async function loadCameras() {
-    const { data, error } = await supabase
-      .from("cameras")
-      .select("id, name, location_name")
-      .order("created_at", { ascending: false });
+    const res = await fetch("/api/cameras");
+    const json = await res.json();
 
-    if (error) {
-      setMsg(error.message);
+    if (!res.ok) {
+      setMsg(json.error || `HTTP ${res.status}`);
       return;
     }
 
-    const list = (data ?? []) as CameraRow[];
+    const list = (json.cameras ?? []) as CameraRow[];
     setCameras(list);
 
-    // Default selection if none selected yet
     if (!cameraId && list.length > 0) {
       setCameraId(list[0].id);
     }
   }
 
   async function loadAssets() {
-    let query = supabase
-      .from("assets")
-      .select("id, storage_path, status, created_at, relevant")
-      .order("created_at", { ascending: false })
-      .limit(30);
+    const res = await fetch(
+      `/api/assets?onlyRelevant=${onlyRelevant ? "true" : "false"}`
+    );
+    const json = await res.json();
 
-    if (onlyRelevant) {
-      query = query.eq("relevant", true);
-    }
-
-    const { data, error } = await query;
-
-    if (error) {
-      setMsg(error.message);
+    if (!res.ok) {
+      setMsg(json.error || `HTTP ${res.status}`);
       return;
     }
 
-    const list = (data ?? []) as AssetRow[];
+    const list = (json.assets ?? []) as AssetRow[];
     setAssets(list);
     await loadUrls(list);
   }
@@ -158,10 +142,15 @@ export default function Home() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-semibold">Venaris</h1>
-            <p className="text-sm text-gray-600">Debug Upload & Recent Assets</p>
+            <p className="text-sm text-gray-600">
+              Debug Upload & Recent Assets
+            </p>
           </div>
 
-          <Link href="/cameras" className="rounded-md border px-3 py-2 text-sm">
+          <Link
+            href="/cameras"
+            className="rounded-md border px-3 py-2 text-sm"
+          >
             Cameras →
           </Link>
         </div>
@@ -175,9 +164,7 @@ export default function Home() {
               value={cameraId}
               onChange={(e) => setCameraId(e.target.value)}
             >
-              {cameras.length === 0 && (
-                <option value="">(keine Kameras)</option>
-              )}
+              {cameras.length === 0 && <option value="">(keine Kameras)</option>}
               {cameras.map((c) => (
                 <option key={c.id} value={c.id}>
                   {c.name}
@@ -260,6 +247,7 @@ export default function Home() {
                 </div>
 
                 {urls[a.id] && (
+                  // eslint-disable-next-line @next/next/no-img-element
                   <img
                     src={urls[a.id]}
                     alt="asset"
