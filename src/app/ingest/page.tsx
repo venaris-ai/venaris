@@ -1,0 +1,162 @@
+// src/app/ingest/page.tsx
+export const dynamic = "force-dynamic";
+
+type Batch = {
+  id: string;
+  camera_id: string;
+  received_at: string;
+  source: string | null;
+  file_count: number | null;
+  status: string | null;
+  error_summary: string | null;
+  meta: any;
+  cameras?: { id: string; name: string } | null;
+};
+
+function Badge({
+  children,
+  tone,
+}: {
+  children: React.ReactNode;
+  tone: "ok" | "warn" | "err" | "muted";
+}) {
+  const cls =
+    tone === "ok"
+      ? "bg-green-100 text-green-800"
+      : tone === "warn"
+      ? "bg-yellow-100 text-yellow-800"
+      : tone === "err"
+      ? "bg-red-100 text-red-800"
+      : "bg-gray-100 text-gray-800";
+
+  return (
+    <span className={`inline-flex items-center rounded px-2 py-0.5 text-xs font-medium ${cls}`}>
+      {children}
+    </span>
+  );
+}
+
+function isTerminalOk(status?: string | null) {
+  const s = (status || "").toLowerCase();
+  return s === "completed" || s === "ok" || s === "success" || s === "done";
+}
+
+function isTerminalErr(status?: string | null) {
+  const s = (status || "").toLowerCase();
+  return s === "failed" || s === "error";
+}
+
+function statusTone(status?: string | null) {
+  const s = (status || "").toLowerCase();
+  if (s === "completed" || s === "ok" || s === "success" || s === "done") return "ok" as const;
+  if (s === "error" || s === "failed") return "err" as const;
+  if (s === "processing" || s === "running") return "warn" as const;
+  return "muted" as const;
+}
+
+function sourceTone(source?: string | null) {
+  const s = (source || "").toLowerCase();
+  if (s === "smtp") return "warn" as const; // yellow-ish
+  if (s === "ftp") return "muted" as const; // neutral
+  if (s === "manual") return "ok" as const; // green-ish
+  if (s === "token" || s === "token-ingest") return "muted" as const;
+  return "muted" as const;
+}
+
+function errorTone(status?: string | null, error?: string | null) {
+  if (!error) return "muted" as const;
+  if (isTerminalErr(status)) return "err" as const;
+  // completed + error_summary => treat as warning (e.g. skipped duplicates)
+  return "warn" as const;
+}
+
+export default async function IngestPage() {
+  const base = process.env.VENARIS_BASE_URL ?? "http://localhost:3000";
+  const res = await fetch(`${base}/api/ingest-batches?limit=50`, { cache: "no-store" });
+
+  const json = await res.json().catch(() => ({}));
+  const items: Batch[] = json?.items ?? [];
+
+  return (
+    <div className="mx-auto max-w-6xl p-6">
+      <div className="mb-4 flex items-center justify-between">
+        <h1 className="text-xl font-semibold">Ingest Monitoring</h1>
+        <a
+          href="/ingest"
+          className="rounded-md border px-3 py-1 text-sm hover:bg-gray-50"
+          title="Reload page"
+        >
+          Refresh
+        </a>
+      </div>
+
+      <div className="overflow-hidden rounded-lg border bg-white">
+        <table className="w-full text-sm">
+          <thead className="border-b bg-gray-50 text-left">
+            <tr>
+              <th className="px-3 py-2">Time</th>
+              <th className="px-3 py-2">Source</th>
+              <th className="px-3 py-2">Camera</th>
+              <th className="px-3 py-2">Files</th>
+              <th className="px-3 py-2">Status</th>
+              <th className="px-3 py-2">Info / Error</th>
+              <th className="px-3 py-2">Batch</th>
+            </tr>
+          </thead>
+          <tbody>
+            {items.length === 0 ? (
+              <tr>
+                <td className="px-3 py-6 text-gray-500" colSpan={7}>
+                  No ingest batches yet.
+                </td>
+              </tr>
+            ) : (
+              items.map((b) => {
+                const stTone = statusTone(b.status);
+                const srcTone = sourceTone(b.source);
+                const errTone = errorTone(b.status, b.error_summary);
+
+                const errClass =
+                  errTone === "err"
+                    ? "text-red-700 font-medium"
+                    : errTone === "warn"
+                    ? "text-yellow-700 font-medium"
+                    : "text-gray-400";
+
+                return (
+                  <tr key={b.id} className="border-b last:border-b-0">
+                    <td className="px-3 py-2 whitespace-nowrap text-gray-700">
+                      {b.received_at ? new Date(b.received_at).toLocaleString() : "-"}
+                    </td>
+
+                    <td className="px-3 py-2">
+                      <Badge tone={srcTone}>{b.source || "-"}</Badge>
+                    </td>
+
+                    <td className="px-3 py-2">{b.cameras?.name || b.camera_id}</td>
+
+                    <td className="px-3 py-2">{b.file_count ?? "-"}</td>
+
+                    <td className="px-3 py-2">
+                      <Badge tone={stTone}>{b.status || "-"}</Badge>
+                    </td>
+
+                    <td className={`px-3 py-2 ${errClass}`}>
+                      {b.error_summary ? b.error_summary : <span className="text-gray-400">-</span>}
+                    </td>
+
+                    <td className="px-3 py-2 font-mono text-xs text-gray-600">{b.id.slice(0, 8)}…</td>
+                  </tr>
+                );
+              })
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      {!res.ok && (
+        <p className="mt-3 text-sm text-red-700">API error: {JSON.stringify(json)}</p>
+      )}
+    </div>
+  );
+}

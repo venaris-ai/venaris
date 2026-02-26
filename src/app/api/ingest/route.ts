@@ -16,6 +16,16 @@ function safeJsonParse(input: string | null): IngestMetadata | null {
   }
 }
 
+function normalizeSource(metadata: IngestMetadata | null): string {
+  const raw = metadata && typeof metadata.source === "string" ? metadata.source.toLowerCase().trim() : "";
+  if (raw === "ftp") return "ftp";
+  if (raw === "smtp") return "smtp";
+  if (raw === "manual") return "manual";
+  if (raw === "token" || raw === "token-ingest") return "token";
+  // fallback
+  return "token";
+}
+
 export async function POST(req: Request) {
   try {
     const supabase = supabaseServer();
@@ -56,12 +66,15 @@ export async function POST(req: Request) {
     const metadata = safeJsonParse(formData.get("metadata") as string | null);
     const capturedAtOverride = (formData.get("capturedAt") as string | null) ?? null;
 
+    // ✅ Determine batch source from metadata (ftp/smtp/manual/token)
+    const batchSource = normalizeSource(metadata);
+
     // 3) Create batch
     const { data: batch, error: batchError } = await supabase
       .from("ingest_batches")
       .insert({
         camera_id: camera.id,
-        source: "token-ingest",
+        source: batchSource,
         file_count: files.length,
         status: "processing",
         meta: metadata ?? null,
@@ -96,27 +109,27 @@ export async function POST(req: Request) {
         .eq("file_hash", hash)
         .limit(1);
 
-if (!existErr && existing && existing.length > 0) {
-  skippedDuplicates++;
+      if (!existErr && existing && existing.length > 0) {
+        skippedDuplicates++;
 
-  // captured_at ggf. nachtragen (wenn wir jetzt eine bessere Zeit haben)
-  const deviceTime =
-    metadata && typeof (metadata as any).device_time === "string"
-      ? String((metadata as any).device_time)
-      : null;
+        // captured_at ggf. nachtragen (wenn wir jetzt eine bessere Zeit haben)
+        const deviceTime =
+          metadata && typeof (metadata as any).device_time === "string"
+            ? String((metadata as any).device_time)
+            : null;
 
-  const capturedAt = capturedAtOverride ?? deviceTime;
+        const capturedAt = capturedAtOverride ?? deviceTime;
 
-  if (capturedAt) {
-    await supabase
-      .from("assets")
-      .update({ captured_at: capturedAt })
-      .eq("id", existing[0].id)
-      .is("captured_at", null);
-  }
+        if (capturedAt) {
+          await supabase
+            .from("assets")
+            .update({ captured_at: capturedAt })
+            .eq("id", existing[0].id)
+            .is("captured_at", null);
+        }
 
-  continue;
-}
+        continue;
+      }
 
       const storagePath = `${camera.id}/${Date.now()}-${hash.slice(0, 12)}.${ext}`;
 
@@ -236,6 +249,7 @@ if (!existErr && existing && existing.length > 0) {
       batchId: batch.id,
       accepted,
       skippedDuplicates,
+      source: batchSource,
     });
   } catch (err: any) {
     console.error("INGEST crashed:", err);
