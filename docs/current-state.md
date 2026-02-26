@@ -1,6 +1,6 @@
 # Venaris – Current State
 
-Last updated: 2026-02-25
+Last updated: 2026-02-26
 
 ---
 
@@ -14,6 +14,7 @@ Last updated: 2026-02-25
 - Event aggregation working (top_species/top_count/relevance_score)
 - Security Advisor clean (0 errors / 0 warnings / 0 suggestions)
 - Reolink office simulation working (FTP → folder → bridge → /api/ingest)
+- X-View office simulation working (SMTP/IMAP → bridge → /api/ingest) ✅
 
 ---
 
@@ -89,10 +90,10 @@ Last updated: 2026-02-25
 ### POST /api/asset-relevant
 - Updates `assets.relevant`
 
-### GET /api/cameras  ✅ (new)
+### GET /api/cameras ✅
 - Returns cameras list (server-side, uses service role)
 
-### GET /api/assets?onlyRelevant=true|false ✅ (new)
+### GET /api/assets?onlyRelevant=true|false ✅
 - Returns assets list (server-side, uses service role)
 
 ---
@@ -144,17 +145,30 @@ Last updated: 2026-02-25
 - Deletes file after successful ingest
 - Tested OK: “Ingest OK … accepted:1”
 
+### X-View office simulation (SMTP/IMAP → ingest) ✅
+- Mailbox: `xview@venaris.io` (provider IMAP)
+- Script: `scripts/smtp-bridge.mjs` (in repo)
+- Polls IMAP mailbox every `IMAP_POLL_SECONDS` (default 15s)
+- Searches UNSEEN by default (set `IMAP_PROCESS_ALL=true` for debugging)
+- Fetch strategy hardened: per-UID `fetchOne(..., { source:true })` to avoid stream timeouts
+- Parses image attachments (jpg/jpeg/png/gif/webp) and POSTs to `/api/ingest` with `x-ingest-token`
+- Adds metadata `{ source:"smtp", vendor:"x-view", mail_from, mail_subject, mail_date, received_time, original_filename, sha256 }`
+- Marks mail as `\\Seen` after successful ingest (if `IMAP_MARK_SEEN=true`)
+- Local state file for UID-dedup: `.smtp-bridge-state.json` (ignored via `.gitignore`)
+- Tested OK: multiple consecutive jpg emails ingested successfully (“ingest OK … accepted:1”)
+
 ---
 
 ## 9️⃣ Open TODOs (Next)
-- [ ] X-View SMTP bridge (email/attachment → /api/ingest)
 - [ ] Optional: Dedup upgrade in /api/ingest (if duplicate: backfill captured_at when NULL)
 - [ ] Replace detections stub with real model pipeline
 - [ ] Improve relevance (system vs user)
 - [ ] Dashboard
+- [ ] Optional: Ingest monitoring UI for `ingest_batches`
 
 ---
 
 ## 10️⃣ Notes for next session
 - After enabling RLS “deny all”, the Home page must not query Supabase tables directly from client.
 - Home now uses `/api/cameras` and `/api/assets` server routes.
+- SMTP bridge is sensitive to mails being already Seen; use `IMAP_PROCESS_ALL=true` only for backfills/debug.
