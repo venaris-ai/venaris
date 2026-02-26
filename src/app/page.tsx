@@ -14,8 +14,17 @@ type AssetRow = {
 type CameraRow = {
   id: string;
   name: string;
-  location_name: string | null;
+  import_method: string | null;
+  health_status: "online" | "stale" | "offline" | "unknown" | string;
+  stale_after_minutes: number;
 };
+
+function healthEmoji(status?: string) {
+  if (status === "online") return "🟢";
+  if (status === "stale") return "🟡";
+  if (status === "offline") return "🔴";
+  return "⚪";
+}
 
 export default function Home() {
   const [cameraId, setCameraId] = useState("");
@@ -45,7 +54,7 @@ export default function Home() {
   }
 
   async function loadCameras() {
-    const res = await fetch("/api/cameras");
+    const res = await fetch("/api/camera-health", { cache: "no-store" });
     const json = await res.json();
 
     if (!res.ok) {
@@ -53,7 +62,7 @@ export default function Home() {
       return;
     }
 
-    const list = (json.cameras ?? []) as CameraRow[];
+    const list = (json.items ?? []) as CameraRow[];
     setCameras(list);
 
     if (!cameraId && list.length > 0) {
@@ -77,13 +86,11 @@ export default function Home() {
     await loadUrls(list);
   }
 
-  // Load cameras once on mount
   useEffect(() => {
     loadCameras();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Reload assets when filter changes
   useEffect(() => {
     loadAssets();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -138,7 +145,6 @@ export default function Home() {
   return (
     <main className="min-h-screen p-8">
       <div className="mx-auto max-w-3xl space-y-6">
-        {/* Header */}
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-semibold">Venaris</h1>
@@ -155,7 +161,6 @@ export default function Home() {
           </Link>
         </div>
 
-        {/* Upload Box */}
         <div className="rounded-xl border p-4 space-y-3">
           <div className="space-y-2">
             <label className="text-sm font-medium">Camera</label>
@@ -167,8 +172,8 @@ export default function Home() {
               {cameras.length === 0 && <option value="">(keine Kameras)</option>}
               {cameras.map((c) => (
                 <option key={c.id} value={c.id}>
-                  {c.name}
-                  {c.location_name ? ` – ${c.location_name}` : ""}
+                  {healthEmoji(c.health_status)} {c.name}
+                  {c.import_method ? ` · ${c.import_method}` : ""}
                 </option>
               ))}
             </select>
@@ -198,7 +203,6 @@ export default function Home() {
           {msg && <div className="text-sm">{msg}</div>}
         </div>
 
-        {/* Assets */}
         <div className="rounded-xl border p-4">
           <div className="mb-3 flex items-center justify-between">
             <h2 className="text-xl font-medium">Assets</h2>
@@ -247,7 +251,6 @@ export default function Home() {
                 </div>
 
                 {urls[a.id] && (
-                  // eslint-disable-next-line @next/next/no-img-element
                   <img
                     src={urls[a.id]}
                     alt="asset"

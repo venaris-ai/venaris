@@ -8,6 +8,8 @@ type CameraHealthRow = {
   import_method: string | null;
   last_seen_at: string | null;
   health_status: "online" | "stale" | "offline" | "unknown" | string;
+  stale_after_minutes: number;
+  offline_after_minutes: number;
 };
 
 type BatchRow = {
@@ -40,19 +42,17 @@ function formatAgo(ts: string | null) {
   return `vor ${days} d`;
 }
 
-function healthEmoji(status?: string | null) {
-  const s = (status || "").toLowerCase();
-  if (s === "online") return "🟢";
-  if (s === "stale") return "🟡";
-  if (s === "offline") return "🔴";
+function healthEmoji(status?: string) {
+  if (status === "online") return "🟢";
+  if (status === "stale") return "🟡";
+  if (status === "offline") return "🔴";
   return "⚪";
 }
 
-function healthTone(status?: string | null) {
-  const s = (status || "").toLowerCase();
-  if (s === "online") return "border-green-300";
-  if (s === "stale") return "border-yellow-300";
-  if (s === "offline") return "border-red-300";
+function healthTone(status?: string) {
+  if (status === "online") return "border-green-300";
+  if (status === "stale") return "border-yellow-300";
+  if (status === "offline") return "border-red-300";
   return "border-gray-300";
 }
 
@@ -103,44 +103,53 @@ export default function CamerasPage() {
     }
   }
 
-  // Tokens sind in camera-health nicht drin (bewusst). Wir holen token on-demand.
   async function loadToken(camId: string) {
-    if (tokenByCameraId[camId] !== undefined) return; // already loaded
+    if (tokenByCameraId[camId] !== undefined) return;
+
     try {
-      const res = await fetch(`/api/cameras`); // existing route returns cameras list incl token? if not, we'll use fallback below
+      const res = await fetch(
+        `/api/camera-token?cameraId=${encodeURIComponent(camId)}`,
+        { cache: "no-store" }
+      );
       const json = await res.json();
-      if (res.ok && Array.isArray(json.cameras)) {
-        const found = json.cameras.find((c: any) => c.id === camId);
-        setTokenByCameraId((prev) => ({ ...prev, [camId]: found?.ingest_token ?? null }));
+
+      if (!res.ok) {
+        setTokenByCameraId((prev) => ({ ...prev, [camId]: null }));
         return;
       }
+
+      setTokenByCameraId((prev) => ({
+        ...prev,
+        [camId]: json.ingest_token ?? null,
+      }));
     } catch {
-      // ignore
+      setTokenByCameraId((prev) => ({ ...prev, [camId]: null }));
     }
-    // fallback: unknown token until regenerate is used
-    setTokenByCameraId((prev) => ({ ...prev, [camId]: null }));
   }
 
   async function loadBatches(camId: string) {
-    setMsg("");
-    const res = await fetch(`/api/ingest-batches?cameraId=${encodeURIComponent(camId)}&limit=10`, {
-      cache: "no-store",
-    });
+    const res = await fetch(
+      `/api/ingest-batches?cameraId=${encodeURIComponent(camId)}&limit=10`,
+      { cache: "no-store" }
+    );
     const json = await res.json();
+
     if (!res.ok) {
       setMsg(json.error || `HTTP ${res.status}`);
       setBatches([]);
       return;
     }
+
     setBatches((json.items ?? []) as BatchRow[]);
   }
 
   async function loadAssets(camId: string) {
-    setMsg("");
-    const res = await fetch(`/api/assets?cameraId=${encodeURIComponent(camId)}&limit=3&onlyRelevant=false`, {
-      cache: "no-store",
-    });
+    const res = await fetch(
+      `/api/assets?cameraId=${encodeURIComponent(camId)}&limit=3&onlyRelevant=false`,
+      { cache: "no-store" }
+    );
     const json = await res.json();
+
     if (!res.ok) {
       setMsg(json.error || `HTTP ${res.status}`);
       setAssets([]);
@@ -154,7 +163,9 @@ export default function CamerasPage() {
     const urls: Record<string, string> = {};
     for (const a of list) {
       try {
-        const ures = await fetch(`/api/asset-url?path=${encodeURIComponent(a.storage_path)}`);
+        const ures = await fetch(
+          `/api/asset-url?path=${encodeURIComponent(a.storage_path)}`
+        );
         const ujson = await ures.json();
         if (ujson.url) urls[a.id] = ujson.url;
       } catch {
@@ -180,6 +191,7 @@ export default function CamerasPage() {
   async function regenerateToken() {
     if (!selected) return;
     setMsg("");
+
     const res = await fetch("/api/camera-token", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -190,16 +202,14 @@ export default function CamerasPage() {
     let json: any = null;
     try {
       json = JSON.parse(text);
-    } catch {
-      /* ignore */
-    }
+    } catch {}
 
     if (!res.ok || !json?.ok) {
       setMsg(json?.error || `HTTP ${res.status}`);
       return;
     }
 
-    const newTok = json.camera.ingest_token as string;
+    const newTok = json.ingest_token as string;
     setTokenByCameraId((prev) => ({ ...prev, [selected.id]: newTok }));
     setMsg("✅ Token aktualisiert");
   }
@@ -219,21 +229,23 @@ export default function CamerasPage() {
         <div className="flex items-end justify-between">
           <div>
             <h1 className="text-3xl font-semibold">Cameras</h1>
-            <p className="text-sm text-gray-600">Onboarding, Tokens, Health, letzte Ingest-Batches</p>
+            <p className="text-sm text-gray-600">
+              Onboarding, Tokens, Health, letzte Ingest-Batches
+            </p>
           </div>
           <a href="/" className="rounded-md border px-3 py-2 text-sm">
             ← Home
           </a>
         </div>
 
-        {/* Camera picker */}
-        <div className="rounded-xl border p-4 space-y-3">
+        <div className="rounded-xl border p-4 space-y-4">
           <div className="flex items-center justify-between">
-            <label className="text-sm font-medium">Kamera auswählen</label>
+            <label className="text-sm font-medium">
+              Kamera auswählen
+            </label>
             <button
               onClick={loadCameras}
               className="rounded-md border px-3 py-1.5 text-sm"
-              type="button"
               disabled={loadingCameras}
             >
               {loadingCameras ? "Loading…" : "Refresh"}
@@ -255,28 +267,54 @@ export default function CamerasPage() {
           </select>
 
           {selected && (
-            <div className="grid gap-3 md:grid-cols-2">
-              <div className="rounded-lg border p-3">
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="rounded-lg border p-4">
                 <div className="text-xs text-gray-500">Health</div>
-                <div className="mt-1 flex items-center gap-2">
+
+                <div className="mt-2 flex items-center gap-2">
                   <span
                     className={[
-                      "inline-flex items-center rounded-full px-2 py-0.5 text-xs border",
+                      "inline-flex items-center rounded-full px-2 py-0.5 text-xs border font-medium",
                       healthTone(selected.health_status),
                     ].join(" ")}
                   >
+                    {healthEmoji(selected.health_status)}{" "}
                     {selected.health_status}
                   </span>
-                  <span className="text-sm text-gray-700">
-                    Last seen: <span className="font-medium">{formatAgo(selected.last_seen_at)}</span>
-                    {selected.last_seen_at ? ` (${new Date(selected.last_seen_at).toLocaleString()})` : ""}
+                </div>
+
+                <div className="mt-2 text-sm text-gray-700">
+                  Last seen:{" "}
+                  <span className="font-medium">
+                    {formatAgo(selected.last_seen_at)}
                   </span>
+                  {selected.last_seen_at
+                    ? ` (${new Date(selected.last_seen_at).toLocaleString()})`
+                    : ""}
+                </div>
+
+                <div className="mt-3 text-xs text-gray-600 space-y-1">
+                  <div>
+                    Expected every{" "}
+                    <span className="font-medium">
+                      {selected.stale_after_minutes} min
+                    </span>
+                  </div>
+                  <div>
+                    Offline after{" "}
+                    <span className="font-medium">
+                      {selected.offline_after_minutes} min
+                    </span>
+                  </div>
                 </div>
               </div>
 
-              <div className="rounded-lg border p-3">
+              <div className="rounded-lg border p-4">
                 <div className="text-xs text-gray-500">Token</div>
-                <div className="mt-1 font-mono text-xs break-all">{tok ?? "—"}</div>
+                <div className="mt-1 font-mono text-xs break-all">
+                  {tok ?? "—"}
+                </div>
+
                 <div className="mt-3 flex flex-wrap gap-2">
                   <button
                     onClick={async () => {
@@ -302,113 +340,6 @@ export default function CamerasPage() {
           )}
 
           {msg && <div className="text-sm">{msg}</div>}
-        </div>
-
-        {/* curl snippets */}
-        <div className="rounded-xl border p-4 space-y-3">
-          <h2 className="text-xl font-medium">Ingestion examples (curl)</h2>
-
-          <div className="space-y-2">
-            <div className="text-xs text-gray-500">Single file</div>
-            <pre className="overflow-auto rounded-md border p-3 text-xs">{curlSingle || "—"}</pre>
-            <button
-              onClick={async () => {
-                if (!curlSingle) return;
-                const ok = await copy(curlSingle);
-                setMsg(ok ? "✅ curl (single) kopiert" : "❌ Copy nicht möglich");
-              }}
-              className="rounded-md border px-3 py-1.5 text-sm"
-              disabled={!curlSingle}
-            >
-              Copy curl (single)
-            </button>
-          </div>
-
-          <div className="space-y-2">
-            <div className="text-xs text-gray-500">Multiple files</div>
-            <pre className="overflow-auto rounded-md border p-3 text-xs">{curlMulti || "—"}</pre>
-            <button
-              onClick={async () => {
-                if (!curlMulti) return;
-                const ok = await copy(curlMulti);
-                setMsg(ok ? "✅ curl (multi) kopiert" : "❌ Copy nicht möglich");
-              }}
-              className="rounded-md border px-3 py-1.5 text-sm"
-              disabled={!curlMulti}
-            >
-              Copy curl (multi)
-            </button>
-          </div>
-
-          <div className="text-xs text-gray-600">
-            Hinweis: Pfade sind Git-Bash Syntax (z.B. <span className="font-mono">/c/dev/test.jpg</span>).
-          </div>
-        </div>
-
-        {/* Recent batches + assets */}
-        <div className="grid gap-6 md:grid-cols-2">
-          <div className="rounded-xl border p-4">
-            <h2 className="text-xl font-medium mb-3">Letzte Batches</h2>
-            <div className="overflow-auto">
-              <table className="w-full text-sm">
-                <thead className="text-left text-xs text-gray-500">
-                  <tr>
-                    <th className="py-2 pr-3">Zeit</th>
-                    <th className="py-2 pr-3">Files</th>
-                    <th className="py-2 pr-3">Status</th>
-                    <th className="py-2 pr-3">Info</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {batches.map((b) => (
-                    <tr key={b.id} className="border-t">
-                      <td className="py-2 pr-3 whitespace-nowrap">
-                        {new Date(b.received_at).toLocaleString()}
-                      </td>
-                      <td className="py-2 pr-3">{b.file_count ?? "—"}</td>
-                      <td className="py-2 pr-3">{b.status ?? "—"}</td>
-                      <td className="py-2 pr-3 text-xs text-gray-600 break-all">
-                        {b.error_summary ?? ""}
-                      </td>
-                    </tr>
-                  ))}
-                  {batches.length === 0 && (
-                    <tr>
-                      <td className="py-2 text-gray-600" colSpan={4}>
-                        Keine Batches.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          <div className="rounded-xl border p-4">
-            <h2 className="text-xl font-medium mb-3">Letzte Assets</h2>
-
-            <div className="space-y-3">
-              {assets.map((a) => (
-                <div key={a.id} className="rounded-md border p-3">
-                  <div className="text-xs text-gray-500 font-mono break-all">{a.id}</div>
-                  <div className="text-xs text-gray-600">{new Date(a.created_at).toLocaleString()}</div>
-
-                  {assetUrls[a.id] && (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={assetUrls[a.id]}
-                      alt="asset"
-                      className="mt-2 w-full max-w-md rounded-md border"
-                    />
-                  )}
-                </div>
-              ))}
-
-              {assets.length === 0 && (
-                <div className="text-sm text-gray-600">Keine Assets.</div>
-              )}
-            </div>
-          </div>
         </div>
       </div>
     </main>
