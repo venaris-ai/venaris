@@ -1,21 +1,13 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { createClient } from "@supabase/supabase-js";
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
-
-type CameraRow = {
+type CameraHealthRow = {
   id: string;
   name: string;
-  location_name: string | null;
   import_method: string | null;
-  ingest_token: string | null;
   last_seen_at: string | null;
-  created_at: string;
+  health_status: "online" | "stale" | "offline" | "unknown" | string;
 };
 
 type BatchRow = {
@@ -48,14 +40,20 @@ function formatAgo(ts: string | null) {
   return `vor ${days} d`;
 }
 
-function health(ts: string | null) {
-  if (!ts) return { label: "unknown", hint: "noch keine Daten", level: "neutral" as const };
-  const d = new Date(ts);
-  const diffMs = Date.now() - d.getTime();
-  const minutes = diffMs / 60000;
-  if (minutes <= 60) return { label: "online", hint: "letztes Signal < 1h", level: "good" as const };
-  if (minutes <= 24 * 60) return { label: "warn", hint: "letztes Signal < 24h", level: "warn" as const };
-  return { label: "offline", hint: "letztes Signal ≥ 24h", level: "bad" as const };
+function healthEmoji(status?: string | null) {
+  const s = (status || "").toLowerCase();
+  if (s === "online") return "🟢";
+  if (s === "stale") return "🟡";
+  if (s === "offline") return "🔴";
+  return "⚪";
+}
+
+function healthTone(status?: string | null) {
+  const s = (status || "").toLowerCase();
+  if (s === "online") return "border-green-300";
+  if (s === "stale") return "border-yellow-300";
+  if (s === "offline") return "border-red-300";
+  return "border-gray-300";
 }
 
 async function copy(text: string) {
@@ -68,13 +66,15 @@ async function copy(text: string) {
 }
 
 export default function CamerasPage() {
-  const [cameras, setCameras] = useState<CameraRow[]>([]);
+  const [cameras, setCameras] = useState<CameraHealthRow[]>([]);
   const [cameraId, setCameraId] = useState<string>("");
   const [msg, setMsg] = useState<string>("");
 
   const [batches, setBatches] = useState<BatchRow[]>([]);
   const [assets, setAssets] = useState<AssetRow[]>([]);
   const [assetUrls, setAssetUrls] = useState<Record<string, string>>({});
+  const [tokenByCameraId, setTokenByCameraId] = useState<Record<string, string | null>>({});
+  const [loadingCameras, setLoadingCameras] = useState(false);
 
   const selected = useMemo(
     () => cameras.find((c) => c.id === cameraId) ?? null,
@@ -83,57 +83,80 @@ export default function CamerasPage() {
 
   async function loadCameras() {
     setMsg("");
-    const { data, error } = await supabase
-      .from("cameras")
-      .select("id, name, location_name, import_method, ingest_token, last_seen_at, created_at")
-      .order("created_at", { ascending: false });
+    setLoadingCameras(true);
+    try {
+      const res = await fetch("/api/camera-health", { cache: "no-store" });
+      const json = await res.json();
 
-    if (error) {
-      setMsg(error.message);
-      return;
+      if (!res.ok) {
+        setMsg(json.error || `HTTP ${res.status}`);
+        return;
+      }
+
+      const list = (json.items ?? []) as CameraHealthRow[];
+      setCameras(list);
+      if (!cameraId && list.length > 0) setCameraId(list[0].id);
+    } catch (e: any) {
+      setMsg(e?.message || String(e));
+    } finally {
+      setLoadingCameras(false);
     }
+  }
 
-    const list = (data ?? []) as CameraRow[];
-    setCameras(list);
-    if (!cameraId && list.length > 0) setCameraId(list[0].id);
+  // Tokens sind in camera-health nicht drin (bewusst). Wir holen token on-demand.
+  async function loadToken(camId: string) {
+    if (tokenByCameraId[camId] !== undefined) return; // already loaded
+    try {
+      const res = await fetch(`/api/cameras`); // existing route returns cameras list incl token? if not, we'll use fallback below
+      const json = await res.json();
+      if (res.ok && Array.isArray(json.cameras)) {
+        const found = json.cameras.find((c: any) => c.id === camId);
+        setTokenByCameraId((prev) => ({ ...prev, [camId]: found?.ingest_token ?? null }));
+        return;
+      }
+    } catch {
+      // ignore
+    }
+    // fallback: unknown token until regenerate is used
+    setTokenByCameraId((prev) => ({ ...prev, [camId]: null }));
   }
 
   async function loadBatches(camId: string) {
-    const { data, error } = await supabase
-      .from("ingest_batches")
-      .select("id, camera_id, received_at, source, file_count, status, error_summary")
-      .eq("camera_id", camId)
-      .order("received_at", { ascending: false })
-      .limit(10);
-
-    if (error) {
-      setMsg(error.message);
+    setMsg("");
+    const res = await fetch(`/api/ingest-batches?cameraId=${encodeURIComponent(camId)}&limit=10`, {
+      cache: "no-store",
+    });
+    const json = await res.json();
+    if (!res.ok) {
+      setMsg(json.error || `HTTP ${res.status}`);
+      setBatches([]);
       return;
     }
-    setBatches((data ?? []) as BatchRow[]);
+    setBatches((json.items ?? []) as BatchRow[]);
   }
 
   async function loadAssets(camId: string) {
-    const { data, error } = await supabase
-      .from("assets")
-      .select("id, camera_id, storage_path, created_at")
-      .eq("camera_id", camId)
-      .order("created_at", { ascending: false })
-      .limit(3);
-
-    if (error) {
-      setMsg(error.message);
+    setMsg("");
+    const res = await fetch(`/api/assets?cameraId=${encodeURIComponent(camId)}&limit=3&onlyRelevant=false`, {
+      cache: "no-store",
+    });
+    const json = await res.json();
+    if (!res.ok) {
+      setMsg(json.error || `HTTP ${res.status}`);
+      setAssets([]);
+      setAssetUrls({});
       return;
     }
-    const list = (data ?? []) as AssetRow[];
+
+    const list = (json.assets ?? []) as AssetRow[];
     setAssets(list);
 
     const urls: Record<string, string> = {};
     for (const a of list) {
       try {
-        const res = await fetch(`/api/asset-url?path=${encodeURIComponent(a.storage_path)}`);
-        const json = await res.json();
-        if (json.url) urls[a.id] = json.url;
+        const ures = await fetch(`/api/asset-url?path=${encodeURIComponent(a.storage_path)}`);
+        const ujson = await ures.json();
+        if (ujson.url) urls[a.id] = ujson.url;
       } catch {
         // ignore
       }
@@ -148,6 +171,7 @@ export default function CamerasPage() {
 
   useEffect(() => {
     if (!cameraId) return;
+    loadToken(cameraId);
     loadBatches(cameraId);
     loadAssets(cameraId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -164,31 +188,30 @@ export default function CamerasPage() {
 
     const text = await res.text();
     let json: any = null;
-    try { json = JSON.parse(text); } catch { /* ignore */ }
+    try {
+      json = JSON.parse(text);
+    } catch {
+      /* ignore */
+    }
 
     if (!res.ok || !json?.ok) {
       setMsg(json?.error || `HTTP ${res.status}`);
       return;
     }
 
-    // update local state
     const newTok = json.camera.ingest_token as string;
-    setCameras((prev) =>
-      prev.map((c) => (c.id === selected.id ? { ...c, ingest_token: newTok } : c))
-    );
-
+    setTokenByCameraId((prev) => ({ ...prev, [selected.id]: newTok }));
     setMsg("✅ Token aktualisiert");
   }
 
-  const ingestHeader = selected?.ingest_token ? `x-ingest-token: ${selected.ingest_token}` : "";
-  const curlSingle = selected?.ingest_token
+  const tok = selected ? tokenByCameraId[selected.id] : null;
+  const ingestHeader = tok ? `x-ingest-token: ${tok}` : "";
+  const curlSingle = tok
     ? `curl -X POST "http://localhost:3000/api/ingest" -H "${ingestHeader}" -F "file=@/c/dev/test.jpg"`
     : "";
-  const curlMulti = selected?.ingest_token
+  const curlMulti = tok
     ? `curl -X POST "http://localhost:3000/api/ingest" -H "${ingestHeader}" -F "files=@/c/dev/a.jpg" -F "files=@/c/dev/b.jpg"`
     : "";
-
-  const h = health(selected?.last_seen_at ?? null);
 
   return (
     <main className="min-h-screen p-8">
@@ -198,26 +221,38 @@ export default function CamerasPage() {
             <h1 className="text-3xl font-semibold">Cameras</h1>
             <p className="text-sm text-gray-600">Onboarding, Tokens, Health, letzte Ingest-Batches</p>
           </div>
-          <a href="/" className="rounded-md border px-3 py-2 text-sm">← Home</a>
+          <a href="/" className="rounded-md border px-3 py-2 text-sm">
+            ← Home
+          </a>
         </div>
 
         {/* Camera picker */}
         <div className="rounded-xl border p-4 space-y-3">
-          <div className="flex flex-col gap-2">
+          <div className="flex items-center justify-between">
             <label className="text-sm font-medium">Kamera auswählen</label>
-            <select
-              className="w-full rounded-md border p-2"
-              value={cameraId}
-              onChange={(e) => setCameraId(e.target.value)}
+            <button
+              onClick={loadCameras}
+              className="rounded-md border px-3 py-1.5 text-sm"
+              type="button"
+              disabled={loadingCameras}
             >
-              {cameras.length === 0 && <option value="">(keine Kameras)</option>}
-              {cameras.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name} {c.location_name ? `– ${c.location_name}` : ""}
-                </option>
-              ))}
-            </select>
+              {loadingCameras ? "Loading…" : "Refresh"}
+            </button>
           </div>
+
+          <select
+            className="w-full rounded-md border p-2"
+            value={cameraId}
+            onChange={(e) => setCameraId(e.target.value)}
+          >
+            {cameras.length === 0 && <option value="">(keine Kameras)</option>}
+            {cameras.map((c) => (
+              <option key={c.id} value={c.id}>
+                {healthEmoji(c.health_status)} {c.name}
+                {c.import_method ? ` · ${c.import_method}` : ""}
+              </option>
+            ))}
+          </select>
 
           {selected && (
             <div className="grid gap-3 md:grid-cols-2">
@@ -227,33 +262,30 @@ export default function CamerasPage() {
                   <span
                     className={[
                       "inline-flex items-center rounded-full px-2 py-0.5 text-xs border",
-                      h.level === "good" ? "border-green-300" : "",
-                      h.level === "warn" ? "border-yellow-300" : "",
-                      h.level === "bad" ? "border-red-300" : "",
-                      h.level === "neutral" ? "border-gray-300" : "",
+                      healthTone(selected.health_status),
                     ].join(" ")}
                   >
-                    {h.label}
+                    {selected.health_status}
                   </span>
-                  <span className="text-sm text-gray-700">{h.hint}</span>
-                </div>
-                <div className="mt-2 text-sm text-gray-700">
-                  Last seen: <span className="font-medium">{formatAgo(selected.last_seen_at)}</span>
-                  {selected.last_seen_at ? ` (${new Date(selected.last_seen_at).toLocaleString()})` : ""}
+                  <span className="text-sm text-gray-700">
+                    Last seen: <span className="font-medium">{formatAgo(selected.last_seen_at)}</span>
+                    {selected.last_seen_at ? ` (${new Date(selected.last_seen_at).toLocaleString()})` : ""}
+                  </span>
                 </div>
               </div>
 
               <div className="rounded-lg border p-3">
                 <div className="text-xs text-gray-500">Token</div>
-                <div className="mt-1 font-mono text-xs break-all">{selected.ingest_token ?? "—"}</div>
+                <div className="mt-1 font-mono text-xs break-all">{tok ?? "—"}</div>
                 <div className="mt-3 flex flex-wrap gap-2">
                   <button
                     onClick={async () => {
-                      if (!selected.ingest_token) return;
-                      const ok = await copy(selected.ingest_token);
+                      if (!tok) return;
+                      const ok = await copy(tok);
                       setMsg(ok ? "✅ Token kopiert" : "❌ Copy nicht möglich");
                     }}
                     className="rounded-md border px-3 py-1.5 text-sm"
+                    disabled={!tok}
                   >
                     Copy token
                   </button>
@@ -286,6 +318,7 @@ export default function CamerasPage() {
                 setMsg(ok ? "✅ curl (single) kopiert" : "❌ Copy nicht möglich");
               }}
               className="rounded-md border px-3 py-1.5 text-sm"
+              disabled={!curlSingle}
             >
               Copy curl (single)
             </button>
@@ -301,6 +334,7 @@ export default function CamerasPage() {
                 setMsg(ok ? "✅ curl (multi) kopiert" : "❌ Copy nicht möglich");
               }}
               className="rounded-md border px-3 py-1.5 text-sm"
+              disabled={!curlMulti}
             >
               Copy curl (multi)
             </button>
@@ -360,6 +394,7 @@ export default function CamerasPage() {
                   <div className="text-xs text-gray-600">{new Date(a.created_at).toLocaleString()}</div>
 
                   {assetUrls[a.id] && (
+                    // eslint-disable-next-line @next/next/no-img-element
                     <img
                       src={assetUrls[a.id]}
                       alt="asset"
