@@ -51,8 +51,11 @@ const cfg = {
   processAll: String(process.env.IMAP_PROCESS_ALL || "false") === "true",
 
   baseUrl: process.env.VENARIS_BASE_URL || "http://127.0.0.1:3000",
-  cameraId: process.env.XVIEW_CAMERA_ID,
-  ingestToken: process.env.XVIEW_INGEST_TOKEN,
+
+  // NEW: generic, backward compatible
+  cameraId: process.env.SMTP_CAMERA_ID || process.env.XVIEW_CAMERA_ID,
+ingestToken: process.env.SMTP_INGEST_TOKEN || process.env.XVIEW_INGEST_TOKEN,
+vendor: process.env.SMTP_VENDOR || "unknown",
 };
 
 function must(v, name) {
@@ -64,8 +67,8 @@ function must(v, name) {
 must(cfg.imapHost, "IMAP_HOST");
 must(cfg.imapUser, "IMAP_USER");
 must(cfg.imapPass, "IMAP_PASS");
-must(cfg.cameraId, "XVIEW_CAMERA_ID");
-must(cfg.ingestToken, "XVIEW_INGEST_TOKEN");
+must(cfg.cameraId, "CAMERA_ID (or XVIEW_CAMERA_ID)");
+must(cfg.ingestToken, "INGEST_TOKEN (or XVIEW_INGEST_TOKEN)");
 
 // --- state (UID dedupe) ---
 const STATE_FILE = path.join(process.cwd(), ".smtp-bridge-state.json");
@@ -104,7 +107,10 @@ function parseCapturedAt({ attachmentName, mailDate }) {
   if (m) {
     const d = m[1];
     const t = m[2];
-    return `${d.slice(0, 4)}-${d.slice(4, 6)}-${d.slice(6, 8)}T${t.slice(0, 2)}:${t.slice(2, 4)}:${t.slice(4, 6)}`;
+    return `${d.slice(0, 4)}-${d.slice(4, 6)}-${d.slice(6, 8)}T${t.slice(0, 2)}:${t.slice(
+      2,
+      4
+    )}:${t.slice(4, 6)}`;
   }
 
   // 2026-02-25 15.30.45
@@ -158,12 +164,58 @@ async function postToIngest({ fileBuffer, filename, meta, capturedAt }) {
 function pickImageAttachments(parsed) {
   const out = [];
   const list = parsed.attachments || [];
+
   for (const a of list) {
-    const ct = (a.contentType || "").toLowerCase();
-    const fn = a.filename || "";
-    if (ct.startsWith("image/") || /\.(jpg|jpeg|png|gif|webp)$/i.test(fn)) out.push(a);
+    const ct = String(a.contentType || "").toLowerCase();
+    const fn = String(a.filename || "");
+    const disp = String(a.contentDisposition || "").toLowerCase();
+
+    const hasImageExt = /\.(jpg|jpeg|png|gif|webp)$/i.test(fn);
+    const looksLikeImage =
+      ct.startsWith("image/") ||
+      hasImageExt ||
+      // some senders label images as octet-stream but keep a .jpg filename
+      (ct === "application/octet-stream" && hasImageExt) ||
+      // inline images sometimes have disposition=inline + cid but still are the image
+      (disp === "inline" && (ct.startsWith("image/") || hasImageExt));
+
+    if (looksLikeImage) out.push(a);
   }
+
   return out;
+}
+
+
+
+
+
+/**
+ * Some cameras (e.g., Reolink) embed the image inline in HTML (data:image/...;base64,...)
+ * instead of sending it as a classic attachment.
+ */
+function pickInlineBase64Image(parsed) {
+  const html = parsed?.html || parsed?.textAsHtml || "";
+  if (!html || typeof html !== "string") return null;
+
+  // Match: data:image/jpeg;base64,AAAA...
+  const m = html.match(/data:image\/(jpeg|jpg|png|webp);base64,([A-Za-z0-9+/=]+)/i);
+  if (!m) return null;
+
+  const ext = (m[1] || "jpg").toLowerCase().replace("jpeg", "jpg");
+  const b64 = m[2];
+
+  try {
+    const buf = Buffer.from(b64, "base64");
+    if (!buf?.length) return null;
+
+    return {
+      filename: `inline-${Date.now()}.${ext}`,
+      contentType: `image/${ext === "jpg" ? "jpeg" : ext}`,
+      content: buf,
+    };
+  } catch {
+    return null;
+  }
 }
 
 async function processMailsOnce() {
@@ -205,13 +257,14 @@ async function processMailsOnce() {
     for (const uid of uids) {
       if (isProcessed(state, cfg.mailbox, uid)) {
         if (!cfg.processAll && cfg.markSeen) {
-          try { await client.messageFlagsAdd(uid, ["\\Seen"], { uid: true }); } catch {}
+          try {
+            await client.messageFlagsAdd(uid, ["\\Seen"], { uid: true });
+          } catch {}
         }
         continue;
       }
 
       try {
-        // fetchOne is more reliable than streaming fetch/download on some IMAP servers
         const msg = await withTimeout(
           client.fetchOne(uid, { source: true, envelope: true }, { uid: true }),
           20000,
@@ -229,34 +282,56 @@ async function processMailsOnce() {
         const subject = parsed.subject || "";
         const receivedAt = new Date().toISOString();
 
-        const attachments = pickImageAttachments(parsed);
+        let attachments = pickImageAttachments(parsed);
+
+if (!attachments.length) {
+  const all = parsed.attachments || [];
+  console.log(
+    `[smtp-bridge] uid=${uid} attachment-scan: total=${all.length} :: ` +
+      all
+        .map((a) => `${a.filename || "NO_NAME"}|${a.contentType || "NO_CT"}|disp=${a.contentDisposition || "?"}|cid=${a.cid || a.contentId || "?"}|bytes=${a.size || a.content?.length || 0}`)
+        .join(" ; ")
+  );
+}
+
+
+        if (!attachments.length) {
+          const inline = pickInlineBase64Image(parsed);
+          if (inline) {
+            attachments = [inline];
+            console.log(`[smtp-bridge] uid=${uid} found inline base64 image subject="${subject}"`);
+          }
+        }
 
         if (!attachments.length) {
           console.log(`[smtp-bridge] uid=${uid} no image attachments subject="${subject}"`);
           rememberProcessed(state, cfg.mailbox, uid);
           saveState(state);
           if (!cfg.processAll && cfg.markSeen) {
-            try { await client.messageFlagsAdd(uid, ["\\Seen"], { uid: true }); } catch {}
+            try {
+              await client.messageFlagsAdd(uid, ["\\Seen"], { uid: true });
+            } catch {}
           }
           continue;
         }
 
-        console.log(`[smtp-bridge] uid=${uid} attachments=${attachments.length} subject="${subject}"`);
+        console.log(`[smtp-bridge] uid=${uid} images=${attachments.length} subject="${subject}"`);
 
         for (const a of attachments) {
-          const buf = a.content;
-          if (!buf) throw new Error("Attachment content is empty");
+          const buf = a?.content; // Buffer
+          if (!buf) throw new Error("Image content is empty");
 
-          const capturedAt = parseCapturedAt({ attachmentName: a.filename, mailDate });
+          const filename = a.filename || "camera.jpg";
+          const capturedAt = parseCapturedAt({ attachmentName: filename, mailDate });
 
           const meta = {
             source: "smtp",
-            vendor: "x-view",
+            vendor: cfg.vendor,
             mail_from: from || null,
             mail_subject: subject || null,
             mail_date: mailDate ? new Date(mailDate).toISOString() : null,
             received_time: receivedAt,
-            original_filename: a.filename || null,
+            original_filename: filename || null,
             content_type: a.contentType || null,
             size_bytes: buf?.length || null,
             sha256: sha256(buf),
@@ -264,13 +339,13 @@ async function processMailsOnce() {
 
           const resp = await postToIngest({
             fileBuffer: buf,
-            filename: a.filename || "xview.jpg",
+            filename,
             meta,
             capturedAt,
           });
 
           console.log(
-            `[smtp-bridge] ingest OK uid=${uid} file="${a.filename}" capturedAt=${capturedAt ?? "null"} :: ${resp}`
+            `[smtp-bridge] ingest OK uid=${uid} file="${filename}" capturedAt=${capturedAt ?? "null"} :: ${resp}`
           );
         }
 
@@ -278,7 +353,9 @@ async function processMailsOnce() {
         saveState(state);
 
         if (!cfg.processAll && cfg.markSeen) {
-          try { await client.messageFlagsAdd(uid, ["\\Seen"], { uid: true }); } catch {}
+          try {
+            await client.messageFlagsAdd(uid, ["\\Seen"], { uid: true });
+          } catch {}
         }
       } catch (uidErr) {
         console.error(`[smtp-bridge] uid=${uid} processing error:`, uidErr?.message || uidErr);
@@ -288,7 +365,9 @@ async function processMailsOnce() {
   } catch (e) {
     console.error("[smtp-bridge] cycle error:", e?.message || e);
   } finally {
-    try { if (lock) lock.release(); } catch {}
+    try {
+      if (lock) lock.release();
+    } catch {}
 
     try {
       await Promise.race([
@@ -296,7 +375,9 @@ async function processMailsOnce() {
         new Promise((_, rej) => setTimeout(() => rej(new Error("IMAP logout timeout")), 5000)),
       ]);
     } catch (e) {
-      try { client.close(); } catch {}
+      try {
+        client.close();
+      } catch {}
       console.error("[smtp-bridge] logout/close issue:", e?.message || e);
     }
   }
@@ -304,7 +385,7 @@ async function processMailsOnce() {
 
 async function main() {
   console.log(
-    `[smtp-bridge] start poll=${cfg.pollSeconds}s baseUrl=${cfg.baseUrl} mailbox=${cfg.mailbox} processAll=${cfg.processAll}`
+    `[smtp-bridge] start poll=${cfg.pollSeconds}s baseUrl=${cfg.baseUrl} mailbox=${cfg.mailbox} processAll=${cfg.processAll} vendor=${cfg.vendor}`
   );
 
   // keep-alive so the event loop doesn't go empty
