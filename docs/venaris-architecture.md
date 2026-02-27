@@ -1,6 +1,6 @@
 # Venaris – Architecture (MVP)
 
-Last updated: 2026-02-26
+Last updated: 2026-02-27
 
 ---
 
@@ -28,6 +28,9 @@ Venaris converts:
 
 Images → Detections → Events → Patterns → Insights
 
+Current stage:
+Images → Assets → Events (stub intelligence)
+
 ---
 
 ## 🏗 System Overview
@@ -39,6 +42,8 @@ Venaris consists of five logical layers:
 3. Intelligence Layer
 4. Monitoring Layer
 5. Application Layer
+
+The Ingestion Layer is now considered stable.
 
 ---
 
@@ -58,16 +63,55 @@ Entry points:
 - POST /api/ingest (token-based)
 - POST /api/upload (manual)
 
+Cameras are authenticated via ingest_token.
+
 Each ingest:
 
 - Creates ingest_batch
 - Deduplicates per camera (SHA256)
 - Stores asset
-- Updates camera heartbeat
+- Updates camera heartbeat (last_seen_at)
 - Triggers event clustering
 - Triggers detection stub (future: model pipeline)
 
-Cameras are authenticated via ingest_token.
+---
+
+### SMTP Ingestion (Vendor-aware)
+
+SMTP Bridge:
+
+Mailbox (IMAP)
+→ smtp-bridge.mjs
+→ /api/ingest
+
+Supports:
+
+- Attachments
+- Inline images (CID embedded)
+- Vendor flag (e.g. SMTP_VENDOR=reolink)
+- UID-based deduplication
+- UNSEEN-only processing (default)
+
+Duplicate handling:
+- skippedDuplicates reported
+- captured_at backfilled if needed
+
+---
+
+### FTP Ingestion
+
+FTP folder watcher:
+
+FTP camera
+→ local inbox
+→ ftp-bridge.mjs
+→ /api/ingest
+
+Characteristics:
+
+- Filename timestamp parsing
+- File deleted after successful ingest
+- SHA256 deduplication server-side
 
 ---
 
@@ -81,6 +125,12 @@ camera-assets
 Naming scheme:
 
 {cameraId}/{timestamp}-{hash12}.ext
+
+Image access:
+
+- Signed URLs
+- 20-minute expiry
+- Generated server-side only
 
 ---
 
@@ -131,13 +181,16 @@ Fields:
 - file_count
 - status
 - error_summary
-- meta
+- meta (jsonb)
 
 ---
 
 ## 3️⃣ Intelligence Layer
 
 This is the core of Venaris.
+
+Current state:
+Detection stub only.
 
 ### detections
 Structured information extracted from assets.
@@ -149,9 +202,6 @@ Fields:
 - count
 - score
 - meta
-
-Currently:
-Stub implementation.
 
 Future:
 Model-based detection pipeline.
@@ -169,6 +219,12 @@ Assets within time window →
 Grouped →
 Aggregated into event →
 Scored
+
+Currently:
+Basic clustering.
+
+Future:
+Detection-density based scoring.
 
 ---
 
@@ -195,6 +251,9 @@ Calculates:
 Based on:
 last_seen_at + rule thresholds
 
+Health is fully DB-driven.
+UI reads only from view.
+
 ---
 
 ### ingest_batches
@@ -204,6 +263,7 @@ Tracks ingest quality:
 - status
 - skipped duplicates
 - errors
+- source (ftp / smtp / manual)
 
 ---
 
@@ -218,16 +278,19 @@ Tracks ingest quality:
 ### Cameras (/cameras)
 - Health view
 - Token management
-- Ingest batch overview
-- Asset preview
+- Last 3 assets preview (signed URLs)
+- Last ingest batches
+- Manual refresh controls
 
 ### Ingest Monitoring (/ingest)
 - Batch list
 - Status transparency
+- Source differentiation
 
 ### Events (/events)
 - Wildlife activity feed
-- Aggregated intelligence view
+- Event detail view
+- AssetGrid with relevance toggle
 
 ---
 
@@ -254,6 +317,7 @@ Relevance becomes probabilistic and context-aware.
 - All reads via server routes (service role)
 - Token-based ingest authentication
 - No public write access
+- Signed URLs only (no public bucket exposure)
 
 ---
 
@@ -267,8 +331,15 @@ to:
 
 Structured wildlife intelligence platform.
 
+Current phase:
+Stable ingestion & monitoring layer.
+
+Next phase:
+Intelligence layer expansion.
+
 Future directions:
 
+- AI species detection
 - Pattern detection across cameras
 - Species movement analysis
 - Population density estimation

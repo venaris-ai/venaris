@@ -1,17 +1,20 @@
 # Venaris – Current State
 
-Last updated: 2026-02-26
+Last updated: 2026-02-27
 
 ---
 
 ## ✅ System Status
 
 - Ingest stable (token ingest + manual upload)
-- FTP bridge stable (Reolink simulation)
-- SMTP/IMAP bridge stable (X-View simulation)
+- FTP bridge stable (Reolink FTP live)
+- SMTP/IMAP bridge stable (Reolink Go Ranger PT live)
+- Vendor-aware SMTP processing (reolink)
+- Inline image handling implemented (CID + attachment)
 - Ingest batch monitoring implemented
 - Camera health engine (rule-based per import_method) implemented
 - Home + Cameras UI fully server-driven (RLS safe)
+- Cameras UI enhanced (last 3 shots + last batches)
 - Event layer working (clustering + aggregation)
 - Relevant toggle working + persists
 - Detections stub working (dev)
@@ -38,6 +41,10 @@ Bucket: `camera-assets`
 
 Naming scheme:
 {cameraId}/{timestamp}-{hash12}.ext
+
+Signed URLs:
+- 20 min expiry
+- Generated server-side only
 
 ---
 
@@ -100,7 +107,7 @@ Naming scheme:
 - id
 - camera_id
 - received_at
-- source
+- source (`ftp | smtp | manual`)
 - file_count
 - status
 - error_summary
@@ -206,21 +213,25 @@ Filters:
 - Deletes file after success
 - Updates camera health
 
-Status: ✅ stable
+Status: ✅ stable (live tested)
 
 ---
 
-## X-View (SMTP/IMAP → ingest)
+## Reolink Go Ranger PT (SMTP/IMAP → ingest)
 
-- Mailbox: `xview@venaris.io`
+- Mailbox: `reolink@venaris.io`
 - Script: `scripts/smtp-bridge.mjs`
 - Poll interval: `IMAP_POLL_SECONDS`
 - Default mode: UNSEEN only
 - UID-based dedup via `.smtp-bridge-state.json`
-- Robust per-UID fetch strategy
+- Vendor-aware handling (`SMTP_VENDOR=reolink`)
+- Supports:
+  - Inline images (CID)
+  - Attachments
 - Marks mail as `\Seen` after success
+- Handles skippedDuplicates cleanly
 
-Status: ✅ stable
+Status: ✅ stable (live camera)
 
 ---
 
@@ -239,13 +250,15 @@ Status: ✅ stable
   - stale_after_minutes
   - offline_after_minutes
 - Token copy + regenerate
+- Last 3 assets preview (signed URLs)
 - Last ingest batches
-- Last assets preview
+- Manual refresh buttons
 
 ## Ingest Monitoring (`/ingest`)
 - Lists ingest_batches
 - Status badges
 - Error summary display
+- Source differentiation (smtp / ftp / manual)
 
 ---
 
@@ -264,11 +277,13 @@ Status: ✅ stable
 Venaris now has:
 
 - Multi-source ingestion layer (FTP + SMTP + manual)
+- Vendor-aware SMTP handling
 - Batch monitoring layer
 - Rule-based health engine (configurable per import method)
 - Event clustering layer
 - Detection stub layer
 - Secure server API layer
+- Signed URL preview system
 
 System modular and production-structurable.
 
@@ -301,5 +316,7 @@ System modular and production-structurable.
   - ftp
   - smtp
   - manual
+- If Git commit hangs (Windows):
+  - remove `.git/index.lock`
 
-Architecture stable and ready for next abstraction layer.
+Architecture stable and ready for intelligence layer.
