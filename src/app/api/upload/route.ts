@@ -7,11 +7,16 @@ import { supabaseServer } from "@/lib/supabaseServer";
 import { ingestFiles, safeJsonParse } from "@/lib/ingestCore";
 
 const MAX_FILES = 500; // MVP Guard
-const MAX_ZIP_BYTES = 150 * 1024 * 1024; // 150MB Guard (anpassen wenn nötig)
+const MAX_ZIP_BYTES = 150 * 1024 * 1024; // 150MB Guard
 
 function isImageName(name: string) {
   const n = name.toLowerCase();
-  return n.endsWith(".jpg") || n.endsWith(".jpeg") || n.endsWith(".png") || n.endsWith(".webp");
+  return (
+    n.endsWith(".jpg") ||
+    n.endsWith(".jpeg") ||
+    n.endsWith(".png") ||
+    n.endsWith(".webp")
+  );
 }
 
 function guessContentType(filename: string) {
@@ -27,10 +32,20 @@ function isZipFile(f: File) {
   return n.endsWith(".zip") || ct.includes("zip");
 }
 
+/**
+ * IMPORTANT:
+ * - JSZip returns Buffer/Uint8Array depending on output mode.
+ * - Next/Vercel TypeScript sometimes treats Buffer/Uint8Array as ArrayBufferLike
+ *   (potential SharedArrayBuffer) and rejects it as BlobPart.
+ *
+ * Fix: copy into a fresh Uint8Array backed by a real ArrayBuffer via Uint8Array.from(buf).
+ */
 async function extractImagesFromZip(zipFile: File): Promise<File[]> {
   const ab = await zipFile.arrayBuffer();
   if (ab.byteLength > MAX_ZIP_BYTES) {
-    throw new Error(`zip too large (${Math.round(ab.byteLength / 1024 / 1024)}MB)`);
+    throw new Error(
+      `zip too large (${Math.round(ab.byteLength / 1024 / 1024)}MB)`
+    );
   }
 
   const zip = await JSZip.loadAsync(ab);
@@ -40,13 +55,15 @@ async function extractImagesFromZip(zipFile: File): Promise<File[]> {
   for (const entry of entries) {
     if (!isImageName(entry.name)) continue;
 
-    // JSZip returns Uint8Array via nodebuffer
-    const buf = await entry.async("uint8array");
-    const filename = entry.name.split("/").pop() || `image-${Date.now()}.jpg`;
+    const filename =
+      entry.name.split("/").pop() || `image-${Date.now()}.jpg`;
     const ct = guessContentType(filename);
 
-    // Node 20 has File global
-    out.push(new File([buf], filename, { type: ct }));
+    // Buffer from JSZip (Node). Then copy into a TS-safe Uint8Array with real ArrayBuffer.
+    const buf = await entry.async("nodebuffer"); // => Buffer
+    const u8 = Uint8Array.from(buf); // TS-safe BlobPart (fresh ArrayBuffer)
+    out.push(new File([u8], filename, { type: ct }));
+
     if (out.length >= MAX_FILES) break;
   }
 
@@ -68,7 +85,9 @@ export async function POST(req: Request) {
     const multi = formData.getAll("files");
     const multiAlt = formData.getAll("files[]");
 
-    const raw = ([...(single ? [single] : []), ...multi, ...multiAlt] as any[]).filter(Boolean);
+    const raw = ([...(single ? [single] : []), ...multi, ...multiAlt] as any[]).filter(
+      Boolean
+    );
     const incomingFiles = raw.filter((v): v is File => v instanceof File);
 
     if (incomingFiles.length === 0) {
@@ -81,7 +100,6 @@ export async function POST(req: Request) {
 
     // Expand ZIPs + keep direct images
     const expanded: File[] = [];
-
     for (const f of incomingFiles) {
       if (isZipFile(f)) {
         const imgs = await extractImagesFromZip(f);
@@ -96,7 +114,10 @@ export async function POST(req: Request) {
     const files = expanded.filter((f) => isImageName(f.name)).slice(0, MAX_FILES);
 
     if (files.length === 0) {
-      return NextResponse.json({ error: "no image files found (jpg/png/webp)" }, { status: 400 });
+      return NextResponse.json(
+        { error: "no image files found (jpg/png/webp)" },
+        { status: 400 }
+      );
     }
 
     // Enforce manual source here
