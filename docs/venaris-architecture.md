@@ -1,27 +1,21 @@
-# Venaris – Architecture (MVP)
+Venaris – Architecture (MVP)
 
-Last updated: 2026-02-27
+Last updated: 2026-03-03
 
----
-
-## 🎯 Vision
+🎯 Vision
 
 Venaris is a wildlife data platform.
 
 Cameras are sensors — not the product.
-
 The product is structured wildlife intelligence.
 
 The long-term goal is to transform unstructured wildlife observations
 (images, time-series signals, environmental metadata)
 into structured, queryable ecological intelligence.
 
----
-
-## 🧭 Core Principle
+🧭 Core Principle
 
 Raw data is not valuable.
-
 Structured context is valuable.
 
 Venaris converts:
@@ -31,54 +25,80 @@ Images → Detections → Events → Patterns → Insights
 Current stage:
 Images → Assets → Events (stub intelligence)
 
----
-
-## 🏗 System Overview
+🏗 System Overview
 
 Venaris consists of five logical layers:
 
-1. Ingestion Layer
-2. Storage Layer
-3. Intelligence Layer
-4. Monitoring Layer
-5. Application Layer
+Ingestion Layer
 
-The Ingestion Layer is now considered stable.
+Storage Layer
 
----
+Intelligence Layer
 
-## 1️⃣ Ingestion Layer
+Monitoring Layer
 
-Purpose:
-Receive wildlife sensor data from multiple import methods.
+Application Layer
 
-Supported import methods:
+System State (MVP Status)
 
-- ftp
-- smtp
-- manual
+The Ingestion Layer is now production-stable for:
 
-Entry points:
+SMTP (Reolink)
 
-- POST /api/ingest (token-based)
-- POST /api/upload (manual)
+FTP (X-View via Hetzner Gateway)
 
-Cameras are authenticated via ingest_token.
+Manual Upload
+
+All ingest channels normalize into a unified ingest contract.
+
+1️⃣ Ingestion Layer
+Purpose
+
+Receive wildlife sensor data from multiple import methods
+and normalize them into a unified ingest contract.
+
+Unified Ingest Contract
+
+Endpoint:
+
+POST /api/ingest
+
+Requirements:
+
+Header: x-ingest-token
+
+Body: multipart/form-data
+
+file
+
+metadata (JSON)
+
+Example metadata:
+
+{
+  "source": "ftp",
+  "ftp_user": "xview01",
+  "filename": "IMG_1234.JPG"
+}
+Ingest Responsibilities
 
 Each ingest:
 
-- Creates ingest_batch
-- Deduplicates per camera (SHA256)
-- Stores asset
-- Updates camera heartbeat (last_seen_at)
-- Triggers event clustering
-- Triggers detection stub (future: model pipeline)
+Creates ingest_batch
 
----
+Deduplicates per camera (SHA256)
 
-### SMTP Ingestion (Vendor-aware)
+Stores asset in Supabase Storage
 
-SMTP Bridge:
+Updates camera.last_seen_at
+
+Triggers event clustering
+
+Triggers detection stub (future model pipeline)
+
+SMTP Ingestion (Vendor-Aware Bridge)
+
+Architecture:
 
 Mailbox (IMAP)
 → smtp-bridge.mjs
@@ -86,40 +106,144 @@ Mailbox (IMAP)
 
 Supports:
 
-- Attachments
-- Inline images (CID embedded)
-- Vendor flag (e.g. SMTP_VENDOR=reolink)
-- UID-based deduplication
-- UNSEEN-only processing (default)
+Attachments
+
+Inline images (CID)
+
+SMTP_VENDOR flag (e.g. reolink)
+
+UID-based deduplication
+
+UNSEEN-only processing
 
 Duplicate handling:
-- skippedDuplicates reported
-- captured_at backfilled if needed
 
----
+skippedDuplicates reported
 
-### FTP Ingestion
+captured_at backfilled if needed
 
-FTP folder watcher:
+MVP note:
+SMTP is mailbox-based per camera.
+Not long-term optimal but stable for MVP.
 
-FTP camera
-→ local inbox
-→ ftp-bridge.mjs
-→ /api/ingest
+FTP Ingestion (Gateway-Based Architecture)
+Final Architecture (Production-Ready)
+
+Wildlife Camera (X-View LTE)
+→ Hetzner VPS (FTP Gateway via vsftpd)
+→ /data/ftp-ingest/<ftp_user>/inbox
+→ FTP Worker (Node.js, systemd service)
+→ POST /api/ingest
+→ Supabase Storage
+
+Gateway Characteristics
+
+Dedicated VPS (Hetzner)
+
+vsftpd in passive mode
+
+Per-camera FTP user
+
+chroot isolation
+
+No public file exposure
+
+UFW firewall
+
+SSH key authentication only
+
+Root login disabled
+
+FTP users cannot access other users' directories.
+
+Directory Structure
+/data/ftp-ingest/
+  └── xview01/
+        └── inbox/
+
+Permissions model:
+
+Owner: ftp user (e.g. xview01)
+
+Group: ftp-ingest
+
+Mode: 2770 (setgid enabled)
+
+local_umask=007 (vsftpd)
+
+This ensures:
+
+Worker can read & delete
+
+Files are group-writable
+
+Isolation between cameras
+
+No world-readable access
+
+FTP Worker
+
+Location:
+
+/opt/venaris-worker/ftp-worker.mjs
+
+Managed via:
+
+systemd → venaris-ftp-worker.service
 
 Characteristics:
 
-- Filename timestamp parsing
-- File deleted after successful ingest
-- SHA256 deduplication server-side
+Poll-based (POLL_SECONDS)
 
----
+Stable file-size check before ingest
 
-## 2️⃣ Storage Layer
+SHA256 pre-hash logging
 
-### Supabase Storage
+Multipart/form-data generation
+
+Automatic metadata injection
+
+Delete only after successful ingest
+
+Retries on failure (implicit via polling)
+
+Vercel Deployment Protection (Automation)
+
+Production API is protected via Vercel Deployment Protection.
+
+Worker uses:
+
+?x-vercel-protection-bypass=<token>
+
+Bypass token stored in:
+
+/opt/venaris-worker/.env
+
+No tokens stored in GitHub.
+
+Deduplication Model
+
+Deduplication is server-side (API layer).
+
+Strategy:
+
+SHA256 file hash
+
+Unique constraint per camera
+
+Duplicate → skippedDuplicates++
+
+Asset not re-created
+
+Event clustering not retriggered
+
+This ensures idempotent ingest behavior.
+
+2️⃣ Storage Layer
+Supabase Storage
 
 Bucket:
+
 camera-assets
 
 Naming scheme:
@@ -128,200 +252,272 @@ Naming scheme:
 
 Image access:
 
-- Signed URLs
-- 20-minute expiry
-- Generated server-side only
+Signed URLs
 
----
+20-minute expiry
 
-## Database Tables
+Generated server-side only
 
-### reviers
+FTP Gateway holds no permanent image storage.
+
+Supabase is the single source of truth.
+
+Database Tables
+reviers
+
 Hunting areas / management units.
 
-### cameras
+cameras
+
 Represents wildlife sensors.
 
 Fields:
-- id
-- revier_id
-- name
-- location_name
-- import_method
-- ingest_token
-- last_seen_at
-- created_at
 
----
+id
 
-### assets
+revier_id
+
+name
+
+location_name
+
+import_method (smtp / ftp / manual)
+
+ingest_token
+
+last_seen_at
+
+created_at
+
+assets
+
 Raw captured observations.
 
 Fields:
-- id
-- camera_id
-- storage_path
-- file_hash
-- status
-- relevant
-- captured_at
-- created_at
-- ingest_batch_id
 
----
+id
 
-### ingest_batches
-Logical delivery units of ingest operations.
+camera_id
+
+storage_path
+
+file_hash
+
+status
+
+relevant
+
+captured_at
+
+created_at
+
+ingest_batch_id
+
+ingest_batches
+
+Logical delivery units.
 
 Fields:
-- id
-- camera_id
-- received_at
-- source
-- file_count
-- status
-- error_summary
-- meta (jsonb)
 
----
+id
 
-## 3️⃣ Intelligence Layer
+camera_id
 
-This is the core of Venaris.
+received_at
+
+source (ftp / smtp / manual / token)
+
+file_count
+
+skipped_duplicates
+
+status
+
+error_summary
+
+meta (jsonb)
+
+Batch source derived from metadata.source.
+
+3️⃣ Intelligence Layer
 
 Current state:
 Detection stub only.
 
-### detections
-Structured information extracted from assets.
+detections
 
 Fields:
-- asset_id
-- label
-- species
-- count
-- score
-- meta
+
+asset_id
+
+label
+
+species
+
+count
+
+score
+
+meta
 
 Future:
 Model-based detection pipeline.
 
----
+events
 
-### events
-Aggregated wildlife events per camera.
+Aggregated wildlife activity.
 
-Events represent time-clustered wildlife activity.
+Logic:
 
-Event logic:
-
-Assets within time window →
-Grouped →
-Aggregated into event →
-Scored
+Assets within time window
+→ grouped
+→ aggregated
+→ scored
 
 Currently:
-Basic clustering.
+
+Basic time-window clustering via RPC
 
 Future:
-Detection-density based scoring.
 
----
+Detection-density scoring
 
-### event_assets
+Species-aware clustering
+
+Movement modeling
+
+event_assets
+
 Join table between events and assets.
 
----
+4️⃣ Monitoring Layer
 
-## 4️⃣ Monitoring Layer
+Venaris monitors ingest reliability and sensor health.
 
-Venaris monitors sensor reliability and ingest integrity.
+camera_health_rules
 
-### camera_health_rules
-Defines health thresholds per import_method.
+Defines thresholds per import_method.
 
-### camera_health (view)
+camera_health (view)
+
 Calculates:
 
-- online
-- stale
-- offline
-- unknown
+online
+
+stale
+
+offline
+
+unknown
 
 Based on:
+
 last_seen_at + rule thresholds
 
-Health is fully DB-driven.
-UI reads only from view.
+Fully DB-driven.
 
----
+ingest monitoring
 
-### ingest_batches
-Tracks ingest quality:
+Tracks:
 
-- file_count
-- status
-- skipped duplicates
-- errors
-- source (ftp / smtp / manual)
+file_count
 
----
+skipped duplicates
 
-## 5️⃣ Application Layer
+source differentiation
 
-### Home (/)
-- Upload
-- Asset list
-- Relevance toggle
-- Camera status indicator
+error summary
 
-### Cameras (/cameras)
-- Health view
-- Token management
-- Last 3 assets preview (signed URLs)
-- Last ingest batches
-- Manual refresh controls
+FTP and SMTP are first-class differentiated ingest sources.
 
-### Ingest Monitoring (/ingest)
-- Batch list
-- Status transparency
-- Source differentiation
+5️⃣ Application Layer
+Home (/)
 
-### Events (/events)
-- Wildlife activity feed
-- Event detail view
-- AssetGrid with relevance toggle
+Upload
 
----
+Asset list
 
-## 🧠 Relevance Model
+Relevance toggle
+
+Camera status indicator
+
+Cameras (/cameras)
+
+Health view
+
+Token management
+
+Last 3 assets preview
+
+Last ingest batches
+
+Manual refresh controls
+
+Ingest Monitoring (/ingest)
+
+Batch list
+
+Source transparency
+
+Error visibility
+
+Events (/events)
+
+Wildlife activity feed
+
+Event detail view
+
+AssetGrid with relevance toggle
+
+🧠 Relevance Model
 
 Current:
-Boolean `relevant`
+
+boolean relevant
 
 Planned evolution:
 
-- relevance_score (system generated)
-- user_relevant (manual override)
-- event_relevance_score
+relevance_score
+
+user_relevant override
+
+event_relevance_score
 
 Long-term:
-Relevance becomes probabilistic and context-aware.
 
----
+Probabilistic, context-aware relevance modeling.
 
-## 🔒 Security Model
+🔒 Security Model
 
-- RLS enabled on all tables
-- Client cannot read tables directly
-- All reads via server routes (service role)
-- Token-based ingest authentication
-- No public write access
-- Signed URLs only (no public bucket exposure)
+RLS enabled
 
----
+No client-side direct table access
 
-## 🚀 Strategic Direction
+All reads via server routes
+
+Service role only on server
+
+Token-based ingest authentication
+
+No public write endpoints
+
+Signed URLs only
+
+Gateway:
+
+SSH key only
+
+No password login
+
+chroot FTP users
+
+Restricted passive port range
+
+Firewall enforced
+
+No permanent image storage
+
+🚀 Strategic Direction
 
 Venaris is evolving from:
 
@@ -332,17 +528,19 @@ to:
 Structured wildlife intelligence platform.
 
 Current phase:
-Stable ingestion & monitoring layer.
+
+Production-ready multi-channel ingestion & monitoring.
 
 Next phase:
-Intelligence layer expansion.
 
-Future directions:
+Model-based detection
 
-- AI species detection
-- Pattern detection across cameras
-- Species movement analysis
-- Population density estimation
-- Seasonal trend analysis
-- Multi-revier aggregation
-- Predictive wildlife modeling
+Species classification
+
+Event scoring
+
+Pattern analysis across cameras
+
+Cross-revier aggregation
+
+Predictive wildlife modeling

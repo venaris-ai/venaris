@@ -1,322 +1,508 @@
-# Venaris – Current State
+Perfekt.
+Hier ist die aktualisierte current-state.md – konsistent mit dem realen Stand (FTP jetzt voll production-stable inkl. Vercel Bypass, Permission-Fix und erfolgreichem End-to-End-Test).
 
-Last updated: 2026-02-27
+Du kannst den kompletten Inhalt ersetzen.
 
----
+Venaris – Current State
 
-## ✅ System Status
+Last updated: 2026-03-03 (Day 3 – FTP Production Stable)
 
-- Ingest stable (token ingest + manual upload)
-- FTP bridge stable (Reolink FTP live)
-- SMTP/IMAP bridge stable (Reolink Go Ranger PT live)
-- Vendor-aware SMTP processing (reolink)
-- Inline image handling implemented (CID + attachment)
-- Ingest batch monitoring implemented
-- Camera health engine (rule-based per import_method) implemented
-- Home + Cameras UI fully server-driven (RLS safe)
-- Cameras UI enhanced (last 3 shots + last batches)
-- Event layer working (clustering + aggregation)
-- Relevant toggle working + persists
-- Detections stub working (dev)
-- Security Advisor clean (0 errors / 0 warnings / 0 suggestions)
+✅ System Status
 
----
+Ingest stable (token ingest + manual upload)
 
-# 1️⃣ Infrastructure
+SMTP/IMAP bridge stable (Reolink live)
 
-### Repository
-- GitHub: venaris-ai/venaris
-- Branch: main
+FTP Gateway fully operational (X-View via Hetzner)
 
-### Tech Stack
-- Next.js (App Router, Turbopack)
-- Supabase (Postgres + Storage)
-- Tailwind CSS
+Worker → Production API (Vercel) confirmed
 
----
+Vercel Deployment Protection bypass implemented
 
-# 2️⃣ Storage
+SHA256 per-camera dedup stable
 
-Bucket: `camera-assets`
+File deletion after ingest confirmed
+
+Vendor-aware SMTP processing implemented
+
+Inline image handling (CID + attachment) implemented
+
+Ingest batch monitoring implemented
+
+Camera health engine (rule-based per import_method) implemented
+
+Home + Cameras UI fully server-driven (RLS safe)
+
+Cameras UI enhanced (last 3 shots + last batches)
+
+Event layer working (clustering + aggregation)
+
+Relevant toggle working + persists
+
+Detection stub working (dev)
+
+Security Advisor clean (0 errors / 0 warnings / 0 suggestions)
+
+1️⃣ Infrastructure
+Repository
+
+GitHub: venaris-ai/venaris
+
+Branch: main
+
+Daily commits
+
+No secrets committed
+
+Tech Stack
+
+Next.js (App Router)
+
+Supabase (Postgres + Storage)
+
+Tailwind CSS
+
+Node.js (SMTP bridge + FTP worker)
+
+Hetzner VPS (FTP Gateway)
+
+2️⃣ Production Gateway (FTP – Stable)
+Hetzner VPS
+
+Server:
+
+CX23
+
+Ubuntu 24.04
+
+Security:
+
+SSH key-only login
+
+Root login disabled
+
+UFW enabled
+
+Ports open:
+
+22 (SSH)
+
+21 (FTP control)
+
+40000–40100 (Passive FTP)
+
+Gateway is stateless.
+
+FTP (vsftpd)
+
+Directory model:
+
+/data/ftp-ingest/<ftp_user>/inbox
+
+Example:
+
+User: xview01
+
+Path: /data/ftp-ingest/xview01/inbox
+
+Permission model (final):
+
+/data                     755 root:root
+/data/ftp-ingest          755 root:root
+/data/ftp-ingest/xview01  2770 xview01:ftp-ingest
+/data/.../inbox           2770 xview01:ftp-ingest
+
+Key elements:
+
+Shared group: ftp-ingest
+
+setgid enabled (2)
+
+vsftpd: local_umask=007
+
+Files created as 660
+
+Worker can delete successfully
+
+Confirmed:
+File delete after ingest works.
+
+3️⃣ FTP Worker (Production Confirmed)
+
+Location:
+
+/opt/venaris-worker
+
+Service:
+
+venaris-ftp-worker (systemd)
+
+Environment:
+
+/opt/venaris-worker/.env
+
+Key variables:
+
+VENARIS_INGEST_URL=https://<prod>/api/ingest?x-vercel-protection-bypass=<token>
+POLL_SECONDS=5
+CAMERA_TOKEN_XVIEW01=cam-view-1
+Worker Behavior (Confirmed Live)
+
+Poll inbox
+
+Ensure file size stable (LTE safety)
+
+Compute SHA256 (log only)
+
+Send multipart FormData
+
+metadata.source="ftp"
+
+If response OK:
+
+ingest_batch created
+
+dedup handled
+
+file deleted
+
+If error:
+
+file retained for retry
+
+Observed:
+
+ok batchId=...
+accepted=1 skippedDup=0
+deleted ...
+
+and for duplicates:
+
+accepted=0 skippedDup=1
+deleted ...
+
+Inbox remains clean.
+
+4️⃣ Storage
+
+Bucket:
+
+camera-assets
 
 Naming scheme:
+
 {cameraId}/{timestamp}-{hash12}.ext
 
 Signed URLs:
-- 20 min expiry
-- Generated server-side only
 
----
+20 min expiry
 
-# 3️⃣ Database (Active Tables)
+Generated server-side only
 
-### reviers
-- id
-- name
-- area_ha
-- region
-- created_at
+Supabase is the only persistent storage.
+Hetzner holds no permanent wildlife data.
 
-### cameras
-- id
-- revier_id
-- name
-- location_name
-- import_method (`ftp | smtp | manual`)
-- ingest_token
-- last_seen_at
-- created_at
+5️⃣ Database (Active Tables)
+reviers
 
-### assets
-- id
-- camera_id
-- storage_path
-- file_hash (sha256 per camera dedup)
-- status
-- relevant
-- captured_at
-- created_at
-- ingest_batch_id
+id
 
-### detections (DEV STUB)
-- id
-- asset_id
-- label
-- species
-- count
-- score
-- meta
-- created_at
+name
 
-### events
-- id
-- camera_id
-- start_at
-- end_at
-- top_label
-- top_species
-- top_count
-- relevance_score
-- created_at
+area_ha
 
-### event_assets
-- event_id
-- asset_id
+region
 
-### ingest_batches
-- id
-- camera_id
-- received_at
-- source (`ftp | smtp | manual`)
-- file_count
-- status
-- error_summary
-- meta (jsonb)
+created_at
 
-### camera_health_rules ✅
-- import_method (PK)
-- stale_after_minutes
-- offline_after_minutes
-- created_at
+cameras
 
----
+id
 
-# 4️⃣ Views
+revier_id
 
-### camera_health ✅
-Rule-based health evaluation per import_method.
+name
 
-Exposes:
-- id
-- name
-- import_method
-- last_seen_at
-- stale_after_minutes
-- offline_after_minutes
-- health_status (`online | stale | offline | unknown`)
+location_name
 
-Health logic:
-- online → last_seen < stale_after_minutes
-- stale → between stale_after and offline_after
-- offline → > offline_after
-- unknown → no last_seen_at
+import_method (ftp | smtp | manual)
 
-### event_feed
-- security_invoker enabled
-- used by `/events`
+ingest_token
 
----
+last_seen_at
 
-# 5️⃣ API Routes (Server)
+created_at
 
-### POST /api/upload
-- Dedup per camera via sha256
-- Upload to storage
-- Insert into `assets`
-- Write detection stub
-- Call `upsert_event_for_asset`
-- Update `cameras.last_seen_at`
+Current cameras:
 
-### POST /api/ingest
-- Auth via `x-ingest-token`
-- Supports single + multiple files
-- Creates `ingest_batches`
-- Dedup per camera via sha256
-- Backfills `captured_at` if duplicate + NULL
-- Sets `captured_at` from:
-  1) `capturedAt`
-  2) `metadata.device_time`
-- Writes detection stub
-- Calls `upsert_event_for_asset`
-- Updates `cameras.last_seen_at`
+Reolink → smtp
 
-### GET /api/assets
-Query params:
-- onlyRelevant
-- cameraId
-- limit
+X-View → ftp
 
-### GET /api/asset-url
-- Signed URL (20 min)
+assets
 
-### POST /api/asset-relevant
-- Toggle relevant flag
+id
 
-### GET /api/ingest-batches
+camera_id
+
+storage_path
+
+file_hash (sha256 per-camera dedup)
+
+status
+
+relevant
+
+captured_at
+
+created_at
+
+ingest_batch_id
+
+detections (DEV STUB)
+
+id
+
+asset_id
+
+label
+
+species
+
+count
+
+score
+
+meta
+
+created_at
+
+events
+
+id
+
+camera_id
+
+start_at
+
+end_at
+
+top_label
+
+top_species
+
+top_count
+
+relevance_score
+
+created_at
+
+event_assets
+
+event_id
+
+asset_id
+
+ingest_batches
+
+id
+
+camera_id
+
+received_at
+
+source (ftp | smtp | manual)
+
+file_count
+
+skipped_duplicates
+
+status
+
+error_summary
+
+meta (jsonb)
+
+camera_health_rules
+
+import_method (PK)
+
+stale_after_minutes
+
+offline_after_minutes
+
+created_at
+
+6️⃣ Views
+camera_health
+
+Rule-based evaluation per import_method.
+
+Health states:
+
+online
+
+stale
+
+offline
+
+unknown
+
+Based on:
+last_seen_at + thresholds
+
+event_feed
+
+security_invoker enabled
+
+Used by /events
+
+7️⃣ API Routes (Production-Ready)
+POST /api/upload
+
+Manual upload.
+
+POST /api/ingest
+
+Token-based ingest.
+Multipart only.
+Per-camera SHA256 dedup.
+Backfills captured_at.
+Triggers event RPC.
+Updates cameras.last_seen_at.
+
+GET /api/assets
+
 Filters:
-- cameraId
-- source
-- status
-- limit
 
-### GET /api/camera-health
-- Reads from `camera_health` view
-- No RLS exposure
+onlyRelevant
 
-### GET /api/camera-token
-- Returns ingest_token for given cameraId
+cameraId
 
-### POST /api/camera-token
-- Regenerates ingest token
+limit
 
----
+GET /api/asset-url
 
-# 6️⃣ Integrations
+Returns signed URL (20 min).
 
-## Reolink (FTP → ingest)
+POST /api/asset-relevant
 
-- Folder: `C:\dev\venaris_ftp_inbox`
-- Script: `scripts/ftp-bridge.mjs`
-- Watches folder
-- Parses timestamp from filename
-- Sends to `/api/ingest`
-- Deletes file after success
-- Updates camera health
+Toggle relevant.
 
-Status: ✅ stable (live tested)
+GET /api/ingest-batches
 
----
+Filterable by:
 
-## Reolink Go Ranger PT (SMTP/IMAP → ingest)
+cameraId
 
-- Mailbox: `reolink@venaris.io`
-- Script: `scripts/smtp-bridge.mjs`
-- Poll interval: `IMAP_POLL_SECONDS`
-- Default mode: UNSEEN only
-- UID-based dedup via `.smtp-bridge-state.json`
-- Vendor-aware handling (`SMTP_VENDOR=reolink`)
-- Supports:
-  - Inline images (CID)
-  - Attachments
-- Marks mail as `\Seen` after success
-- Handles skippedDuplicates cleanly
+source
 
-Status: ✅ stable (live camera)
+status
 
----
+limit
 
-# 7️⃣ UI Status
+GET /api/camera-health
 
-## Home (`/`)
-- Upload
-- Asset list
-- Relevant filter
-- Camera dropdown shows health indicator
+Reads from camera_health view.
 
-## Cameras (`/cameras`)
-- Health indicator (emoji + rule-based)
-- Displays:
-  - last_seen_at
-  - stale_after_minutes
-  - offline_after_minutes
-- Token copy + regenerate
-- Last 3 assets preview (signed URLs)
-- Last ingest batches
-- Manual refresh buttons
+GET /api/camera-token
 
-## Ingest Monitoring (`/ingest`)
-- Lists ingest_batches
-- Status badges
-- Error summary display
-- Source differentiation (smtp / ftp / manual)
+Returns ingest_token.
 
----
+POST /api/camera-token
 
-# 8️⃣ Security / RLS
+Regenerates ingest token.
 
-- RLS enabled on all public tables
-- Client cannot query tables directly
-- All reads via server routes (service role)
-- Functions use fixed search_path
-- Security Advisor clean
+8️⃣ Integrations
+Reolink Go Ranger PT (SMTP → ingest)
 
----
+Mailbox: reolink@venaris.io
 
-# 9️⃣ Architecture State
+Script: smtp-bridge.mjs
+
+UNSEEN-only mode
+
+UID dedup
+
+Vendor-aware
+
+Inline images supported
+
+Status: ✅ Stable
+
+X-View LTE (FTP → Worker → ingest)
+
+FTP user: xview01
+
+Passive FTP
+
+Ingest token: cam-view-1
+
+import_method: ftp
+
+Worker forwarding confirmed
+
+Production ingest confirmed
+
+File deletion confirmed
+
+Status: ✅ Fully operational
+
+9️⃣ Architecture Maturity
 
 Venaris now has:
 
-- Multi-source ingestion layer (FTP + SMTP + manual)
-- Vendor-aware SMTP handling
-- Batch monitoring layer
-- Rule-based health engine (configurable per import method)
-- Event clustering layer
-- Detection stub layer
-- Secure server API layer
-- Signed URL preview system
+Multi-source ingestion layer
 
-System modular and production-structurable.
+Vendor-aware SMTP bridge
 
----
+Dedicated FTP Gateway (isolated)
 
-# 🔟 Open TODOs (Next Phase)
+Worker-based ingestion transformation
 
-### Core Platform
-- [ ] Replace detection stub with real model pipeline
-- [ ] System vs user relevance separation
-- [ ] Detection-based event scoring refinement
+Vercel-protected production ingest endpoint
 
-### Monitoring
-- [ ] Health alert log table (DB only)
-- [ ] Error-rate based health override
-- [ ] Per-camera ingest KPI stats
+SHA256 deduplication
 
-### Product Layer
-- [ ] Dashboard (online/stale/offline summary)
-- [ ] Revier-based filtering
-- [ ] Multi-user structure (future SaaS)
+Batch monitoring
 
----
+Rule-based health engine
 
-# 11️⃣ Operational Notes
+Event clustering layer
 
-- SMTP bridge processes UNSEEN mails by default.
-- Health thresholds configurable via `camera_health_rules`.
-- System supports:
-  - ftp
-  - smtp
-  - manual
-- If Git commit hangs (Windows):
-  - remove `.git/index.lock`
+Detection stub layer
 
-Architecture stable and ready for intelligence layer.
+Secure RLS API layer
+
+Signed URL preview system
+
+Infrastructure is production-structurable.
+
+🔟 Immediate Next Step
+
+Next expansion:
+
+ZEISS Secacam 5 integration.
+
+Likely path:
+App-based export → Cloud folder → Ingest normalization.
+
+Separate design session required.
+
+11️⃣ Operational Notes
+
+SMTP processes UNSEEN only.
+
+FTP Gateway isolates users via chroot.
+
+Worker deletes files only after successful ingest.
+
+Dedup is idempotent.
+
+Supabase is the single source of truth.
+
+Hetzner is a transport layer only.
+
+Worker requires bypass token if Vercel Protection active.
+
+Rotate bypass token if leaked.

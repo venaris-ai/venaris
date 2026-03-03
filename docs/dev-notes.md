@@ -1,38 +1,31 @@
+Venaris – Dev Notes
 
-# Venaris – Dev Notes
+Last updated: 2026-03-03 (Day 3 – FTP Ingest Production Stable)
 
-Last updated: 2026-02-27
+This file documents operational setup, real-world behavior,
+and important implementation details that are not purely architectural.
 
-Diese Datei ist bewusst operativ.
-Sie beantwortet:
+It is intentionally practical.
 
-- Wie läuft das System lokal?
-- Was bricht typischerweise?
-- Was darf man nicht kaputt machen?
+1️⃣ Local Development Setup (Windows)
 
----
+Project root:
 
-## 1. Local Setup
+C:\dev\venaris
 
-### App starten
+Run app:
 
-```bash
 npm run dev
 
-Bridges starten
+Local URL:
 
-FTP → ingest
-node scripts/ftp-bridge.mjs
+http://localhost:3000
 
-SMTP → ingest
-node scripts/smtp-bridge.mjs
+Environment file:
 
-Hinweis:
-Bridges sind bewusst getrennte Prozesse.
-Sie simulieren produktionsnahe Hardware-Ingestion.
+.env.local
 
-2. Environment Variables (lokal)
-Supabase
+Contains:
 
 NEXT_PUBLIC_SUPABASE_URL
 
@@ -40,228 +33,332 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY
 
 SUPABASE_SERVICE_ROLE_KEY
 
-App / Ingest
+IMAP credentials (SMTP bridge)
 
-VENARIS_BASE_URL (z.B. http://localhost:3000
-)
+INGEST_TOKEN (test cameras)
 
-FTP Bridge
+⚠️ Never commit .env files.
 
-INGEST_TOKEN (Token einer Kamera, z.B. cam1-test)
+2️⃣ Ingest API Contract (CRITICAL)
 
-Optional:
+Route:
 
-FTP_INBOX (default: C:\dev\venaris_ftp_inbox)
+src/app/api/ingest/route.ts
 
-INGEST_URL (default: http://localhost:3000/api/ingest
-)
+Requirements:
 
-SMTP Bridge
+Header: x-ingest-token
 
-IMAP_HOST
+Body: multipart/form-data
 
-IMAP_PORT=993
+File field: "file"
 
-IMAP_SECURE=true
+metadata must be JSON string
 
-IMAP_USER
+metadata.source determines ingest_batches.source
 
-IMAP_PASS
+Example metadata:
 
-IMAP_MAILBOX=INBOX
+{
+  "source": "ftp",
+  "ftp_user": "xview01",
+  "filename": "IMG_1234.JPG"
+}
+Common Failure Modes (Already Encountered)
+❌ Sending raw binary (application/octet-stream)
 
-IMAP_POLL_SECONDS
-
-IMAP_MARK_SEEN=true
-
-IMAP_PROCESS_ALL=false
-
-SMTP_VENDOR (optional, z.B. reolink)
-
-SMTP_CAMERA_ID
-
-SMTP_INGEST_TOKEN
-
-Wichtig:
-IMAP_PROCESS_ALL nur für Debugging verwenden.
-Standard ist UNSEEN-only Betrieb.
-
-3. RLS & Server Access
-
-RLS ist auf allen Tabellen aktiv.
-
-Client darf keine Tabellen direkt lesen.
-
-Alle Reads laufen über Server-Routes mit Service Role.
-
-Niemals:
-
-Supabase-Client im Frontend direkt für DB-Reads verwenden
-
-Service Role Key im Client exponieren
-
-Security Advisor: clean.
-
-4. SMTP Besonderheiten
-Verarbeitung
-
-Standardmäßig werden nur UNSEEN Mails verarbeitet.
-
-Bereits gelesene Mails werden ignoriert.
-
-UID-Dedup wird über .smtp-bridge-state.json gespeichert.
-
-Diese Datei darf niemals committed werden.
-
-Reolink Besonderheiten
-
-Reolink kann Bilder senden als:
-
-klassische Attachments
-
-Inline Images (CID embedded im HTML-Body)
-
-Bridge unterstützt beide Varianten.
-
-Vendor-Handling:
-SMTP_VENDOR=reolink aktiviert spezifische Verarbeitung.
-
-Duplicate Handling
-
-Wenn ein Bild identisch ist:
-
-skippedDuplicates wird im ingest response protokolliert.
-
-captured_at wird ggf. backfilled.
-
-5. FTP Besonderheiten
-
-Dateien werden nach erfolgreichem Ingest gelöscht.
-
-Filename kann capturedAt enthalten (YYYYMMDD_HHMMSS).
-
-Dedup erfolgt serverseitig per SHA256 pro Kamera.
-
-FTP ist rein dateibasiert, keine UID-Logik.
-
-6. Health Engine
-
-Health wird nicht im Code berechnet.
-
-Health basiert auf DB-Regeln (camera_health_rules).
-
-Regeln sind pro import_method definiert.
-
-UI liest ausschließlich aus View camera_health.
-
-Health basiert auf:
-
-last_seen_at
-
-stale_after_minutes
-
-offline_after_minutes
-
-SMTP- und FTP-Ingest aktualisieren last_seen_at automatisch.
-
-7. UI Besonderheiten
-Cameras Page
-
-Zeigt:
-
-Health Status (Emoji + Regel)
-
-last_seen_at
-
-Token + Regenerate
-
-Letzte 3 Assets (Signed URLs)
-
-Letzte 10 Ingest Batches
-
-Assets werden über /api/assets geladen.
-Signed URLs werden serverseitig generiert (/api/asset-url).
-
-8. Typische Fehlerquellen
-SMTP Bridge läuft, aber nichts passiert
-
-IMAP_PROCESS_ALL=false + Mail bereits SEEN
-
-Falscher SMTP_VENDOR
-
-Falscher ingest_token
-
-Kamera-ID falsch gemappt
-
-Git hängt bei Commit
-
-Ursache:
-
-git commit -a ohne -m
-
-Editor blockiert
+→ 500 Failed to parse body as FormData
 
 Fix:
-rm -f .git/index.lock
+Always use multipart/form-data.
 
-Danach:
-git commit -m "message"
+❌ Missing metadata
 
-Nie:
+→ ingest_batches.source becomes incorrect
 
-.git löschen
+Fix:
+Always append metadata in FormData.
 
-9. Commit Hygiene
+❌ Wrong ingest URL (localhost instead of production)
 
-Nie committen:
+Worker must always target production API.
 
-.env.local
+❌ Vercel Deployment Protection
 
-.smtp-bridge-state.json
+Initial failure:
 
-Commit Schema:
+401 + HTML authentication page
+Worker received SSO redirect page.
 
-feat:
+Cause:
+Vercel Deployment Protection active.
 
-fix:
+Fix:
+Append:
 
-docs:
+?x-vercel-protection-bypass=<token>
 
-chore:
+to VENARIS_INGEST_URL.
 
-Bevorzugt:
+Bypass token stored in:
 
-git commit -m "feat: short clear description"
+/opt/venaris-worker/.env
 
-Nicht verwenden:
+Never commit token.
 
-git commit -a
-10. Architektur-Status
+❌ 307 Redirect from Vercel
 
-Ingestion Layer gilt als stabil:
+Observed:
 
-FTP
+HTTP/2 307 Redirecting...
 
-SMTP (inkl. Inline Images)
+Reason:
+Missing bypass cookie.
 
-Manual Upload
+Resolved by:
+Using bypass query parameter consistently in worker URL.
 
-Dedup
+3️⃣ SMTP Bridge (Reolink)
 
-Batch Monitoring
+Flow:
 
-Health Engine
+IMAP mailbox
+→ smtp-bridge.mjs
+→ /api/ingest
 
-System bereit für Intelligence Layer.
+Characteristics:
 
+Processes UNSEEN mails only
 
+Dedup by IMAP UID
 
+Supports inline images (CID)
 
+Vendor flag via SMTP_VENDOR env
 
+Mailbox example:
 
+reolink@venaris.io
 
+Known behavior:
 
+Duplicate mail attachments → skippedDuplicates++
 
+captured_at can be backfilled
 
+SMTP is stable for MVP.
 
+4️⃣ FTP Gateway (Hetzner)
 
+Purpose:
+Handle FTP-native cameras (X-View and future devices).
+
+Server:
+Hetzner VPS (Ubuntu 24.04)
+
+Security Setup
+
+SSH key only
+
+Root login disabled
+
+UFW enabled
+
+Ports open:
+
+22 (SSH)
+
+21 (FTP control)
+
+40000–40100 (Passive FTP)
+
+vsftpd Configuration
+
+File:
+
+/etc/vsftpd.conf
+
+Important lines:
+
+user_sub_token=$USER
+local_root=/data/ftp-ingest/$USER/inbox
+pasv_enable=YES
+pasv_min_port=40000
+pasv_max_port=40100
+pasv_address=<server-ip>
+chroot_local_user=YES
+allow_writeable_chroot=YES
+anonymous_enable=NO
+local_umask=007
+
+⚠️ local_umask=007 is critical.
+
+Ensures:
+
+Files uploaded as 660
+
+Directories as 770
+
+Worker (group member) can delete files
+
+FTP Directory Permissions (Final Model)
+
+Structure:
+
+/data/ftp-ingest/
+  └── xview01/
+        └── inbox/
+
+Permissions:
+
+/data                     755 root:root
+/data/ftp-ingest          755 root:root
+/data/ftp-ingest/xview01  2770 xview01:ftp-ingest
+/data/.../inbox           2770 xview01:ftp-ingest
+
+Key concepts:
+
+ftp-ingest group shared between ftp users and venaris worker
+
+setgid (2) ensures new files inherit group
+
+Worker deletes only after successful ingest
+
+FTP Login Issue (Lesson Learned)
+
+Problem:
+vsftpd rejects login when shell is:
+
+/usr/sbin/nologin
+
+Fix:
+
+sudo usermod -s /bin/bash xview01
+
+Reason:
+vsftpd validates login shell.
+
+Security note:
+SSH still key-only → FTP users cannot SSH.
+
+5️⃣ FTP Worker (Production)
+
+Location:
+
+/opt/venaris-worker
+
+Service:
+
+venaris-ftp-worker
+
+Environment:
+
+/opt/venaris-worker/.env
+
+Variables:
+
+VENARIS_INGEST_URL=https://<prod>/api/ingest?x-vercel-protection-bypass=<token>
+POLL_SECONDS=5
+CAMERA_TOKEN_XVIEW01=cam-view-1
+Worker Behavior
+
+Loop:
+
+Scan inbox
+
+Ensure file size stable (prevents partial LTE uploads)
+
+Compute SHA256 (logging only)
+
+Send multipart FormData
+
+metadata.source="ftp"
+
+If success → delete file
+
+If error → keep file for retry
+
+Dedup Behavior
+
+If file already ingested:
+
+accepted=0 skippedDup=1
+
+Worker still deletes file after successful API response.
+
+Inbox remains clean.
+
+6️⃣ Camera Config (X-View LTE)
+
+Resolution: 5M
+
+Send size: Groß
+
+PIR: 6
+
+Multi-shot: 1
+
+Daily report: OFF
+
+Passive FTP
+
+24h time format
+
+LTE SIM active
+
+FTP user:
+
+xview01
+
+Ingest token:
+
+cam-view-1
+7️⃣ Known Risk Areas
+
+Worker infinite retry loop (no quarantine yet)
+
+LTE unstable upload → partial file (mitigated via size check)
+
+Token leakage
+
+Vercel protection expiration (token rotation required)
+
+Future multi-camera scaling requires dynamic CAMERA_MAP
+
+8️⃣ Operational Routine
+
+SSH:
+
+ssh venaris@<server-ip>
+
+Check worker:
+
+sudo systemctl status venaris-ftp-worker --no-pager -l
+
+Live logs:
+
+sudo journalctl -u venaris-ftp-worker -f
+
+Check inbox:
+
+ls -la /data/ftp-ingest/xview01/inbox
+
+Check Supabase:
+
+ingest_batches
+
+assets
+
+cameras.last_seen_at
+
+9️⃣ Important Production Truths
+
+Hetzner is a Gateway.
+It must remain stateless.
+
+Supabase is the single source of truth.
+
+The Worker is a transport layer only.
+
+If Hetzner is destroyed,
+no wildlife data is lost.

@@ -23,52 +23,77 @@ process.on("uncaughtException", (err) => {
   // do not exit; keep running
 });
 
-// ---- tiny .env loader ----
+// ---- tiny .env loader (dev convenience; production should use systemd EnvironmentFile) ----
 function loadDotEnv(file = ".env.local") {
-  if (!fs.existsSync(file)) return;
-  const txt = fs.readFileSync(file, "utf8");
-  for (const line of txt.split(/\r?\n/)) {
-    const m = line.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*)\s*$/i);
-    if (!m) continue;
-    const key = m[1];
-    let val = m[2] ?? "";
-    val = val.replace(/^['"]|['"]$/g, "");
-    if (process.env[key] === undefined) process.env[key] = val;
+  try {
+    if (!fs.existsSync(file)) return;
+    const txt = fs.readFileSync(file, "utf8");
+    for (const line of txt.split(/\r?\n/)) {
+      const m = line.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*)\s*$/i);
+      if (!m) continue;
+      const key = m[1];
+      let val = m[2] ?? "";
+      val = val.replace(/^['"]|['"]$/g, "");
+      if (process.env[key] === undefined) process.env[key] = val;
+    }
+  } catch (e) {
+    console.error("[smtp-bridge] dotenv load error:", e?.message ?? e);
   }
 }
 loadDotEnv();
 
-const cfg = {
-  imapHost: process.env.IMAP_HOST,
-  imapPort: Number(process.env.IMAP_PORT || 993),
-  imapSecure: String(process.env.IMAP_SECURE || "true") === "true",
-  imapUser: process.env.IMAP_USER,
-  imapPass: process.env.IMAP_PASS,
-
-  mailbox: process.env.IMAP_MAILBOX || "INBOX",
-  pollSeconds: Number(process.env.IMAP_POLL_SECONDS || 15),
-  markSeen: String(process.env.IMAP_MARK_SEEN || "true") === "true",
-  processAll: String(process.env.IMAP_PROCESS_ALL || "false") === "true",
-
-  baseUrl: process.env.VENARIS_BASE_URL || "http://127.0.0.1:3000",
-
-  // NEW: generic, backward compatible
-  cameraId: process.env.SMTP_CAMERA_ID || process.env.XVIEW_CAMERA_ID,
-ingestToken: process.env.SMTP_INGEST_TOKEN || process.env.XVIEW_INGEST_TOKEN,
-vendor: process.env.SMTP_VENDOR || "unknown",
-};
-
 function must(v, name) {
-  if (!v) {
+  if (!v || !String(v).trim()) {
     console.error(`Missing env: ${name}`);
     process.exit(1);
   }
 }
+
+function asBool(v, def = false) {
+  if (v === undefined || v === null || String(v).trim() === "") return def;
+  const s = String(v).trim().toLowerCase();
+  return s === "1" || s === "true" || s === "yes" || s === "on";
+}
+
+function asNum(v, def) {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : def;
+}
+
+const cfg = {
+  imapHost: process.env.IMAP_HOST,
+  imapPort: asNum(process.env.IMAP_PORT, 993),
+  imapSecure: asBool(process.env.IMAP_SECURE, true),
+  imapUser: process.env.IMAP_USER,
+  imapPass: process.env.IMAP_PASS,
+
+  mailbox: process.env.IMAP_MAILBOX || "INBOX",
+  pollSeconds: asNum(process.env.IMAP_POLL_SECONDS, 15),
+  markSeen: asBool(process.env.IMAP_MARK_SEEN, true),
+  processAll: asBool(process.env.IMAP_PROCESS_ALL, false),
+
+  // Base URL ONLY (no /api/ingest)
+  baseUrl: process.env.VENARIS_BASE_URL || "http://127.0.0.1:3000",
+
+  // Vercel protection bypass (optional, but needed in prod when protection is active)
+  vercelBypassToken: process.env.VERCEL_BYPASS_TOKEN
+    ? String(process.env.VERCEL_BYPASS_TOKEN).trim()
+    : "",
+
+  // Backward compatible naming
+  cameraId: process.env.SMTP_CAMERA_ID || process.env.XVIEW_CAMERA_ID,
+  ingestToken: process.env.SMTP_INGEST_TOKEN || process.env.XVIEW_INGEST_TOKEN,
+  vendor: process.env.SMTP_VENDOR || "unknown",
+};
+
 must(cfg.imapHost, "IMAP_HOST");
 must(cfg.imapUser, "IMAP_USER");
 must(cfg.imapPass, "IMAP_PASS");
-must(cfg.cameraId, "CAMERA_ID (or XVIEW_CAMERA_ID)");
-must(cfg.ingestToken, "INGEST_TOKEN (or XVIEW_INGEST_TOKEN)");
+must(cfg.ingestToken, "SMTP_INGEST_TOKEN (or XVIEW_INGEST_TOKEN)");
+// cameraId is not required for unified ingest (token identifies camera), but keep it optional:
+if (!cfg.cameraId) {
+  console.warn("[smtp-bridge] WARNING: SMTP_CAMERA_ID not set (ok for unified ingest)");
+}
 
 // --- state (UID dedupe) ---
 const STATE_FILE = path.join(process.cwd(), ".smtp-bridge-state.json");
@@ -131,33 +156,87 @@ async function withTimeout(promise, ms, label) {
   ]);
 }
 
-async function postToIngest({ fileBuffer, filename, meta, capturedAt }) {
-  const url = `${cfg.baseUrl}/api/ingest`;
+function normalizeBaseUrl(u) {
+  return String(u || "").trim().replace(/\/+$/, "");
+}
 
-  const form = new FormData();
-  form.append("cameraId", cfg.cameraId);
-  if (capturedAt) form.append("capturedAt", capturedAt);
-  form.append("metadata", JSON.stringify(meta));
+function buildIngestUrl() {
+  const base = normalizeBaseUrl(cfg.baseUrl);
+  must(base, "VENARIS_BASE_URL");
 
-  const blob = new Blob([fileBuffer], { type: "application/octet-stream" });
-  form.append("files", blob, filename || "image.jpg");
+  const u = new URL(`${base}/api/ingest`);
+  if (cfg.vercelBypassToken) {
+    // same as ftp-worker
+    u.searchParams.set("x-vercel-protection-bypass", cfg.vercelBypassToken);
+  }
+  return u.toString();
+}
 
-  const controller = new AbortController();
-  const t = setTimeout(() => controller.abort(), 20000);
+function guessContentType(filename, fallback = "application/octet-stream") {
+  const n = String(filename || "").toLowerCase();
+  if (n.endsWith(".png")) return "image/png";
+  if (n.endsWith(".webp")) return "image/webp";
+  if (n.endsWith(".gif")) return "image/gif";
+  if (n.endsWith(".jpg") || n.endsWith(".jpeg")) return "image/jpeg";
+  return fallback;
+}
 
-  try {
-    const res = await fetch(url, {
+async function postToIngest({ fileBuffer, filename, meta }) {
+  const ingestUrl = buildIngestUrl();
+
+  const headers = {
+    "x-ingest-token": cfg.ingestToken,
+  };
+  // Add bypass token as header as well (Vercel supports this for automation)
+  if (cfg.vercelBypassToken) {
+    headers["x-vercel-protection-bypass"] = cfg.vercelBypassToken;
+  }
+
+  const makeForm = () => {
+    const form = new FormData();
+    const contentType = guessContentType(filename);
+
+    // unified contract: field name MUST be "file"
+    form.append("file", new Blob([fileBuffer], { type: contentType }), filename || "image.jpg");
+
+    // unified contract: metadata MUST be JSON string
+    form.append("metadata", JSON.stringify(meta));
+
+    return form;
+  };
+
+  const doPost = async (url) => {
+    // IMPORTANT: fresh FormData per request, otherwise redirect retry can lose body
+    return fetch(url, {
       method: "POST",
-      headers: { "x-ingest-token": cfg.ingestToken },
-      body: form,
-      signal: controller.signal,
+      headers,
+      body: makeForm(),
+      redirect: "manual", // IMPORTANT: do not auto-follow 307/308 with multipart body
+      signal: AbortSignal.timeout(20_000),
     });
+  };
 
-    const text = await res.text();
-    if (!res.ok) throw new Error(`Ingest failed ${res.status}: ${text}`);
-    return text;
-  } finally {
-    clearTimeout(t);
+  let resp = await doPost(ingestUrl);
+
+  // Handle 307/308 redirect MANUALLY so the multipart body stays correct (same as ftp-worker)
+  if (resp.status === 307 || resp.status === 308) {
+    const loc = resp.headers.get("location");
+    if (!loc) {
+      const txt = await resp.text().catch(() => "");
+      throw new Error(`Redirect ${resp.status} but no Location. Body: ${txt.slice(0, 300)}`);
+    }
+    const redirectedUrl = new URL(loc, ingestUrl).toString();
+    resp = await doPost(redirectedUrl);
+  }
+
+  const text = await resp.text().catch(() => "");
+  if (!resp.ok) throw new Error(`Ingest failed ${resp.status}: ${text.slice(0, 800)}`);
+
+  // Try parse json response, fallback to raw text
+  try {
+    return JSON.parse(text);
+  } catch {
+    return { raw: text };
   }
 }
 
@@ -184,10 +263,6 @@ function pickImageAttachments(parsed) {
 
   return out;
 }
-
-
-
-
 
 /**
  * Some cameras (e.g., Reolink) embed the image inline in HTML (data:image/...;base64,...)
@@ -271,9 +346,7 @@ async function processMailsOnce() {
           "IMAP fetchOne"
         );
 
-        if (!msg || !msg.source) {
-          throw new Error("IMAP fetchOne returned empty source");
-        }
+        if (!msg || !msg.source) throw new Error("IMAP fetchOne returned empty source");
 
         const parsed = await simpleParser(msg.source);
 
@@ -284,16 +357,20 @@ async function processMailsOnce() {
 
         let attachments = pickImageAttachments(parsed);
 
-if (!attachments.length) {
-  const all = parsed.attachments || [];
-  console.log(
-    `[smtp-bridge] uid=${uid} attachment-scan: total=${all.length} :: ` +
-      all
-        .map((a) => `${a.filename || "NO_NAME"}|${a.contentType || "NO_CT"}|disp=${a.contentDisposition || "?"}|cid=${a.cid || a.contentId || "?"}|bytes=${a.size || a.content?.length || 0}`)
-        .join(" ; ")
-  );
-}
-
+        if (!attachments.length) {
+          const all = parsed.attachments || [];
+          console.log(
+            `[smtp-bridge] uid=${uid} attachment-scan: total=${all.length} :: ` +
+              all
+                .map(
+                  (a) =>
+                    `${a.filename || "NO_NAME"}|${a.contentType || "NO_CT"}|disp=${
+                      a.contentDisposition || "?"
+                    }|cid=${a.cid || a.contentId || "?"}|bytes=${a.size || a.content?.length || 0}`
+                )
+                .join(" ; ")
+          );
+        }
 
         if (!attachments.length) {
           const inline = pickInlineBase64Image(parsed);
@@ -324,28 +401,39 @@ if (!attachments.length) {
           const filename = a.filename || "camera.jpg";
           const capturedAt = parseCapturedAt({ attachmentName: filename, mailDate });
 
+          // Unified ingest metadata contract
           const meta = {
             source: "smtp",
             vendor: cfg.vendor,
+            camera_id: cfg.cameraId || null, // optional
+            captured_at: capturedAt || null,
+
             mail_from: from || null,
             mail_subject: subject || null,
             mail_date: mailDate ? new Date(mailDate).toISOString() : null,
             received_time: receivedAt,
+
             original_filename: filename || null,
             content_type: a.contentType || null,
             size_bytes: buf?.length || null,
             sha256: sha256(buf),
+            // NOTE: uid is useful for debugging; dedup is handled server-side via SHA256 per camera
+            imap_uid: uid,
+            mailbox: cfg.mailbox,
           };
 
           const resp = await postToIngest({
             fileBuffer: buf,
             filename,
             meta,
-            capturedAt,
           });
 
           console.log(
-            `[smtp-bridge] ingest OK uid=${uid} file="${filename}" capturedAt=${capturedAt ?? "null"} :: ${resp}`
+            `[smtp-bridge] ingest OK uid=${uid} file="${filename}" capturedAt=${
+              capturedAt ?? "null"
+            } batchId=${resp?.batchId ?? "?"} accepted=${resp?.accepted ?? "?"} skippedDup=${
+              resp?.skippedDuplicates ?? "?"
+            } source=${resp?.source ?? "?"}`
           );
         }
 
@@ -359,7 +447,7 @@ if (!attachments.length) {
         }
       } catch (uidErr) {
         console.error(`[smtp-bridge] uid=${uid} processing error:`, uidErr?.message || uidErr);
-        // retry next tick
+        // keep UID unremembered -> retry next tick
       }
     }
   } catch (e) {
@@ -384,8 +472,10 @@ if (!attachments.length) {
 }
 
 async function main() {
+  const ingestUrlForLog = buildIngestUrl();
+
   console.log(
-    `[smtp-bridge] start poll=${cfg.pollSeconds}s baseUrl=${cfg.baseUrl} mailbox=${cfg.mailbox} processAll=${cfg.processAll} vendor=${cfg.vendor}`
+    `[smtp-bridge] start poll=${cfg.pollSeconds}s mailbox=${cfg.mailbox} processAll=${cfg.processAll} markSeen=${cfg.markSeen} vendor=${cfg.vendor} ingest=${ingestUrlForLog}`
   );
 
   // keep-alive so the event loop doesn't go empty
