@@ -1,15 +1,10 @@
-Perfekt.
-Hier ist die aktualisierte current-state.md – konsistent mit dem realen Stand (FTP jetzt voll production-stable inkl. Vercel Bypass, Permission-Fix und erfolgreichem End-to-End-Test).
-
-Du kannst den kompletten Inhalt ersetzen.
-
 Venaris – Current State
 
-Last updated: 2026-03-03 (Day 3 – FTP Production Stable)
+Last updated: 2026-03-03 (Day 3 – Unified Ingest + Import Center)
 
 ✅ System Status
 
-Ingest stable (token ingest + manual upload)
+Unified ingest pipeline (FTP + SMTP + Manual via shared ingestCore)
 
 SMTP/IMAP bridge stable (Reolink live)
 
@@ -31,15 +26,17 @@ Ingest batch monitoring implemented
 
 Camera health engine (rule-based per import_method) implemented
 
-Home + Cameras UI fully server-driven (RLS safe)
-
-Cameras UI enhanced (last 3 shots + last batches)
-
 Event layer working (clustering + aggregation)
 
 Relevant toggle working + persists
 
 Detection stub working (dev)
+
+Import Adapter (ZIP + multi-file) implemented
+
+Import Center UI implemented
+
+Navigation updated (Import added)
 
 Security Advisor clean (0 errors / 0 warnings / 0 suggestions)
 
@@ -47,48 +44,34 @@ Security Advisor clean (0 errors / 0 warnings / 0 suggestions)
 Repository
 
 GitHub: venaris-ai/venaris
-
 Branch: main
-
 Daily commits
-
 No secrets committed
 
 Tech Stack
 
 Next.js (App Router)
-
 Supabase (Postgres + Storage)
-
 Tailwind CSS
-
 Node.js (SMTP bridge + FTP worker)
-
 Hetzner VPS (FTP Gateway)
+JSZip (Import Adapter ZIP support)
 
 2️⃣ Production Gateway (FTP – Stable)
 Hetzner VPS
 
 Server:
-
 CX23
-
 Ubuntu 24.04
 
 Security:
-
 SSH key-only login
-
 Root login disabled
-
 UFW enabled
 
-Ports open:
-
+Open ports:
 22 (SSH)
-
 21 (FTP control)
-
 40000–40100 (Passive FTP)
 
 Gateway is stateless.
@@ -102,11 +85,9 @@ Directory model:
 Example:
 
 User: xview01
-
 Path: /data/ftp-ingest/xview01/inbox
 
-Permission model (final):
-
+Permission model (final)
 /data                     755 root:root
 /data/ftp-ingest          755 root:root
 /data/ftp-ingest/xview01  2770 xview01:ftp-ingest
@@ -130,21 +111,18 @@ File delete after ingest works.
 3️⃣ FTP Worker (Production Confirmed)
 
 Location:
-
 /opt/venaris-worker
 
 Service:
-
 venaris-ftp-worker (systemd)
 
 Environment:
-
 /opt/venaris-worker/.env
 
 Key variables:
 
 VENARIS_INGEST_URL=https://<prod>/api/ingest?x-vercel-protection-bypass=<token>
-POLL_SECONDS=5
+POLL_SECONDS=15
 CAMERA_TOKEN_XVIEW01=cam-view-1
 Worker Behavior (Confirmed Live)
 
@@ -157,6 +135,10 @@ Compute SHA256 (log only)
 Send multipart FormData
 
 metadata.source="ftp"
+
+Manual redirect handling (307/308)
+
+Delete file only after successful ingest
 
 If response OK:
 
@@ -176,17 +158,132 @@ ok batchId=...
 accepted=1 skippedDup=0
 deleted ...
 
-and for duplicates:
+For duplicates:
 
 accepted=0 skippedDup=1
 deleted ...
 
 Inbox remains clean.
 
-4️⃣ Storage
+4️⃣ SMTP Bridge (Production Confirmed)
+
+Service:
+venaris-smtp-bridge (systemd)
+
+Environment:
+/opt/venaris-worker/.env.smtp
+
+Poll interval:
+60 seconds
+
+Behavior:
+
+IMAP UNSEEN-only
+
+UID dedup
+
+Vendor-aware parsing
+
+Inline images supported
+
+metadata.source="smtp"
+
+Sends to production ingest endpoint (with bypass token)
+
+Status: ✅ Stable
+
+5️⃣ Unified Ingest Architecture
+
+Core Logic extracted to:
+
+src/lib/ingestCore.ts
+
+Used by:
+
+POST /api/ingest
+
+POST /api/upload
+
+Guarantees:
+
+ingest_batches record created
+
+source derived from metadata
+
+per-camera SHA256 dedup
+
+storage upload
+
+assets insert
+
+event clustering RPC
+
+detection stub (dev)
+
+cameras.last_seen_at updated
+
+batch status + summary handling
+
+This removed duplicated logic between ingest and upload.
+
+6️⃣ Import Adapter (Manual Channel)
+
+Route:
+
+POST /api/upload
+
+Capabilities:
+
+Multi-file upload
+
+ZIP upload (auto-extracted via JSZip)
+
+metadata.source="manual"
+
+channel="import" or "upload"
+
+MAX_FILES guard
+
+MAX_ZIP_BYTES guard
+
+All files forwarded to ingestCore pipeline.
+
+Import batches now appear in monitoring as:
+
+source = manual
+
+7️⃣ Import Center (UI)
+
+Route:
+
+/import
+
+Capabilities:
+
+Camera selection (auto-default first camera)
+
+Single button: “Bilder oder ZIP auswählen…”
+
+Multi-file support
+
+ZIP support
+
+Drag & Drop support
+
+Batch result feedback
+
+Uses /api/upload with channel="import"
+
+Navigation updated:
+
+Home · Cameras · Import · Ingest · Events
+
+Import is now the human-facing ingestion entrypoint.
+Ingest page remains technical monitoring.
+
+8️⃣ Storage
 
 Bucket:
-
 camera-assets
 
 Naming scheme:
@@ -194,15 +291,13 @@ Naming scheme:
 {cameraId}/{timestamp}-{hash12}.ext
 
 Signed URLs:
-
 20 min expiry
-
 Generated server-side only
 
 Supabase is the only persistent storage.
 Hetzner holds no permanent wildlife data.
 
-5️⃣ Database (Active Tables)
+9️⃣ Database (Active Tables)
 reviers
 
 id
@@ -239,6 +334,8 @@ Reolink → smtp
 
 X-View → ftp
 
+Cam 1 → ftp/manual (test)
+
 assets
 
 id
@@ -247,7 +344,7 @@ camera_id
 
 storage_path
 
-file_hash (sha256 per-camera dedup)
+file_hash
 
 status
 
@@ -260,49 +357,8 @@ created_at
 ingest_batch_id
 
 detections (DEV STUB)
-
-id
-
-asset_id
-
-label
-
-species
-
-count
-
-score
-
-meta
-
-created_at
-
 events
-
-id
-
-camera_id
-
-start_at
-
-end_at
-
-top_label
-
-top_species
-
-top_count
-
-relevance_score
-
-created_at
-
 event_assets
-
-event_id
-
-asset_id
-
 ingest_batches
 
 id
@@ -315,8 +371,6 @@ source (ftp | smtp | manual)
 
 file_count
 
-skipped_duplicates
-
 status
 
 error_summary
@@ -324,131 +378,34 @@ error_summary
 meta (jsonb)
 
 camera_health_rules
-
-import_method (PK)
-
-stale_after_minutes
-
-offline_after_minutes
-
-created_at
-
-6️⃣ Views
+🔟 Views
 camera_health
 
-Rule-based evaluation per import_method.
-
-Health states:
-
-online
-
-stale
-
-offline
-
-unknown
-
-Based on:
-last_seen_at + thresholds
+Rule-based evaluation per import_method
+States: online / stale / offline / unknown
 
 event_feed
 
 security_invoker enabled
-
 Used by /events
 
-7️⃣ API Routes (Production-Ready)
-POST /api/upload
+1️⃣1️⃣ API Routes (Production-Ready)
 
-Manual upload.
+POST /api/upload
+Manual & Import Adapter
 
 POST /api/ingest
-
-Token-based ingest.
-Multipart only.
-Per-camera SHA256 dedup.
-Backfills captured_at.
-Triggers event RPC.
-Updates cameras.last_seen_at.
+Token-based ingest (FTP + SMTP workers)
 
 GET /api/assets
-
-Filters:
-
-onlyRelevant
-
-cameraId
-
-limit
-
 GET /api/asset-url
-
-Returns signed URL (20 min).
-
 POST /api/asset-relevant
-
-Toggle relevant.
-
 GET /api/ingest-batches
-
-Filterable by:
-
-cameraId
-
-source
-
-status
-
-limit
-
 GET /api/camera-health
-
-Reads from camera_health view.
-
 GET /api/camera-token
-
-Returns ingest_token.
-
 POST /api/camera-token
 
-Regenerates ingest token.
-
-8️⃣ Integrations
-Reolink Go Ranger PT (SMTP → ingest)
-
-Mailbox: reolink@venaris.io
-
-Script: smtp-bridge.mjs
-
-UNSEEN-only mode
-
-UID dedup
-
-Vendor-aware
-
-Inline images supported
-
-Status: ✅ Stable
-
-X-View LTE (FTP → Worker → ingest)
-
-FTP user: xview01
-
-Passive FTP
-
-Ingest token: cam-view-1
-
-import_method: ftp
-
-Worker forwarding confirmed
-
-Production ingest confirmed
-
-File deletion confirmed
-
-Status: ✅ Fully operational
-
-9️⃣ Architecture Maturity
+1️⃣2️⃣ Architecture Maturity
 
 Venaris now has:
 
@@ -459,6 +416,12 @@ Vendor-aware SMTP bridge
 Dedicated FTP Gateway (isolated)
 
 Worker-based ingestion transformation
+
+Unified ingest pipeline
+
+ZIP-capable Import Adapter
+
+Import Center UI
 
 Vercel-protected production ingest endpoint
 
@@ -478,31 +441,35 @@ Signed URL preview system
 
 Infrastructure is production-structurable.
 
-🔟 Immediate Next Step
-
-Next expansion:
+🔜 Immediate Next Step
 
 ZEISS Secacam 5 integration.
 
 Likely path:
-App-based export → Cloud folder → Ingest normalization.
+App/Web export → Import Center (ZIP) → ingest normalization.
 
-Separate design session required.
+Optional next technical layer:
 
-11️⃣ Operational Notes
+EXIF timestamp parsing
 
-SMTP processes UNSEEN only.
+Filename timestamp parsing
 
-FTP Gateway isolates users via chroot.
+Structured import metadata
 
-Worker deletes files only after successful ingest.
+🔒 Operational Notes
 
-Dedup is idempotent.
+SMTP processes UNSEEN only
 
-Supabase is the single source of truth.
+FTP Gateway isolates users via chroot
 
-Hetzner is a transport layer only.
+Worker deletes files only after successful ingest
 
-Worker requires bypass token if Vercel Protection active.
+Dedup is idempotent
 
-Rotate bypass token if leaked.
+Supabase is single source of truth
+
+Hetzner is transport layer only
+
+Worker requires bypass token if Vercel Protection active
+
+Rotate bypass token if leaked

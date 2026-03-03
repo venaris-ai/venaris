@@ -1,6 +1,6 @@
 Venaris – Architecture (MVP)
 
-Last updated: 2026-03-03
+Last updated: 2026-03-03 (Unified Ingest + Import Center)
 
 🎯 Vision
 
@@ -20,9 +20,10 @@ Structured context is valuable.
 
 Venaris converts:
 
-Images → Detections → Events → Patterns → Insights
+Images → Assets → Detections → Events → Patterns → Insights
 
-Current stage:
+Current stage (MVP):
+
 Images → Assets → Events (stub intelligence)
 
 🏗 System Overview
@@ -41,15 +42,29 @@ Application Layer
 
 System State (MVP Status)
 
-The Ingestion Layer is now production-stable for:
+The Ingestion Layer is production-stable for:
 
 SMTP (Reolink)
 
 FTP (X-View via Hetzner Gateway)
 
-Manual Upload
+Manual Import (ZIP + multi-file via Import Adapter)
 
-All ingest channels normalize into a unified ingest contract.
+All ingest channels normalize into a unified ingest pipeline.
+
+Core logic is centralized in:
+
+src/lib/ingestCore.ts
+
+Both:
+
+POST /api/ingest
+
+POST /api/upload
+
+use the same processing logic.
+
+This guarantees consistency across all import methods.
 
 1️⃣ Ingestion Layer
 Purpose
@@ -59,19 +74,25 @@ and normalize them into a unified ingest contract.
 
 Unified Ingest Contract
 
-Endpoint:
+Primary endpoint:
 
 POST /api/ingest
 
 Requirements:
 
-Header: x-ingest-token
+Header:
+x-ingest-token
 
-Body: multipart/form-data
+Body:
+multipart/form-data
 
-file
+Fields:
+
+file (or files)
 
 metadata (JSON)
+
+optional: capturedAt
 
 Example metadata:
 
@@ -80,7 +101,31 @@ Example metadata:
   "ftp_user": "xview01",
   "filename": "IMG_1234.JPG"
 }
-Ingest Responsibilities
+Import Adapter (Manual Channel)
+
+Endpoint:
+
+POST /api/upload
+
+Capabilities:
+
+Multi-file upload
+
+ZIP upload (auto-extracted via JSZip)
+
+metadata.source="manual"
+
+channel="import" or "upload"
+
+Guard rails (MAX_FILES, MAX_ZIP_BYTES)
+
+All files are forwarded to ingestCore.
+
+This creates ingest_batches with:
+
+source = manual
+
+Ingest Responsibilities (Unified)
 
 Each ingest:
 
@@ -92,19 +137,21 @@ Stores asset in Supabase Storage
 
 Updates camera.last_seen_at
 
-Triggers event clustering
+Triggers event clustering (RPC)
 
-Triggers detection stub (future model pipeline)
+Triggers detection stub (DEV)
+
+Deduplication is per-camera and idempotent.
 
 SMTP Ingestion (Vendor-Aware Bridge)
 
 Architecture:
 
 Mailbox (IMAP)
-→ smtp-bridge.mjs
-→ /api/ingest
+→ smtp-bridge.mjs (systemd service)
+→ POST /api/ingest
 
-Supports:
+Features:
 
 Attachments
 
@@ -116,15 +163,17 @@ UID-based deduplication
 
 UNSEEN-only processing
 
+Poll interval configurable (MVP: 60s)
+
 Duplicate handling:
 
-skippedDuplicates reported
+skippedDuplicates incremented
 
-captured_at backfilled if needed
+captured_at backfilled if metadata.device_time present
 
 MVP note:
 SMTP is mailbox-based per camera.
-Not long-term optimal but stable for MVP.
+Stable but not horizontally scalable long-term.
 
 FTP Ingestion (Gateway-Based Architecture)
 Final Architecture (Production-Ready)
@@ -132,7 +181,7 @@ Final Architecture (Production-Ready)
 Wildlife Camera (X-View LTE)
 → Hetzner VPS (FTP Gateway via vsftpd)
 → /data/ftp-ingest/<ftp_user>/inbox
-→ FTP Worker (Node.js, systemd service)
+→ FTP Worker (Node.js, systemd)
 → POST /api/ingest
 → Supabase Storage
 
@@ -140,7 +189,7 @@ Gateway Characteristics
 
 Dedicated VPS (Hetzner)
 
-vsftpd in passive mode
+vsftpd passive mode
 
 Per-camera FTP user
 
@@ -161,7 +210,7 @@ Directory Structure
   └── xview01/
         └── inbox/
 
-Permissions model:
+Permission model:
 
 Owner: ftp user (e.g. xview01)
 
@@ -169,9 +218,9 @@ Group: ftp-ingest
 
 Mode: 2770 (setgid enabled)
 
-local_umask=007 (vsftpd)
+vsftpd local_umask=007
 
-This ensures:
+Ensures:
 
 Worker can read & delete
 
@@ -193,29 +242,31 @@ systemd → venaris-ftp-worker.service
 
 Characteristics:
 
-Poll-based (POLL_SECONDS)
+Poll-based (MVP: 15s)
 
-Stable file-size check before ingest
+Stable file-size check (LTE safety)
 
 SHA256 pre-hash logging
 
 Multipart/form-data generation
 
-Automatic metadata injection
+metadata.source="ftp"
+
+Manual redirect handling (307/308)
 
 Delete only after successful ingest
 
-Retries on failure (implicit via polling)
+Retry via polling
 
 Vercel Deployment Protection (Automation)
 
 Production API is protected via Vercel Deployment Protection.
 
-Worker uses:
+Workers use:
 
 ?x-vercel-protection-bypass=<token>
 
-Bypass token stored in:
+Bypass token stored only in:
 
 /opt/venaris-worker/.env
 
@@ -223,7 +274,7 @@ No tokens stored in GitHub.
 
 Deduplication Model
 
-Deduplication is server-side (API layer).
+Server-side (API layer).
 
 Strategy:
 
@@ -250,7 +301,7 @@ Naming scheme:
 
 {cameraId}/{timestamp}-{hash12}.ext
 
-Image access:
+Access:
 
 Signed URLs
 
@@ -269,7 +320,7 @@ Hunting areas / management units.
 
 cameras
 
-Represents wildlife sensors.
+Wildlife sensors.
 
 Fields:
 
@@ -325,11 +376,9 @@ camera_id
 
 received_at
 
-source (ftp / smtp / manual / token)
+source (ftp / smtp / manual)
 
 file_count
-
-skipped_duplicates
 
 status
 
@@ -344,9 +393,7 @@ Batch source derived from metadata.source.
 Current state:
 Detection stub only.
 
-detections
-
-Fields:
+detections:
 
 asset_id
 
@@ -363,7 +410,7 @@ meta
 Future:
 Model-based detection pipeline.
 
-events
+Events
 
 Aggregated wildlife activity.
 
@@ -376,7 +423,7 @@ Assets within time window
 
 Currently:
 
-Basic time-window clustering via RPC
+Basic time-window clustering via RPC.
 
 Future:
 
@@ -386,8 +433,9 @@ Species-aware clustering
 
 Movement modeling
 
-event_assets
+Cross-camera correlation
 
+event_assets:
 Join table between events and assets.
 
 4️⃣ Monitoring Layer
@@ -416,7 +464,7 @@ last_seen_at + rule thresholds
 
 Fully DB-driven.
 
-ingest monitoring
+Ingest Monitoring
 
 Tracks:
 
@@ -428,18 +476,26 @@ source differentiation
 
 error summary
 
-FTP and SMTP are first-class differentiated ingest sources.
+FTP, SMTP, and Manual are first-class differentiated ingest sources.
 
 5️⃣ Application Layer
 Home (/)
 
-Upload
+Debug + asset list (MVP internal view)
 
-Asset list
+Import (/import)
 
-Relevance toggle
+Primary human ingestion entrypoint:
 
-Camera status indicator
+Camera selection
+
+Multi-file
+
+ZIP
+
+Drag & drop
+
+Batch feedback
 
 Cameras (/cameras)
 
@@ -529,7 +585,9 @@ Structured wildlife intelligence platform.
 
 Current phase:
 
-Production-ready multi-channel ingestion & monitoring.
+Production-ready multi-channel ingestion & monitoring
+Unified ingest pipeline
+Import Adapter + Import Center
 
 Next phase:
 

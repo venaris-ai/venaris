@@ -1,6 +1,6 @@
 Venaris – Dev Notes
 
-Last updated: 2026-03-03 (Day 3 – FTP Ingest Production Stable)
+Last updated: 2026-03-03 (Day 3 – Unified Ingest + Import Center)
 
 This file documents operational setup, real-world behavior,
 and important implementation details that are not purely architectural.
@@ -33,13 +33,37 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY
 
 SUPABASE_SERVICE_ROLE_KEY
 
-IMAP credentials (SMTP bridge)
-
-INGEST_TOKEN (test cameras)
+Optional: local test ingest tokens
 
 ⚠️ Never commit .env files.
 
-2️⃣ Ingest API Contract (CRITICAL)
+2️⃣ Unified Ingest Pipeline (CRITICAL)
+
+Core logic lives in:
+
+src/lib/ingestCore.ts
+
+Used by:
+
+src/app/api/ingest/route.ts
+
+src/app/api/upload/route.ts
+
+This guarantees:
+
+Same dedup logic
+
+Same batch handling
+
+Same event clustering
+
+Same detection stub
+
+Same camera health updates
+
+No duplicate ingest logic anymore.
+
+3️⃣ Ingest API Contract (Workers → Production)
 
 Route:
 
@@ -47,15 +71,21 @@ src/app/api/ingest/route.ts
 
 Requirements:
 
-Header: x-ingest-token
+Header:
 
-Body: multipart/form-data
+x-ingest-token
 
-File field: "file"
+Body:
 
-metadata must be JSON string
+multipart/form-data
 
-metadata.source determines ingest_batches.source
+File field:
+
+file OR files
+
+metadata must be JSON string.
+
+metadata.source determines ingest_batches.source.
 
 Example metadata:
 
@@ -74,26 +104,24 @@ Always use multipart/form-data.
 
 ❌ Missing metadata
 
-→ ingest_batches.source becomes incorrect
+→ ingest_batches.source incorrect
 
 Fix:
 Always append metadata in FormData.
 
 ❌ Wrong ingest URL (localhost instead of production)
 
-Worker must always target production API.
+Workers must always target production API.
 
 ❌ Vercel Deployment Protection
 
-Initial failure:
+Observed:
 
-401 + HTML authentication page
-Worker received SSO redirect page.
-
-Cause:
-Vercel Deployment Protection active.
+401 + HTML SSO page
+Worker received authentication redirect.
 
 Fix:
+
 Append:
 
 ?x-vercel-protection-bypass=<token>
@@ -116,14 +144,50 @@ Reason:
 Missing bypass cookie.
 
 Resolved by:
-Using bypass query parameter consistently in worker URL.
+Using bypass query parameter consistently.
 
-3️⃣ SMTP Bridge (Reolink)
+4️⃣ Import Adapter (Manual Channel)
+
+Route:
+
+src/app/api/upload/route.ts
+
+Capabilities:
+
+Multi-file upload
+
+ZIP upload (via JSZip)
+
+metadata.source="manual"
+
+channel="import" or "upload"
+
+MAX_FILES guard
+
+MAX_ZIP_BYTES guard
+
+All files forwarded to ingestCore.
+
+Result:
+
+ingest_batches created
+
+source = manual
+
+dedup identical to FTP/SMTP
+
+Import Center UI:
+
+/import
+
+This is the human ingestion entrypoint.
+
+5️⃣ SMTP Bridge (Reolink)
 
 Flow:
 
 IMAP mailbox
-→ smtp-bridge.mjs
+→ smtp-bridge.mjs (systemd)
 → /api/ingest
 
 Characteristics:
@@ -134,24 +198,22 @@ Dedup by IMAP UID
 
 Supports inline images (CID)
 
-Vendor flag via SMTP_VENDOR env
+metadata.source="smtp"
 
-Mailbox example:
+Poll interval: 60s (MVP)
 
-reolink@venaris.io
+Duplicate attachments:
 
-Known behavior:
+→ skippedDuplicates++
 
-Duplicate mail attachments → skippedDuplicates++
+captured_at can be backfilled.
 
-captured_at can be backfilled
+SMTP stable for MVP.
 
-SMTP is stable for MVP.
-
-4️⃣ FTP Gateway (Hetzner)
+6️⃣ FTP Gateway (Hetzner)
 
 Purpose:
-Handle FTP-native cameras (X-View and future devices).
+Handle FTP-native cameras (X-View + future devices).
 
 Server:
 Hetzner VPS (Ubuntu 24.04)
@@ -164,7 +226,7 @@ Root login disabled
 
 UFW enabled
 
-Ports open:
+Open ports:
 
 22 (SSH)
 
@@ -220,13 +282,14 @@ Key concepts:
 
 ftp-ingest group shared between ftp users and venaris worker
 
-setgid (2) ensures new files inherit group
+setgid (2) ensures group inheritance
 
 Worker deletes only after successful ingest
 
 FTP Login Issue (Lesson Learned)
 
 Problem:
+
 vsftpd rejects login when shell is:
 
 /usr/sbin/nologin
@@ -239,9 +302,9 @@ Reason:
 vsftpd validates login shell.
 
 Security note:
-SSH still key-only → FTP users cannot SSH.
+SSH remains key-only → FTP users cannot SSH.
 
-5️⃣ FTP Worker (Production)
+7️⃣ FTP Worker (Production)
 
 Location:
 
@@ -258,7 +321,7 @@ Environment:
 Variables:
 
 VENARIS_INGEST_URL=https://<prod>/api/ingest?x-vercel-protection-bypass=<token>
-POLL_SECONDS=5
+POLL_SECONDS=15
 CAMERA_TOKEN_XVIEW01=cam-view-1
 Worker Behavior
 
@@ -266,7 +329,7 @@ Loop:
 
 Scan inbox
 
-Ensure file size stable (prevents partial LTE uploads)
+Ensure file size stable (LTE safety)
 
 Compute SHA256 (logging only)
 
@@ -288,22 +351,15 @@ Worker still deletes file after successful API response.
 
 Inbox remains clean.
 
-6️⃣ Camera Config (X-View LTE)
+8️⃣ Camera Config (X-View LTE)
 
 Resolution: 5M
-
 Send size: Groß
-
 PIR: 6
-
 Multi-shot: 1
-
 Daily report: OFF
-
 Passive FTP
-
 24h time format
-
 LTE SIM active
 
 FTP user:
@@ -313,7 +369,7 @@ xview01
 Ingest token:
 
 cam-view-1
-7️⃣ Known Risk Areas
+9️⃣ Known Risk Areas
 
 Worker infinite retry loop (no quarantine yet)
 
@@ -323,9 +379,11 @@ Token leakage
 
 Vercel protection expiration (token rotation required)
 
-Future multi-camera scaling requires dynamic CAMERA_MAP
+No dead-letter queue
 
-8️⃣ Operational Routine
+Multi-camera scaling currently static env mapping
+
+🔟 Operational Routine
 
 SSH:
 
@@ -334,10 +392,12 @@ ssh venaris@<server-ip>
 Check worker:
 
 sudo systemctl status venaris-ftp-worker --no-pager -l
+sudo systemctl status venaris-smtp-bridge --no-pager -l
 
 Live logs:
 
 sudo journalctl -u venaris-ftp-worker -f
+sudo journalctl -u venaris-smtp-bridge -f
 
 Check inbox:
 
@@ -351,7 +411,7 @@ assets
 
 cameras.last_seen_at
 
-9️⃣ Important Production Truths
+1️⃣1️⃣ Important Production Truths
 
 Hetzner is a Gateway.
 It must remain stateless.
@@ -362,3 +422,15 @@ The Worker is a transport layer only.
 
 If Hetzner is destroyed,
 no wildlife data is lost.
+
+All critical state lives in Supabase.
+
+Du bist jetzt sauber dokumentiert.
+
+Wenn du willst, gebe ich dir jetzt:
+
+eine saubere git add Einzeile
+
+die Commit Message
+
+und die Shutdown-Checkliste (Server + Lokal)

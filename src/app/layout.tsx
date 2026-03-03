@@ -39,6 +39,9 @@ export default function RootLayout({
               <a href="/cameras" className="rounded-md border px-3 py-1 hover:bg-gray-50">
                 Cameras
               </a>
+<a href="/import" className="rounded-md border px-3 py-1 hover:bg-gray-50">
+  Import
+</a>
               <a href="/ingest" className="rounded-md border px-3 py-1 hover:bg-gray-50">
                 Ingest
               </a>
