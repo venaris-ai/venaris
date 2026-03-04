@@ -27,6 +27,11 @@ type AssetRow = {
   camera_id: string;
   storage_path: string;
   created_at: string;
+  status: string;
+  relevant: boolean | null;
+  relevant_effective: boolean;
+  empty: boolean | null;
+  empty_confidence: number | null;
 };
 
 function formatAgo(ts: string | null) {
@@ -56,6 +61,19 @@ function healthTone(status?: string) {
   return "border-gray-300";
 }
 
+function relevanceLabel(a: AssetRow) {
+  if (a.relevant === true) return `✅ relevant (manuell)`;
+  if (a.relevant === false) return `🚫 irrelevant (manuell)`;
+  if (a.empty === true) {
+    const pct =
+      typeof a.empty_confidence === "number"
+        ? ` (${Math.round(a.empty_confidence * 100)}%)`
+        : "";
+    return `🚫 leer erkannt${pct}`;
+  }
+  return `✅ relevant`;
+}
+
 async function copy(text: string) {
   try {
     await navigator.clipboard.writeText(text);
@@ -73,7 +91,9 @@ export default function CamerasPage() {
   const [batches, setBatches] = useState<BatchRow[]>([]);
   const [assets, setAssets] = useState<AssetRow[]>([]);
   const [assetUrls, setAssetUrls] = useState<Record<string, string>>({});
-  const [tokenByCameraId, setTokenByCameraId] = useState<Record<string, string | null>>({});
+  const [tokenByCameraId, setTokenByCameraId] = useState<
+    Record<string, string | null>
+  >({});
   const [loadingCameras, setLoadingCameras] = useState(false);
 
   const selected = useMemo(
@@ -145,7 +165,7 @@ export default function CamerasPage() {
 
   async function loadAssets(camId: string) {
     const res = await fetch(
-      `/api/assets?cameraId=${encodeURIComponent(camId)}&limit=3&onlyRelevant=false`,
+      `/api/assets?cameraId=${encodeURIComponent(camId)}&limit=3`,
       { cache: "no-store" }
     );
     const json = await res.json();
@@ -214,8 +234,26 @@ export default function CamerasPage() {
     setMsg("✅ Token aktualisiert");
   }
 
+  async function setRelevant(assetId: string, nextRelevant: boolean) {
+    setMsg("");
+    const res = await fetch("/api/asset-relevant", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ assetId, relevant: nextRelevant }),
+    });
+
+    const json = await res.json().catch(() => null);
+    if (!res.ok) {
+      setMsg(json?.error || `HTTP ${res.status}`);
+      return;
+    }
+
+    await loadAssets(cameraId);
+  }
+
   const tok = selected ? tokenByCameraId[selected.id] : null;
   const ingestHeader = tok ? `x-ingest-token: ${tok}` : "";
+
   const curlSingle = tok
     ? `curl -X POST "http://localhost:3000/api/ingest" -H "${ingestHeader}" -F "file=@/c/dev/test.jpg"`
     : "";
@@ -224,124 +262,195 @@ export default function CamerasPage() {
     : "";
 
   return (
-    <main className="min-h-screen p-8">
-      <div className="mx-auto max-w-4xl space-y-6">
-        <div className="flex items-end justify-between">
-          <div>
-            <h1 className="text-3xl font-semibold">Cameras</h1>
-            <p className="text-sm text-gray-600">
-              Onboarding, Tokens, Health, letzte Ingest-Batches
-            </p>
-          </div>
-          <a href="/" className="rounded-md border px-3 py-2 text-sm">
-            ← Home
-          </a>
+    <main className="space-y-6">
+      <div>
+        <h1 className="text-3xl font-semibold">Cameras</h1>
+        <p className="text-sm text-gray-600">
+          Onboarding, Tokens, Health, letzte Ingest-Batches
+        </p>
+      </div>
+
+      <section className="rounded-xl border p-4 space-y-4">
+        <div className="flex items-center justify-between">
+          <label className="text-sm font-medium">Kamera auswählen</label>
+          <button
+            onClick={loadCameras}
+            className="rounded-md border px-3 py-1.5 text-sm"
+            disabled={loadingCameras}
+          >
+            {loadingCameras ? "Loading…" : "Refresh"}
+          </button>
         </div>
 
-        <div className="rounded-xl border p-4 space-y-4">
-          <div className="flex items-center justify-between">
-            <label className="text-sm font-medium">
-              Kamera auswählen
-            </label>
-            <button
-              onClick={loadCameras}
-              className="rounded-md border px-3 py-1.5 text-sm"
-              disabled={loadingCameras}
-            >
-              {loadingCameras ? "Loading…" : "Refresh"}
-            </button>
-          </div>
+        <select
+          className="w-full rounded-md border p-2"
+          value={cameraId}
+          onChange={(e) => setCameraId(e.target.value)}
+        >
+          {cameras.length === 0 && <option value="">(keine Kameras)</option>}
+          {cameras.map((c) => (
+            <option key={c.id} value={c.id}>
+              {healthEmoji(c.health_status)} {c.name}
+              {c.import_method ? ` · ${c.import_method}` : ""}
+            </option>
+          ))}
+        </select>
 
-          <select
-            className="w-full rounded-md border p-2"
-            value={cameraId}
-            onChange={(e) => setCameraId(e.target.value)}
-          >
-            {cameras.length === 0 && <option value="">(keine Kameras)</option>}
-            {cameras.map((c) => (
-              <option key={c.id} value={c.id}>
-                {healthEmoji(c.health_status)} {c.name}
-                {c.import_method ? ` · ${c.import_method}` : ""}
-              </option>
-            ))}
-          </select>
+        {selected && (
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="rounded-lg border p-4">
+              <div className="text-xs text-gray-500">Health</div>
 
-          {selected && (
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="rounded-lg border p-4">
-                <div className="text-xs text-gray-500">Health</div>
-
-                <div className="mt-2 flex items-center gap-2">
-                  <span
-                    className={[
-                      "inline-flex items-center rounded-full px-2 py-0.5 text-xs border font-medium",
-                      healthTone(selected.health_status),
-                    ].join(" ")}
-                  >
-                    {healthEmoji(selected.health_status)}{" "}
-                    {selected.health_status}
-                  </span>
-                </div>
-
-                <div className="mt-2 text-sm text-gray-700">
-                  Last seen:{" "}
-                  <span className="font-medium">
-                    {formatAgo(selected.last_seen_at)}
-                  </span>
-                  {selected.last_seen_at
-                    ? ` (${new Date(selected.last_seen_at).toLocaleString()})`
-                    : ""}
-                </div>
-
-                <div className="mt-3 text-xs text-gray-600 space-y-1">
-                  <div>
-                    Expected every{" "}
-                    <span className="font-medium">
-                      {selected.stale_after_minutes} min
-                    </span>
-                  </div>
-                  <div>
-                    Offline after{" "}
-                    <span className="font-medium">
-                      {selected.offline_after_minutes} min
-                    </span>
-                  </div>
-                </div>
+              <div className="mt-2 flex items-center gap-2">
+                <span
+                  className={[
+                    "inline-flex items-center rounded-full px-2 py-0.5 text-xs border font-medium",
+                    healthTone(selected.health_status),
+                  ].join(" ")}
+                >
+                  {healthEmoji(selected.health_status)} {selected.health_status}
+                </span>
               </div>
 
-              <div className="rounded-lg border p-4">
-                <div className="text-xs text-gray-500">Token</div>
-                <div className="mt-1 font-mono text-xs break-all">
-                  {tok ?? "—"}
+              <div className="mt-2 text-sm text-gray-700">
+                Last seen:{" "}
+                <span className="font-medium">{formatAgo(selected.last_seen_at)}</span>
+                {selected.last_seen_at
+                  ? ` (${new Date(selected.last_seen_at).toLocaleString()})`
+                  : ""}
+              </div>
+
+              <div className="mt-3 text-xs text-gray-600 space-y-1">
+                <div>
+                  Expected every{" "}
+                  <span className="font-medium">{selected.stale_after_minutes} min</span>
                 </div>
-
-                <div className="mt-3 flex flex-wrap gap-2">
-                  <button
-                    onClick={async () => {
-                      if (!tok) return;
-                      const ok = await copy(tok);
-                      setMsg(ok ? "✅ Token kopiert" : "❌ Copy nicht möglich");
-                    }}
-                    className="rounded-md border px-3 py-1.5 text-sm"
-                    disabled={!tok}
-                  >
-                    Copy token
-                  </button>
-
-                  <button
-                    onClick={regenerateToken}
-                    className="rounded-md bg-black px-3 py-1.5 text-sm text-white"
-                  >
-                    Regenerate token
-                  </button>
+                <div>
+                  Offline after{" "}
+                  <span className="font-medium">{selected.offline_after_minutes} min</span>
                 </div>
               </div>
             </div>
-          )}
 
-          {msg && <div className="text-sm">{msg}</div>}
+            <div className="rounded-lg border p-4 space-y-3">
+              <div>
+                <div className="text-xs text-gray-500">Token</div>
+                <div className="mt-1 font-mono text-xs break-all">{tok ?? "—"}</div>
+              </div>
+
+              <div className="flex flex-wrap gap-2">
+                <button
+                  onClick={async () => {
+                    if (!tok) return;
+                    const ok = await copy(tok);
+                    setMsg(ok ? "✅ Token kopiert" : "❌ Copy nicht möglich");
+                  }}
+                  className="rounded-md border px-3 py-1.5 text-sm"
+                  disabled={!tok}
+                >
+                  Copy token
+                </button>
+
+                <button
+                  onClick={regenerateToken}
+                  className="rounded-md bg-black px-3 py-1.5 text-sm text-white"
+                >
+                  Regenerate token
+                </button>
+              </div>
+
+              <div className="rounded-md border p-3 text-xs space-y-2">
+                <div className="font-medium text-gray-700">cURL examples</div>
+
+                <div className="space-y-1">
+                  <div className="text-gray-500">Single file</div>
+                  <div className="font-mono break-all">{curlSingle || "—"}</div>
+                </div>
+
+                <div className="space-y-1">
+                  <div className="text-gray-500">Multi file</div>
+                  <div className="font-mono break-all">{curlMulti || "—"}</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {msg && <div className="text-sm">{msg}</div>}
+      </section>
+
+      <section className="grid gap-4 md:grid-cols-2">
+        <div className="rounded-xl border p-4">
+          <div className="mb-2 flex items-center justify-between">
+            <h2 className="text-lg font-medium">Letzte Ingest-Batches</h2>
+            <span className="text-xs text-gray-500">{selected ? selected.name : ""}</span>
+          </div>
+
+          <div className="space-y-2 text-sm">
+            {batches.map((b) => (
+              <div key={b.id} className="rounded-md border p-3">
+                <div className="text-xs text-gray-500 font-mono">{b.id}</div>
+                <div className="mt-1 text-gray-700">
+                  {new Date(b.received_at).toLocaleString()} ·{" "}
+                  {b.source ?? "?"} · files: {b.file_count ?? "?"}
+                </div>
+                <div className="text-gray-600">
+                  status: {b.status ?? "?"}
+                  {b.error_summary ? ` · err: ${b.error_summary}` : ""}
+                </div>
+              </div>
+            ))}
+
+            {batches.length === 0 && (
+              <div className="text-gray-600">Keine Batches.</div>
+            )}
+          </div>
         </div>
-      </div>
+
+        <div className="rounded-xl border p-4">
+          <div className="mb-2 flex items-center justify-between">
+            <h2 className="text-lg font-medium">Letzte Assets</h2>
+            <span className="text-xs text-gray-500">{selected ? selected.name : ""}</span>
+          </div>
+
+          <div className="space-y-3 text-sm">
+            {assets.map((a) => {
+              const effective = a.relevant_effective === true;
+              return (
+                <div key={a.id} className="rounded-md border p-3">
+                  <div className="text-xs text-gray-500 font-mono">{a.id}</div>
+                  <div className="break-all text-xs">{a.storage_path}</div>
+                  <div className="text-gray-600">
+                    {a.status} · {new Date(a.created_at).toLocaleString()}
+                  </div>
+
+                  <div className="mt-2 flex items-center gap-3">
+                    <span className="text-xs">{relevanceLabel(a)}</span>
+                    <button
+                      onClick={() => setRelevant(a.id, !effective)}
+                      className="rounded-md border px-3 py-1 text-xs"
+                    >
+                      {effective ? "Als irrelevant markieren" : "Als relevant markieren"}
+                    </button>
+                  </div>
+
+                  {assetUrls[a.id] && (
+                    <img
+                      src={assetUrls[a.id]}
+                      alt="asset"
+                      className="mt-3 w-full max-w-md rounded-md border"
+                    />
+                  )}
+                </div>
+              );
+            })}
+
+            {assets.length === 0 && (
+              <div className="text-gray-600">Keine Assets.</div>
+            )}
+          </div>
+        </div>
+      </section>
     </main>
   );
 }

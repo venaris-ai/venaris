@@ -4,7 +4,7 @@ import Link from "next/link";
 import { supabaseServer } from "@/lib/supabaseServer";
 
 function fmt(ts: string | null) {
-  if (!ts) return "";
+  if (!ts) return "—";
   return new Date(ts).toLocaleString("de-DE");
 }
 
@@ -13,34 +13,40 @@ export default async function EventsPage() {
 
   const { data: events, error } = await supabase
     .from("event_feed")
-    .select("id,camera_id,start_at,end_at,asset_count,top_species,top_count,relevance_score")
+    .select(
+      "id,camera_id,start_at,end_at,asset_count,top_species,top_count,relevance_score"
+    )
     .order("end_at", { ascending: false })
     .limit(100);
 
   if (error) {
     return (
-      <div className="p-6">
-        <h1 className="text-xl font-semibold">Events</h1>
-        <p className="mt-4 text-red-600">Fehler: {error.message}</p>
-      </div>
+      <main className="space-y-6">
+        <div>
+          <h1 className="text-3xl font-semibold">Events</h1>
+          <p className="text-sm text-gray-600">Aktuelle Event-Zusammenfassungen</p>
+        </div>
+
+        <div className="rounded-xl border p-4 text-sm text-red-600">
+          Fehler: {error.message}
+        </div>
+      </main>
     );
   }
 
   return (
-    <div className="p-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold">Events</h1>
-        <Link href="/" className="text-sm underline">
-          Home
-        </Link>
+    <main className="space-y-6">
+      <div>
+        <h1 className="text-3xl font-semibold">Events</h1>
+        <p className="text-sm text-gray-600">Aktuelle Event-Zusammenfassungen</p>
       </div>
 
-      <div className="mt-4 space-y-3">
+      <div className="space-y-3">
         {(events ?? []).map((e) => (
           <Link
             key={e.id}
             href={`/events/${e.id}`}
-            className="block rounded-xl border bg-white/50 p-4 shadow-sm transition hover:bg-gray-50"
+            className="block rounded-xl border p-4 transition hover:bg-gray-50"
           >
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="text-sm">
@@ -48,7 +54,7 @@ export default async function EventsPage() {
                 {fmt(e.start_at)} – {fmt(e.end_at)}
               </div>
               <div className="text-sm">
-                <span className="font-medium">Assets:</span> {e.asset_count}
+                <span className="font-medium">Assets:</span> {e.asset_count ?? 0}
               </div>
             </div>
 
@@ -78,6 +84,6 @@ export default async function EventsPage() {
           </div>
         )}
       </div>
-    </div>
+    </main>
   );
 }

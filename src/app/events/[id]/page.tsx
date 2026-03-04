@@ -12,23 +12,27 @@ function fmt(ts: string | null) {
 export default async function EventDetailPage(props: any) {
   const supabase = supabaseServer();
 
-  // ✅ Next.js versions-robust: params kann Objekt ODER Promise sein
+  // Next.js versions-robust: params kann Objekt ODER Promise sein
   const params = await Promise.resolve(props?.params);
   const eventId: string | undefined = params?.id;
 
   if (!eventId) {
     return (
-      <div className="p-6">
-        <div className="flex items-center justify-between">
-          <h1 className="text-xl font-semibold">Event Details</h1>
-          <Link href="/events" className="text-sm underline">
-            Zurück
+      <main className="space-y-6">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h1 className="text-3xl font-semibold">Event</h1>
+            <p className="text-sm text-gray-600">Details & Assets</p>
+          </div>
+          <Link href="/events" className="rounded-md border px-3 py-2 text-sm">
+            ← Zurück
           </Link>
         </div>
-        <p className="mt-4 text-red-600">
+
+        <div className="rounded-xl border p-4 text-sm text-red-600">
           Event-ID fehlt (params.id ist undefined). Bitte Seite neu laden.
-        </p>
-      </div>
+        </div>
+      </main>
     );
   }
 
@@ -43,17 +47,21 @@ export default async function EventDetailPage(props: any) {
 
   if (eventErr || !event) {
     return (
-      <div className="p-6">
-        <div className="flex items-center justify-between">
-          <h1 className="text-xl font-semibold">Event Details</h1>
-          <Link href="/events" className="text-sm underline">
-            Zurück
+      <main className="space-y-6">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h1 className="text-3xl font-semibold">Event</h1>
+            <p className="text-sm text-gray-600">Details & Assets</p>
+          </div>
+          <Link href="/events" className="rounded-md border px-3 py-2 text-sm">
+            ← Zurück
           </Link>
         </div>
-        <p className="mt-4 text-red-600">
+
+        <div className="rounded-xl border p-4 text-sm text-red-600">
           Event nicht gefunden: {eventErr?.message ?? "unknown error"}
-        </p>
-      </div>
+        </div>
+      </main>
     );
   }
 
@@ -78,7 +86,7 @@ export default async function EventDetailPage(props: any) {
   if (!assetsErr && assetIds.length > 0) {
     const { data: assetsData, error: assetsDataErr } = await supabase
       .from("assets")
-      .select("id, camera_id, storage_path, created_at, captured_at, status, relevant")
+      .select("id,camera_id,storage_path,created_at,captured_at,status,relevant,empty,empty_confidence")
       .in("id", assetIds)
       .order("created_at", { ascending: false });
 
@@ -102,41 +110,42 @@ export default async function EventDetailPage(props: any) {
     previewUrl: signedUrlsByAssetId[a.id],
     timestampLabel: fmt(a.captured_at ?? a.created_at),
     storagePath: a.storage_path,
-    relevant: !!a.relevant,
+    relevant: a.relevant ?? null,           // bool | null (optional fürs Grid)
+    empty: a.empty ?? null,                 // bool | null
+    emptyConfidence: a.empty_confidence ?? null, // number | null
   }));
 
+  const cameraLabel =
+    camera?.name
+      ? `${camera.name}${camera.location_name ? ` (${camera.location_name})` : ""}`
+      : event.camera_id;
+
+  const topLabel = event.top_species
+    ? `${event.top_species}${event.top_count ? ` (${event.top_count})` : ""}`
+    : "—";
+
   return (
-    <div className="p-6">
-      <div className="flex items-center justify-between">
+    <main className="space-y-6">
+      <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-xl font-semibold">Event</h1>
-          <div className="mt-1 text-sm text-gray-600">
+          <h1 className="text-3xl font-semibold">Event</h1>
+          <p className="text-sm text-gray-600">
             Zeitraum: {fmt(event.start_at)} – {fmt(event.end_at)}
-          </div>
+          </p>
         </div>
-        <div className="flex items-center gap-4">
-          <Link href="/events" className="text-sm underline">
-            Zurück
-          </Link>
-          <Link href="/" className="text-sm underline">
-            Home
-          </Link>
-        </div>
+
+        <Link href="/events" className="rounded-md border px-3 py-2 text-sm">
+          ← Zurück
+        </Link>
       </div>
 
-      <div className="mt-4 rounded-xl border bg-white/50 p-4 shadow-sm">
+      <div className="rounded-xl border p-4">
         <div className="text-sm">
-          <span className="font-medium">Kamera:</span>{" "}
-          {camera?.name
-            ? `${camera.name}${camera.location_name ? ` (${camera.location_name})` : ""}`
-            : event.camera_id}
+          <span className="font-medium">Kamera:</span> {cameraLabel}
         </div>
 
         <div className="mt-2 text-sm text-gray-700">
-          <span className="font-medium">Top:</span>{" "}
-          {event.top_species
-            ? `${event.top_species}${event.top_count ? ` (${event.top_count})` : ""}`
-            : "—"}
+          <span className="font-medium">Top:</span> {topLabel}
           {typeof event.relevance_score === "number"
             ? ` · Score: ${event.relevance_score.toFixed(2)}`
             : ""}
@@ -147,8 +156,8 @@ export default async function EventDetailPage(props: any) {
         </div>
       </div>
 
-      <div className="mt-6">
-        <h2 className="text-base font-semibold">Assets</h2>
+      <div>
+        <h2 className="text-xl font-medium">Assets</h2>
 
         {assets.length === 0 ? (
           <div className="mt-3 rounded-xl border p-4 text-sm text-gray-600">
@@ -158,6 +167,6 @@ export default async function EventDetailPage(props: any) {
           <AssetGrid initialAssets={initialAssets} />
         )}
       </div>
-    </div>
+    </main>
   );
 }
