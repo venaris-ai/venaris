@@ -39,7 +39,6 @@ export function normalizeSource(metadata: IngestMetadata | null): string {
  * - storage upload
  * - assets insert
  * - event clustering (non-fatal)
- * - detections stub (non-fatal)
  * - cameras.last_seen_at updated
  * - batch status completed/failed + summary
  */
@@ -182,21 +181,6 @@ export async function ingestFiles(params: {
     if (eventErr) {
       console.warn("Event clustering failed for asset", insertedAsset.id, eventErr.message);
       warnings.push(`event_clustering_failed:${eventErr.message}`);
-    }
-
-    // 2e) Fake detection (DEV STUB, non-fatal) - exactly once
-    const { error: fakeDetErr } = await supabase.from("detections").insert({
-      asset_id: insertedAsset.id,
-      label: "animal",
-      species: "test_species",
-      count: 1,
-      score: 0.75,
-      meta: { stub: true },
-    });
-
-    if (fakeDetErr) {
-      console.warn("Fake detection insert failed:", fakeDetErr.message);
-      warnings.push(`fake_detection_failed:${fakeDetErr.message}`);
     }
 
     accepted++;
