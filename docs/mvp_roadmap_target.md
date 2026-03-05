@@ -2,21 +2,19 @@ Venaris – MVP Roadmap Target (Version 1.0)
 
 Target Delivery: 31.03.2026 (EOD)
 Goal: Visible Wildlife Intelligence + Operational Stability
-
-Workdays only (Mon–Fri).
-Weekends are intentionally excluded.
+Workdays only (Mon–Fri). Weekends excluded.
 
 🎯 MVP Definition (Version 1.0)
 
 Venaris delivers:
 
-Automatic image classification (empty / animal)
+Automatic image classification (empty / non-empty)
 
 Species recognition (taxonomy v1)
 
 Event clustering
 
-System relevance scoring + manual relevance override (if enabled)
+System relevance scoring (system) + manual relevance override (UI)
 
 Camera monitoring (health)
 
@@ -54,13 +52,10 @@ Application Layer → dashboard + insight views
 
 📆 Execution Plan (Workdays Only)
 
-Start: 04.03.2026
-End: 31.03.2026
+Start: 04.03.2026 (Wed)
+End: 31.03.2026 (Tue)
 
 ✅ Phase 1 – Processing Foundation (DONE)
-
-(Asset Lifecycle + Worker Architecture)
-
 📅 04.03 (Wed) – DONE
 
 Asset Status System – Design
@@ -83,7 +78,7 @@ ingest remains fast & idempotent
 
 delivery: pure ingest → queue model
 
-📅 06.03 (Fri) – DONE
+📅 06.03 (Fri) – DONE (as designed earlier; implementation already live)
 
 Detection Worker Skeleton – Architecture
 
@@ -91,11 +86,11 @@ runtime decided: Node worker
 
 poll strategy: RPC claim_queued_assets
 
-concurrency + retries concept
+retries concept
 
 delivery: worker design locked
 
-📅 09.03 (Mon) – DONE
+📅 09.03 (Mon) – DONE (system running + verified)
 
 Detection Worker Skeleton – Implementation
 
@@ -103,33 +98,38 @@ systemd service on Hetzner
 
 claims queued assets
 
-processing → processed (mock)
+processing → processed (real pipeline now; no longer mock)
 
 errors → failed with retry logic
 
-captured_at fallback fix integrated
+captured_at fallback + EXIF backfill strategy integrated
 
 delivery: async processing loop running
 
 🟢 Phase 2 – Detection v1 (Core Intelligence)
 
 Chosen Stack (Option A):
-
 Camera → Ingest → MegaDetector → Empty Filter → Species Classifier → Event Clustering → Intelligence
 
 Taxonomy v1: 15 classes (incl. wolf)
 
-📅 10.03 (Tue)
+📅 10.03 (Tue) – DONE (completed early on 05.03)
 
 MegaDetector Integration – v1
 
 integrate MegaDetector (animal/human/vehicle)
 
-store detection outputs (bboxes + confidence) in detections / asset_detections
+store detection outputs (bboxes + confidence) in detections
 
-delivery: MegaDetector runs automatically on queued assets
+delivery: MegaDetector runs automatically on queued assets ✅
 
-📅 11.03 (Wed)
+Notes from production run (05.03):
+
+worker processed large backlog (hundreds of assets)
+
+MD thresholds managed via env: MD_MIN_CONF, MD_MAX_DETECTIONS
+
+📅 11.03 (Wed) – DONE (completed early on 05.03)
 
 Empty Filter – v1 (System Decision)
 
@@ -137,47 +137,59 @@ derive empty/non-empty from MegaDetector output
 
 write to assets.empty + assets.empty_confidence
 
-set system relevance automatically:
+set system relevance automatically: empty=true → relevant=false
 
-if empty=true → relevant=false
+delivery: automatic empty filtering works ✅
 
-delivery: automatic empty filtering works reliably
-
-📅 12.03 (Thu)
+📅 12.03 (Thu) – DONE (completed early on 05.03)
 
 Species Mapping – Taxonomy v1 + Schema
 
-finalize taxonomy v1 (15 classes):
+taxonomy v1 finalized (15 classes):
 
-roe_deer, wild_boar, red_deer, fallow_deer, mouflon,
+roe_deer, wild_boar, red_deer, fallow_deer, mouflon
 
-fox, wolf, badger,
+fox, wolf, badger
 
-raccoon, raccoon_dog,
+raccoon, raccoon_dog
 
-hare, rabbit,
+hare, rabbit
 
-pheasant, crow,
+pheasant, crow
 
 other
 
-define minimal detections schema usage:
+DB schema aligned:
 
-species/label, confidence, count, bbox
+detections.species converted to ENUM taxonomy_species_v1
 
-delivery: detection data model finalized
+delivery: detection data model finalized ✅
 
-📅 13.03 (Fri)
+📅 13.03 (Fri) – DONE (integration completed early on 05.03; accuracy validation pending)
 
-Species Classifier – Integration
+Species Classifier – Integration (Option A / CLIP)
 
 run classifier only if MegaDetector sees animal
 
-store species detections in DB
+store species in DB (detections.species)
 
-confidence thresholding v1
+store similarity score (e.g. species_sim) for debugging/QA
 
-delivery: automatic species detection working end-to-end
+thresholding v1:
+
+SPECIES_SIM_THRESHOLD
+
+bbox padding via SPECIES_BBOX_PAD
+
+SPECIES_SPECIES_SOFTMAX=0 (score = sim, consistent)
+
+delivery: automatic species detection working end-to-end ✅
+
+Open validation (planned for 06–10.03):
+
+quantify misclassifications (e.g. grill→vehicle, boar→roe_deer)
+
+add UI for human verification
 
 🟡 Phase 3 – Visible Intelligence Layer
 📅 16.03 (Mon)
@@ -192,9 +204,7 @@ species weights (wolf high)
 
 confidence
 
-store in events:
-
-relevance_score_system
+store in events: relevance_score_system
 
 delivery: events become ranked
 
@@ -210,23 +220,23 @@ confidence hint
 
 sort by relevance_score_system
 
-delivery: feed feels “intelligent”
+delivery: feed feels intelligent
 
 📅 18.03 (Wed)
 
 Relevance Model Finalization (System vs User)
-
-decision point:
+Decision point:
 
 keep only assets.relevant (simple MVP)
+OR
 
-OR add assets.relevant_user as override (clean separation)
+add assets.relevant_user override (clean separation)
 
-if override enabled:
+If override enabled:
 
 effective logic = COALESCE(relevant_user, relevant, true)
 
-delivery: relevance model locked + UI consistent
+Delivery: relevance model locked + UI consistent
 
 📅 19.03 (Thu)
 
@@ -266,7 +276,6 @@ delivery: basic wilddruck metric
 📅 24.03 (Tue)
 
 Dashboard MVP
-
 Includes:
 
 camera health
@@ -278,8 +287,7 @@ top species (7/30)
 activity graph
 
 wilddruck indicator
-
-Delivery: full operational overview.
+Delivery: full operational overview
 
 📅 25.03 (Wed)
 
@@ -290,7 +298,6 @@ Load & Stability Test
 worker throughput + retry behavior
 
 DB query load sanity
-
 delivery: system stress-tested
 
 📅 26.03 (Thu)
@@ -302,7 +309,6 @@ index review
 event_feed optimization
 
 detection joins tuning
-
 delivery: performance hardened
 
 📅 27.03 (Fri)
@@ -314,7 +320,6 @@ label normalization
 confidence tuning
 
 “other” policy
-
 delivery: clean detection output
 
 🟣 Finalization Phase
@@ -327,7 +332,6 @@ real workflow test on terrace cameras (Reolink/X-View/ZEISS)
 motion latency sanity tests (single shot vs burst)
 
 relevance override test
-
 delivery: real-world validated
 
 📅 31.03 (Tue)
@@ -336,47 +340,44 @@ Version 1.0 Freeze
 
 feature lock
 
-docs pass (current-state + architecture + dev-notes)
+docs pass (current-state + architecture + dev-notes + roadmap)
 
 define v2 scope
-
 delivery: Venaris v1.0 complete
 
 🧩 Cross-Cutting (UI Consistency Block)
 
-(we do this in parallel whenever UI causes friction)
+Do in parallel whenever UI causes friction:
 
 single navigation model
-
-remove duplicate Home buttons
 
 consistent back navigation (Events → Event → Back)
 
 unify “Relevant” UI: one concept, one label, one toggle
 
-avoid “debug-like” terms in UI (override/effective) unless in a debug view
+avoid “debug-like” terms in UI unless in debug view
 
 📊 MVP Success Criteria (31.03)
 
 By end of month:
 
-MegaDetector runs automatically
+MegaDetector runs automatically ✅
 
-Empty images auto-filtered
+Empty images auto-filtered ✅
 
-Species detection functional (taxonomy v1)
+Species detection functional (taxonomy v1) ✅ (accuracy validation pending)
 
-Event clustering active
+Event clustering active ✅
 
-Relevance scoring operational
+Relevance scoring operational (event-level) ⏳
 
-Dashboard usable
+Dashboard usable ⏳
 
-Wilddruck indicator visible
+Wilddruck indicator visible ⏳
 
-Monitoring stable
+Monitoring stable ✅
 
-Real hardware validated
+Real hardware validated ⏳
 
 🚀 After Version 1.0
 
@@ -403,7 +404,6 @@ wildlife intelligence moat
 🧠 Strategic Note
 
 Infra is stable.
-
 From 04.03 onward, Venaris shifts from:
 
 Transport reliability → Visible intelligence

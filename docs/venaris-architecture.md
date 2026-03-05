@@ -1,6 +1,6 @@
 Venaris – Architecture (MVP)
 
-Last updated: 2026-03-03 (Unified Ingest + Import Center)
+Last updated: 2026-03-05 (AI Detection Pipeline Operational)
 
 🎯 Vision
 
@@ -10,7 +10,9 @@ Cameras are sensors — not the product.
 The product is structured wildlife intelligence.
 
 The long-term goal is to transform unstructured wildlife observations
+
 (images, time-series signals, environmental metadata)
+
 into structured, queryable ecological intelligence.
 
 🧭 Core Principle
@@ -22,10 +24,9 @@ Venaris converts:
 
 Images → Assets → Detections → Events → Patterns → Insights
 
-Current stage (MVP):
+Current MVP stage:
 
-Images → Assets → Events (stub intelligence)
-
+Images → Assets → AI Detections → Events
 🏗 System Overview
 
 Venaris consists of five logical layers:
@@ -48,23 +49,20 @@ SMTP (Reolink)
 
 FTP (X-View via Hetzner Gateway)
 
-Manual Import (ZIP + multi-file via Import Adapter)
+Manual Import (ZIP + multi-file)
 
 All ingest channels normalize into a unified ingest pipeline.
 
-Core logic is centralized in:
+Core logic:
 
 src/lib/ingestCore.ts
 
-Both:
+Used by:
 
 POST /api/ingest
-
 POST /api/upload
 
-use the same processing logic.
-
-This guarantees consistency across all import methods.
+This guarantees consistent processing across all ingest channels.
 
 1️⃣ Ingestion Layer
 Purpose
@@ -80,18 +78,18 @@ POST /api/ingest
 
 Requirements:
 
-Header:
+Header
+
 x-ingest-token
 
-Body:
+Body
+
 multipart/form-data
 
-Fields:
+Fields
 
 file (or files)
-
 metadata (JSON)
-
 optional: capturedAt
 
 Example metadata:
@@ -109,37 +107,43 @@ POST /api/upload
 
 Capabilities:
 
-Multi-file upload
+multi-file upload
 
-ZIP upload (auto-extracted via JSZip)
+ZIP upload
+
+JSZip auto-extraction
 
 metadata.source="manual"
 
-channel="import" or "upload"
+Guard rails:
 
-Guard rails (MAX_FILES, MAX_ZIP_BYTES)
+MAX_FILES
+MAX_ZIP_BYTES
 
-All files are forwarded to ingestCore.
+All files are forwarded to:
+
+ingestCore
 
 This creates ingest_batches with:
 
 source = manual
-
 Ingest Responsibilities (Unified)
 
 Each ingest:
 
-Creates ingest_batch
+creates ingest_batch
 
-Deduplicates per camera (SHA256)
+performs per-camera SHA256 deduplication
 
-Stores asset in Supabase Storage
+stores image in Supabase Storage
 
-Updates camera.last_seen_at
+inserts asset row
 
-Triggers event clustering (RPC)
+updates camera.last_seen_at
 
-Triggers detection stub (DEV)
+triggers event clustering RPC
+
+asset enters AI detection queue
 
 Deduplication is per-camera and idempotent.
 
@@ -148,152 +152,71 @@ SMTP Ingestion (Vendor-Aware Bridge)
 Architecture:
 
 Mailbox (IMAP)
-→ smtp-bridge.mjs (systemd service)
-→ POST /api/ingest
+ → smtp-bridge.mjs
+ → POST /api/ingest
 
 Features:
 
-Attachments
+attachment extraction
 
-Inline images (CID)
+inline image support (CID)
 
-SMTP_VENDOR flag (e.g. reolink)
+vendor flag (reolink)
 
-UID-based deduplication
+UID deduplication
 
 UNSEEN-only processing
 
-Poll interval configurable (MVP: 60s)
+Poll interval:
 
-Duplicate handling:
+60 seconds
+FTP Ingestion (Gateway Architecture)
 
-skippedDuplicates incremented
+Architecture:
 
-captured_at backfilled if metadata.device_time present
-
-MVP note:
-SMTP is mailbox-based per camera.
-Stable but not horizontally scalable long-term.
-
-FTP Ingestion (Gateway-Based Architecture)
-Final Architecture (Production-Ready)
-
-Wildlife Camera (X-View LTE)
-→ Hetzner VPS (FTP Gateway via vsftpd)
-→ /data/ftp-ingest/<ftp_user>/inbox
-→ FTP Worker (Node.js, systemd)
-→ POST /api/ingest
-→ Supabase Storage
-
+Wildlife Camera
+ → Hetzner FTP Gateway
+ → /data/ftp-ingest/<user>/inbox
+ → FTP Worker
+ → POST /api/ingest
 Gateway Characteristics
 
-Dedicated VPS (Hetzner)
+Hetzner VPS
 
 vsftpd passive mode
 
-Per-camera FTP user
+per-camera FTP user
 
 chroot isolation
-
-No public file exposure
 
 UFW firewall
 
 SSH key authentication only
 
-Root login disabled
+root login disabled
 
-FTP users cannot access other users' directories.
-
-Directory Structure
+Directory Model
 /data/ftp-ingest/
-  └── xview01/
+   └── xview01/
         └── inbox/
 
-Permission model:
+Permissions:
 
-Owner: ftp user (e.g. xview01)
-
+Owner: ftp user
 Group: ftp-ingest
+Mode: 2770 (setgid)
+local_umask=007
 
-Mode: 2770 (setgid enabled)
+Worker can:
 
-vsftpd local_umask=007
+read
+delete
 
-Ensures:
-
-Worker can read & delete
-
-Files are group-writable
-
-Isolation between cameras
-
-No world-readable access
-
-FTP Worker
-
-Location:
-
-/opt/venaris-worker/ftp-worker.mjs
-
-Managed via:
-
-systemd → venaris-ftp-worker.service
-
-Characteristics:
-
-Poll-based (MVP: 15s)
-
-Stable file-size check (LTE safety)
-
-SHA256 pre-hash logging
-
-Multipart/form-data generation
-
-metadata.source="ftp"
-
-Manual redirect handling (307/308)
-
-Delete only after successful ingest
-
-Retry via polling
-
-Vercel Deployment Protection (Automation)
-
-Production API is protected via Vercel Deployment Protection.
-
-Workers use:
-
-?x-vercel-protection-bypass=<token>
-
-Bypass token stored only in:
-
-/opt/venaris-worker/.env
-
-No tokens stored in GitHub.
-
-Deduplication Model
-
-Server-side (API layer).
-
-Strategy:
-
-SHA256 file hash
-
-Unique constraint per camera
-
-Duplicate → skippedDuplicates++
-
-Asset not re-created
-
-Event clustering not retriggered
-
-This ensures idempotent ingest behavior.
+Cameras remain isolated.
 
 2️⃣ Storage Layer
-Supabase Storage
 
-Bucket:
+Supabase Storage bucket:
 
 camera-assets
 
@@ -303,20 +226,18 @@ Naming scheme:
 
 Access:
 
-Signed URLs
+signed URLs
+20 min expiry
+server-generated
 
-20-minute expiry
-
-Generated server-side only
-
-FTP Gateway holds no permanent image storage.
+FTP gateway holds no persistent data.
 
 Supabase is the single source of truth.
 
-Database Tables
+Database Core Tables
 reviers
 
-Hunting areas / management units.
+Wildlife management areas.
 
 cameras
 
@@ -325,280 +246,330 @@ Wildlife sensors.
 Fields:
 
 id
-
 revier_id
-
 name
-
 location_name
-
-import_method (smtp / ftp / manual)
-
+import_method
 ingest_token
-
 last_seen_at
-
 created_at
-
 assets
 
-Raw captured observations.
+Captured observations.
 
 Fields:
 
 id
-
 camera_id
-
 storage_path
-
 file_hash
-
 status
-
 relevant
-
 captured_at
-
 created_at
-
 ingest_batch_id
+empty
+empty_confidence
+detections
 
-ingest_batches
-
-Logical delivery units.
+AI detection results.
 
 Fields:
-
-id
-
-camera_id
-
-received_at
-
-source (ftp / smtp / manual)
-
-file_count
-
-status
-
-error_summary
-
-meta (jsonb)
-
-Batch source derived from metadata.source.
-
-3️⃣ Intelligence Layer
-
-Current state:
-Detection stub only.
-
-detections:
 
 asset_id
-
-label
-
-species
-
+label          (animal | human | vehicle)
+species        (taxonomy_species_v1 enum)
+score          (MegaDetector confidence)
+species_sim    (CLIP similarity)
 count
-
-score
-
 meta
 
-Future:
-Model-based detection pipeline.
+Bounding boxes stored in:
 
+meta.bbox
+ingest_batches
+
+Logical delivery groups.
+
+Fields:
+
+id
+camera_id
+received_at
+source
+file_count
+status
+error_summary
+meta
+3️⃣ Intelligence Layer
+
+The Intelligence Layer converts images → ecological signals.
+
+Detection Pipeline
+asset
+↓
+MegaDetector
+↓
+empty filtering
+↓
+species classifier
+↓
+detections table
+↓
+event clustering
+MegaDetector
+
+Purpose:
+
+Detect animal / human / vehicle.
+
+Model:
+
+md_v1000.0.0-redwood.pt
+
+Output:
+
+label
+score
+bbox
+Empty Filter
+
+System decision derived from MegaDetector.
+
+Rule:
+
+best animal score < threshold
+→ empty
+
+Environment:
+
+MD_ANIMAL_THRESHOLD=0.2
+
+Asset updated with:
+
+empty
+empty_confidence
+relevant
+Species Classification
+
+Model:
+
+CLIP ViT-B/32
+
+Runner:
+
+species/runner.py
+
+Process:
+
+MegaDetector bbox
+↓
+image crop
+↓
+CLIP zero-shot classification
+↓
+taxonomy_species_v1
+
+Taxonomy v1:
+
+roe_deer
+wild_boar
+red_deer
+fallow_deer
+mouflon
+fox
+wolf
+badger
+raccoon
+raccoon_dog
+hare
+rabbit
+pheasant
+crow
+other
+
+Classification threshold:
+
+SPECIES_SIM_THRESHOLD=0.22
+
+Bounding box padding:
+
+SPECIES_BBOX_PAD=0.10
 Events
 
-Aggregated wildlife activity.
+Events represent aggregated wildlife activity.
 
 Logic:
 
 Assets within time window
 → grouped
 → aggregated
-→ scored
 
-Currently:
+Current implementation:
 
-Basic time-window clustering via RPC.
+time-window clustering RPC
 
 Future:
 
-Detection-density scoring
+species-aware clustering
 
-Species-aware clustering
+detection density scoring
 
-Movement modeling
+movement modeling
 
-Cross-camera correlation
-
-event_assets:
-Join table between events and assets.
+cross-camera correlation
 
 4️⃣ Monitoring Layer
 
-Venaris monitors ingest reliability and sensor health.
+Venaris monitors sensor reliability and ingest health.
 
 camera_health_rules
 
-Defines thresholds per import_method.
+Defines thresholds per import method.
 
 camera_health (view)
 
-Calculates:
+States:
 
 online
-
 stale
-
 offline
-
 unknown
 
-Based on:
+Calculated from:
 
-last_seen_at + rule thresholds
-
-Fully DB-driven.
-
+last_seen_at
 Ingest Monitoring
 
 Tracks:
 
 file_count
+skipped_duplicates
+source
+error_summary
 
-skipped duplicates
+Sources:
 
-source differentiation
-
-error summary
-
-FTP, SMTP, and Manual are first-class differentiated ingest sources.
-
+ftp
+smtp
+manual
 5️⃣ Application Layer
 Home (/)
 
-Debug + asset list (MVP internal view)
+Internal asset debug view.
 
 Import (/import)
 
-Primary human ingestion entrypoint:
+Human ingestion interface.
 
-Camera selection
+Features:
 
-Multi-file
+camera selection
 
-ZIP
+multi-file upload
 
-Drag & drop
+ZIP import
 
-Batch feedback
+drag & drop
+
+batch feedback
 
 Cameras (/cameras)
 
-Health view
+Camera overview.
 
-Token management
+Features:
 
-Last 3 assets preview
+health status
 
-Last ingest batches
+token management
 
-Manual refresh controls
+asset preview
 
-Ingest Monitoring (/ingest)
+ingest monitoring
 
-Batch list
+Ingest (/ingest)
 
-Source transparency
+Technical monitoring.
 
-Error visibility
+Displays:
+
+ingest batches
+
+source transparency
+
+errors
 
 Events (/events)
 
-Wildlife activity feed
+Wildlife activity feed.
 
-Event detail view
+Includes:
 
-AssetGrid with relevance toggle
-
+Event view
+Asset grid
+relevance toggle
 🧠 Relevance Model
 
 Current:
 
 boolean relevant
 
-Planned evolution:
+Derived from:
+
+empty detection
+
+Future:
 
 relevance_score
-
-user_relevant override
-
+user_override
 event_relevance_score
-
-Long-term:
-
-Probabilistic, context-aware relevance modeling.
-
 🔒 Security Model
 
 RLS enabled
 
-No client-side direct table access
+no client-side direct table access
 
-All reads via server routes
+server routes only
 
-Service role only on server
+service role server-side only
 
-Token-based ingest authentication
+token-based ingest authentication
 
-No public write endpoints
+Gateway Security
 
-Signed URLs only
+SSH key login only
 
-Gateway:
-
-SSH key only
-
-No password login
+root login disabled
 
 chroot FTP users
 
-Restricted passive port range
+restricted passive port range
 
-Firewall enforced
-
-No permanent image storage
+firewall enforced
 
 🚀 Strategic Direction
 
-Venaris is evolving from:
+Venaris is evolving from a:
 
-Camera ingestion system
+camera ingestion system
 
-to:
+into a:
 
-Structured wildlife intelligence platform.
+wildlife intelligence platform
 
 Current phase:
 
-Production-ready multi-channel ingestion & monitoring
-Unified ingest pipeline
-Import Adapter + Import Center
+multi-channel ingest
+AI detection pipeline
+species classification
+event clustering
+monitoring layer
 
 Next phase:
 
-Model-based detection
-
-Species classification
-
-Event scoring
-
-Pattern analysis across cameras
-
-Cross-revier aggregation
-
-Predictive wildlife modeling
+detection review UI
+species validation
+event scoring
+cross-camera pattern analysis
+predictive wildlife modeling
