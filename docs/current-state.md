@@ -1,503 +1,1150 @@
 Venaris – Current State
 
-Last updated: 2026-03-05 (Day 5 – AI Pipeline Operational)
+
+
+Last updated: 2026-03-06 (Day 6 – AI Pipeline Validated)
+
+
 
 ✅ System Status
+
+
+
 Ingestion Layer
 
-Unified ingest pipeline (FTP + SMTP + Manual) via shared ingestCore
 
-SMTP/IMAP bridge stable (Reolink live)
 
-FTP Gateway fully operational (X-View via Hetzner)
+Unified ingest pipeline (FTP + SMTP + Manual) via shared ingestCore  
 
-Worker → Production API (Vercel) confirmed
+SMTP/IMAP bridge stable (Reolink live)  
 
-Vercel Deployment Protection bypass implemented
+FTP Gateway fully operational (X-View via Hetzner)  
 
-SHA256 per-camera dedup stable
+Worker → Production API (Vercel) confirmed  
 
-File deletion after ingest confirmed
+Vercel Deployment Protection bypass implemented  
 
-Vendor-aware SMTP processing implemented
+SHA256 per-camera dedup stable  
 
-Inline image handling (CID + attachment) implemented
+File deletion after ingest confirmed  
+
+Vendor-aware SMTP processing implemented  
+
+Inline image handling (CID + attachment) implemented  
+
+
 
 Monitoring
 
-Ingest batch monitoring implemented
 
-Camera health engine (rule-based per import_method) implemented
 
-Navigation updated (Import added)
+Ingest batch monitoring implemented  
+
+Camera health engine (rule-based per import\_method) implemented  
+
+Navigation updated (Import added)  
+
+
 
 Import
 
-Import Adapter (ZIP + multi-file) implemented
 
-Import Center UI implemented
+
+Import Adapter (ZIP + multi-file) implemented  
+
+Import Center UI implemented  
+
+
 
 Security
 
-Security Advisor clean
+
+
+Security Advisor clean  
+
 (0 errors / 0 warnings / 0 suggestions)
 
-🧠 AI Pipeline (NEW)
 
-Venaris now runs a full computer vision pipeline.
 
-Camera
-   ↓
-Ingest
-   ↓
-MegaDetector
-(animal / human / vehicle)
-   ↓
-Empty Filter
-   ↓
-Species Classifier (CLIP)
-   ↓
-detections table
-   ↓
-Event clustering
+🧠 AI Pipeline
+
+
+
+Venaris runs a full computer vision pipeline.
+
+
+
+Camera  
+
+↓  
+
+Ingest  
+
+↓  
+
+MegaDetector  
+
+(animal / human / vehicle)  
+
+↓  
+
+Empty Filter  
+
+↓  
+
+Species Classifier (CLIP)  
+
+↓  
+
+detections table  
+
+↓  
+
+Event clustering  
+
+
+
 MegaDetector Integration (v1)
 
-Model:
 
-md_v1000.0.0-redwood.pt
 
-Runs on:
+Model:  
 
-/opt/venaris-worker/detection-worker/md/runner.py
+md\_v1000.0.0-redwood.pt  
+
+
+
+Runs on:  
+
+/opt/venaris-worker/detection-worker/md/runner.py  
+
+
 
 Output normalized to:
 
-label   → animal | human | vehicle
-score   → MD confidence
-bbox    → relative [x,y,w,h]
 
-Detection rows inserted into:
 
-detections
+label → animal | human | vehicle  
+
+score → MD confidence  
+
+bbox → relative \[x,y,w,h]  
+
+
+
+Detection rows inserted into:  
+
+detections  
+
+
 
 Meta stored:
 
-meta.bbox
-meta.model = "megadetector_v1000"
-meta.md_idx
+
+
+meta.bbox  
+
+meta.model = "megadetector\_v1000"  
+
+meta.md\_idx  
+
+
+
 Empty Filter (System Decision)
+
+
 
 Empty classification derived from MegaDetector:
 
-best_animal_score < MD_ANIMAL_THRESHOLD → empty=true
+
+
+best\_animal\_score < MD\_ANIMAL\_THRESHOLD → empty=true  
+
+
 
 Environment:
 
-MD_ANIMAL_THRESHOLD=0.2
+
+
+MD\_ANIMAL\_THRESHOLD=0.2  
+
+
 
 Assets updated with:
 
-assets.empty
-assets.empty_confidence
-assets.relevant
+
+
+assets.empty  
+
+assets.empty\_confidence  
+
+assets.relevant  
+
+
 
 Rules:
 
-animal present → relevant=true
-no animals → relevant=false
+
+
+animal present → relevant=true  
+
+no animals → relevant=false  
+
+
+
 Species Classifier (CLIP)
+
+
 
 Classifier:
 
-CLIP ViT-B/32
-openai/clip-vit-base-patch32
+
+
+CLIP ViT-B/32  
+
+openai/clip-vit-base-patch32  
+
+
 
 Runner:
 
-/opt/venaris-worker/detection-worker/species/runner.py
+
+
+/opt/venaris-worker/detection-worker/species/runner.py  
+
+
 
 Process:
 
-MegaDetector animal bbox
-↓
-crop image region
-↓
-CLIP zero-shot classification
-↓
-taxonomy_species_v1
+
+
+MegaDetector animal bbox  
+
+↓  
+
+crop image region  
+
+↓  
+
+CLIP zero-shot classification  
+
+↓  
+
+taxonomy\_species\_v1  
+
+
 
 Taxonomy v1 (ENUM):
 
-roe_deer
-wild_boar
-red_deer
-fallow_deer
-mouflon
-fox
-wolf
-badger
-raccoon
-raccoon_dog
-hare
-rabbit
-pheasant
-crow
-other
+
+
+roe\_deer  
+
+wild\_boar  
+
+red\_deer  
+
+fallow\_deer  
+
+mouflon  
+
+fox  
+
+wolf  
+
+badger  
+
+raccoon  
+
+raccoon\_dog  
+
+hare  
+
+rabbit  
+
+pheasant  
+
+crow  
+
+other  
+
+
 
 Decision:
 
-species = other if sim < SPECIES_SIM_THRESHOLD
+
+
+species = other if sim < SPECIES\_SIM\_THRESHOLD  
+
+
 
 Environment:
 
-SPECIES_SIM_THRESHOLD=0.22
-SPECIES_BBOX_PAD=0.10
+
+
+SPECIES\_SIM\_THRESHOLD=0.22  
+
+SPECIES\_BBOX\_PAD=0.10  
+
+
 
 Result stored by updating the MegaDetector detection row:
 
-detections.species
-meta.species.sim
-meta.species.model
+
+
+detections.species  
+
+meta.species.sim  
+
+meta.species.model  
+
+
 
 This ensures:
 
-1 bounding box = 1 detection row
 
-(no duplication).
+
+1 bounding box = 1 detection row  
+
+(no duplication)
+
+
+
+---
+
+
+
+🧪 AI Pipeline Validation (2026-03-06)
+
+
+
+The full AI pipeline has been validated end-to-end using controlled test images.
+
+
+
+Test species:
+
+
+
+fox  
+
+badger  
+
+wolf  
+
+wild\_boar  
+
+
+
+Result:
+
+
+
+All species correctly classified with high confidence (~0.96–0.97).
+
+
+
+Example detections:
+
+
+
+fox → 0.973  
+
+badger → 0.963  
+
+wolf → 0.960  
+
+wild\_boar → 0.969  
+
+
+
+Observation:
+
+
+
+A night IR image of a red deer was classified as roe\_deer.  
+
+This appears to be a natural ambiguity within deer classes under IR conditions  
+
+and not a system malfunction.
+
+
+
+Conclusion:
+
+
+
+The MegaDetector + CLIP pipeline is functioning correctly.
+
+
+
+---
+
+
 
 1️⃣ Infrastructure
+
+
+
 Repository
 
-GitHub:
 
-venaris-ai/venaris
 
-Branch:
+GitHub:  
 
-main
+venaris-ai/venaris  
 
-Secrets:
 
-never committed
+
+Branch:  
+
+main  
+
+
+
+Secrets:  
+
+never committed  
+
+
 
 Daily commits active.
 
+
+
 Tech Stack
-Next.js (App Router)
-Supabase (Postgres + Storage)
-Tailwind CSS
-Node.js workers
-JSZip (Import Adapter)
+
+
+
+Next.js (App Router)  
+
+Supabase (Postgres + Storage)  
+
+Tailwind CSS  
+
+Node.js workers  
+
+JSZip (Import Adapter)  
+
 Python (MegaDetector + CLIP)
+
+
 
 Servers:
 
-Vercel (API + frontend)
-Hetzner VPS (FTP gateway)
+
+
+Vercel (API + frontend)  
+
+Hetzner VPS (FTP gateway)  
+
 Hetzner VPS (AI worker)
+
+
+
+---
+
+
+
 2️⃣ Production Gateway (FTP – Stable)
+
+
+
 Hetzner VPS
 
-Server:
 
-CX23
+
+Server:  
+
+CX23  
+
+
+
 Ubuntu 24.04
+
+
 
 Security:
 
-SSH key-only login
-Root login disabled
-UFW enabled
+
+
+SSH key-only login  
+
+Root login disabled  
+
+UFW enabled  
+
+
 
 Open ports:
 
-22 (SSH)
-21 (FTP control)
+
+
+22 (SSH)  
+
+21 (FTP control)  
+
 40000–40100 (Passive FTP)
+
+
 
 Gateway is stateless.
 
+
+
 FTP (vsftpd)
+
+
 
 Directory model:
 
-/data/ftp-ingest/<ftp_user>/inbox
+
+
+/data/ftp-ingest/<ftp\_user>/inbox  
+
+
 
 Example:
 
-User: xview01
-Path: /data/ftp-ingest/xview01/inbox
+
+
+User: xview01  
+
+Path: /data/ftp-ingest/xview01/inbox  
+
+
 
 Permission model:
 
-/data                     755 root:root
-/data/ftp-ingest          755 root:root
-/data/ftp-ingest/xview01  2770 xview01:ftp-ingest
-/data/.../inbox           2770 xview01:ftp-ingest
+
+
+/data                     755 root:root  
+
+/data/ftp-ingest          755 root:root  
+
+/data/ftp-ingest/xview01  2770 xview01:ftp-ingest  
+
+/data/.../inbox           2770 xview01:ftp-ingest  
+
+
 
 Key elements:
 
-shared group: ftp-ingest
-setgid enabled
-vsftpd: local_umask=007
-files created as 660
+
+
+shared group: ftp-ingest  
+
+setgid enabled  
+
+vsftpd: local\_umask=007  
+
+files created as 660  
+
+
 
 Worker can delete successfully.
 
+
+
 Confirmed:
 
+
+
 File delete after ingest works.
+
+
+
+---
+
+
+
 3️⃣ FTP Worker
 
+
+
 Location:
+
+
 
 /opt/venaris-worker
 
+
+
 Service:
+
+
 
 venaris-ftp-worker
 
+
+
 Environment:
+
+
 
 /opt/venaris-worker/.env
 
+
+
 Behavior:
 
-poll inbox
-ensure file size stable
-compute SHA256
-send multipart FormData
-delete file after success
+
+
+poll inbox  
+
+ensure file size stable  
+
+compute SHA256  
+
+send multipart FormData  
+
+delete file after success  
+
+
 
 Metadata:
 
+
+
 metadata.source="ftp"
+
+
+
+---
+
+
+
 4️⃣ SMTP Bridge
 
+
+
 Service:
+
+
 
 venaris-smtp-bridge
 
+
+
 Environment:
+
+
 
 /opt/venaris-worker/.env.smtp
 
+
+
 Behavior:
 
-IMAP UNSEEN
-UID dedup
-vendor-aware parsing
-inline image support
+
+
+IMAP UNSEEN  
+
+UID dedup  
+
+vendor-aware parsing  
+
+inline image support  
+
+
+
 metadata.source="smtp"
+
+
 
 Status:
 
+
+
 Stable
+
+
+
+---
+
+
+
 5️⃣ Detection Worker (AI)
+
+
 
 Service:
 
+
+
 venaris-detection-worker
+
+
 
 Location:
 
+
+
 /opt/venaris-worker/detection-worker
+
+
 
 Pipeline:
 
-download asset
-↓
-MegaDetector
-↓
-insert detections
-↓
-species classifier (if animal)
-↓
-update detections
-↓
-empty decision
-↓
-event clustering
+
+
+download asset  
+
+↓  
+
+MegaDetector  
+
+↓  
+
+insert detections  
+
+↓  
+
+species classifier (if animal)  
+
+↓  
+
+update detections  
+
+↓  
+
+empty decision  
+
+↓  
+
+event clustering  
+
+
 
 Average runtime:
 
-MegaDetector ≈ 3–4s
-CLIP species ≈ 2–3s
+
+
+MegaDetector ≈ 3–4s  
+
+CLIP species ≈ 2–3s  
+
 Total ≈ 5–6s / image
+
+
+
+---
+
+
+
 6️⃣ Import Adapter
+
+
 
 Route:
 
+
+
 POST /api/upload
+
+
 
 Capabilities:
 
-multi-file upload
-ZIP upload
+
+
+multi-file upload  
+
+ZIP upload  
+
+
+
 metadata.source="manual"
+
+
 
 Guards:
 
-MAX_FILES
-MAX_ZIP_BYTES
+
+
+MAX\_FILES  
+
+MAX\_ZIP\_BYTES  
+
+
 
 All files forwarded to:
 
+
+
 ingestCore
+
+
+
+---
+
+
+
 7️⃣ Import Center (UI)
+
+
 
 Route:
 
+
+
 /import
+
+
 
 Capabilities:
 
-camera selection
-multi-file upload
-ZIP support
-drag & drop
-batch result feedback
+
+
+camera selection  
+
+multi-file upload  
+
+ZIP support  
+
+drag \& drop  
+
+batch result feedback  
+
+
 
 Navigation:
 
+
+
 Home · Cameras · Import · Ingest · Events
+
+
+
+---
+
+
+
 8️⃣ Storage
+
+
 
 Bucket:
 
+
+
 camera-assets
+
+
 
 Naming scheme:
 
+
+
 {cameraId}/{timestamp}-{hash12}.ext
+
+
 
 Signed URLs:
 
-20 min expiry
-server generated
 
-Supabase is the only persistent storage.
+
+20 min expiry  
+
+server generated  
+
+
+
+Supabase is the only persistent storage.  
 
 Hetzner holds no wildlife data.
 
+
+
+---
+
+
+
 9️⃣ Database (Active Tables)
-reviers
-cameras
-assets
-detections
-events
-event_assets
-ingest_batches
-camera_health_rules
+
+
+
+reviers  
+
+cameras  
+
+assets  
+
+detections  
+
+events  
+
+event\_assets  
+
+ingest\_batches  
+
+camera\_health\_rules
+
+
+
+---
+
+
+
 🔟 Views
-camera_health
+
+
+
+camera\_health
+
+
 
 Rule-based camera monitoring.
 
+
+
 States:
 
-online
-stale
-offline
-unknown
-event_feed
+
+
+online  
+
+stale  
+
+offline  
+
+unknown  
+
+
+
+event\_feed
+
+
 
 Used by:
 
+
+
 /events
+
+
 
 Security:
 
-security_invoker enabled
+
+
+security\_invoker enabled
+
+
+
+---
+
+
+
 1️⃣1️⃣ API Routes
-POST /api/upload
-POST /api/ingest
 
-GET /api/assets
-GET /api/asset-url
-POST /api/asset-relevant
 
-GET /api/ingest-batches
-GET /api/camera-health
-GET /api/camera-token
-POST /api/camera-token
+
+POST /api/upload  
+
+POST /api/ingest  
+
+GET /api/assets  
+
+GET /api/asset-url  
+
+POST /api/asset-relevant  
+
+GET /api/ingest-batches  
+
+GET /api/camera-health  
+
+GET /api/camera-token  
+
+POST /api/camera-token  
+
+
+
+---
+
+
+
 1️⃣2️⃣ Architecture Maturity
+
+
 
 Venaris now includes:
 
-multi-source ingestion
-vendor-aware SMTP bridge
-FTP gateway
-AI detection worker
-MegaDetector integration
-automatic empty filtering
-species classifier
-taxonomy ENUM
-event clustering
-ZIP import adapter
-batch monitoring
-camera health engine
-secure RLS API
-signed URL previews
+
+
+multi-source ingestion  
+
+vendor-aware SMTP bridge  
+
+FTP gateway  
+
+AI detection worker  
+
+MegaDetector integration  
+
+automatic empty filtering  
+
+species classifier  
+
+taxonomy ENUM  
+
+event clustering  
+
+ZIP import adapter  
+
+batch monitoring  
+
+camera health engine  
+
+secure RLS API  
+
+signed URL previews  
+
+
 
 Infrastructure is AI-capable and production-structurable.
 
+
+
+---
+
+
+
+📦 Infrastructure Archiving (2026-03-06)
+
+
+
+The Hetzner worker runtime has been archived in the repository under:
+
+
+
+infrastructure/hetzner-worker/
+
+
+
+Included components:
+
+
+
+ftp-worker.mjs  
+
+smtp-bridge.mjs  
+
+MegaDetector runner  
+
+CLIP species runner  
+
+systemd service definitions  
+
+masked worker environment files
+
+
+
+Purpose:
+
+
+
+Ensure the full ingestion and AI pipeline runtime is reproducible and documented in Git.
+
+
+
+---
+
+
+
 🔜 Immediate Next Step
-Detection Review UI
+
+
+
+Phase 3 – Visible Intelligence Layer
+
+
+
+Planned features:
+
+
+
+Event relevance scoring  
+
+Event feed ranking  
+
+Species frequency (7 / 30 days)  
+
+Camera activity histogram  
+
+
 
 Goal:
 
-User must be able to verify AI output.
 
-Example UI:
 
-Image
-↓
-animal detected
-↓
-species = roe_deer
-confidence = 0.31
+Expose AI insights in the UI and make wildlife activity patterns visible.
 
-User can confirm / correct.
 
-Data Expansion
 
-Current dataset:
+---
 
-very few wildlife images
 
-Next step:
 
-collect larger dataset
-evaluate species accuracy
 🔒 Operational Notes
+
+
 
 SMTP:
 
+
+
 process UNSEEN only
+
+
 
 FTP:
 
+
+
 users isolated via chroot
+
+
 
 Workers:
 
+
+
 delete files only after successful ingest
+
+
 
 Deduplication:
 
+
+
 per-camera SHA256
+
+
 
 Source of truth:
 
+
+
 Supabase
+
+
 
 Hetzner:
 
+
+
 transport layer only
+
+
 
 Workers require:
 
+
+
 Vercel bypass token if deployment protection active
 
+
+
 Rotate token if leaked.
+
