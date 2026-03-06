@@ -36,11 +36,6 @@ function Badge({
   );
 }
 
-function isTerminalOk(status?: string | null) {
-  const s = (status || "").toLowerCase();
-  return s === "completed" || s === "ok" || s === "success" || s === "done";
-}
-
 function isTerminalErr(status?: string | null) {
   const s = (status || "").toLowerCase();
   return s === "failed" || s === "error";
@@ -56,9 +51,9 @@ function statusTone(status?: string | null) {
 
 function sourceTone(source?: string | null) {
   const s = (source || "").toLowerCase();
-  if (s === "smtp") return "warn" as const; // yellow-ish
-  if (s === "ftp") return "muted" as const; // neutral
-  if (s === "manual") return "ok" as const; // green-ish
+  if (s === "smtp") return "warn" as const;
+  if (s === "ftp") return "muted" as const;
+  if (s === "manual") return "ok" as const;
   if (s === "token" || s === "token-ingest") return "muted" as const;
   return "muted" as const;
 }
@@ -66,8 +61,14 @@ function sourceTone(source?: string | null) {
 function errorTone(status?: string | null, error?: string | null) {
   if (!error) return "muted" as const;
   if (isTerminalErr(status)) return "err" as const;
-  // completed + error_summary => treat as warning (e.g. skipped duplicates)
   return "warn" as const;
+}
+
+function formatUtcTimestamp(value?: string | null) {
+  if (!value) return "-";
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return "-";
+  return d.toISOString().replace("T", " ").slice(0, 19) + " UTC";
 }
 
 export default async function IngestPage() {
@@ -126,14 +127,14 @@ export default async function IngestPage() {
                 return (
                   <tr key={b.id} className="border-b last:border-b-0">
                     <td className="px-3 py-2 whitespace-nowrap text-gray-700">
-                      {b.received_at ? new Date(b.received_at).toLocaleString() : "-"}
+                      {formatUtcTimestamp(b.received_at)}
                     </td>
 
                     <td className="px-3 py-2">
                       <Badge tone={srcTone}>{b.source || "-"}</Badge>
                     </td>
 
-                    <td className="px-3 py-2">{b.cameras?.name || b.camera_id}</td>
+                    <td className="px-3 py-2">{b.cameras?.name || b.camera_id || "-"}</td>
 
                     <td className="px-3 py-2">{b.file_count ?? "-"}</td>
 
@@ -145,7 +146,9 @@ export default async function IngestPage() {
                       {b.error_summary ? b.error_summary : <span className="text-gray-400">-</span>}
                     </td>
 
-                    <td className="px-3 py-2 font-mono text-xs text-gray-600">{b.id.slice(0, 8)}…</td>
+                    <td className="px-3 py-2 font-mono text-xs text-gray-600">
+                      {b.id.slice(0, 8)}…
+                    </td>
                   </tr>
                 );
               })

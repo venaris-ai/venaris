@@ -1,0 +1,16 @@
+[Unit]
+Description=Venaris FTP Ingest Worker
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=venaris
+WorkingDirectory=/opt/venaris-worker
+EnvironmentFile=/opt/venaris-worker/.env
+ExecStart=/usr/bin/node /opt/venaris-worker/ftp-worker.mjs
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target

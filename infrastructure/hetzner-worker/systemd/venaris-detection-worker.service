@@ -1,0 +1,15 @@
+[Unit]
+Description=Venaris Detection Worker
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/venaris-worker/detection-worker
+EnvironmentFile=/opt/venaris-worker/detection-worker/.env
+ExecStart=/usr/bin/node /opt/venaris-worker/detection-worker/workers/detection-worker.mjs
+Restart=always
+RestartSec=2
+User=venaris
+
+[Install]
+WantedBy=multi-user.target

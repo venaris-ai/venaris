@@ -1,0 +1,16 @@
+[Unit]
+Description=Venaris SMTP Bridge (IMAP -> /api/ingest)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=venaris
+WorkingDirectory=/opt/venaris-worker
+EnvironmentFile=/opt/venaris-worker/.env.smtp
+ExecStart=/usr/bin/node /opt/venaris-worker/smtp-bridge.mjs
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
