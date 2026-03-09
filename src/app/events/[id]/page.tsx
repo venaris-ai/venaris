@@ -9,10 +9,22 @@ function fmt(ts: string | null) {
   return new Date(ts).toLocaleString("de-DE");
 }
 
+function prettySpecies(value: string | null) {
+  if (!value) return "—";
+  return value.replaceAll("_", " ");
+}
+
+function scoreBadge(score: number | null) {
+  if (typeof score !== "number") return "—";
+  if (score >= 0.9) return "very high";
+  if (score >= 0.75) return "high";
+  if (score >= 0.5) return "medium";
+  return "low";
+}
+
 export default async function EventDetailPage(props: any) {
   const supabase = supabaseServer();
 
-  // Next.js versions-robust: params kann Objekt ODER Promise sein
   const params = await Promise.resolve(props?.params);
   const eventId: string | undefined = params?.id;
 
@@ -36,7 +48,6 @@ export default async function EventDetailPage(props: any) {
     );
   }
 
-  // 1) Event laden
   const { data: event, error: eventErr } = await supabase
     .from("events")
     .select(
@@ -65,14 +76,12 @@ export default async function EventDetailPage(props: any) {
     );
   }
 
-  // 2) Kamera-Name laden (für UX)
   const { data: camera } = await supabase
     .from("cameras")
     .select("id,name,location_name")
     .eq("id", event.camera_id)
     .single();
 
-  // 3) Assets zum Event laden (via Join-Tabelle)
   const { data: eventAssets, error: assetsErr } = await supabase
     .from("event_assets")
     .select("asset_id")
@@ -86,42 +95,43 @@ export default async function EventDetailPage(props: any) {
   if (!assetsErr && assetIds.length > 0) {
     const { data: assetsData, error: assetsDataErr } = await supabase
       .from("assets")
-      .select("id,camera_id,storage_path,created_at,captured_at,status,relevant,empty,empty_confidence")
+      .select(
+        "id,camera_id,storage_path,created_at,captured_at,status,relevant,empty,empty_confidence"
+      )
       .in("id", assetIds)
       .order("created_at", { ascending: false });
 
     if (!assetsDataErr && assetsData) assets = assetsData;
   }
 
-  // 4) Signed URLs erzeugen (serverseitig)
   const signedUrlsByAssetId: Record<string, string> = {};
   for (const a of assets) {
     if (!a.storage_path) continue;
     const { data: signed } = await supabase.storage
       .from("camera-assets")
-      .createSignedUrl(a.storage_path, 60 * 20); // 20 min
+      .createSignedUrl(a.storage_path, 60 * 20);
 
     if (signed?.signedUrl) signedUrlsByAssetId[a.id] = signed.signedUrl;
   }
 
-  // 5) Client Grid Input vorbereiten
   const initialAssets = assets.map((a) => ({
     id: a.id,
     previewUrl: signedUrlsByAssetId[a.id],
     timestampLabel: fmt(a.captured_at ?? a.created_at),
     storagePath: a.storage_path,
-    relevant: a.relevant ?? null,           // bool | null (optional fürs Grid)
-    empty: a.empty ?? null,                 // bool | null
-    emptyConfidence: a.empty_confidence ?? null, // number | null
+    relevant: a.relevant ?? null,
+    empty: a.empty ?? null,
+    emptyConfidence: a.empty_confidence ?? null,
   }));
 
-  const cameraLabel =
-    camera?.name
-      ? `${camera.name}${camera.location_name ? ` (${camera.location_name})` : ""}`
-      : event.camera_id;
+  const cameraLabel = camera?.name
+    ? `${camera.name}${camera.location_name ? ` (${camera.location_name})` : ""}`
+    : event.camera_id;
 
   const topLabel = event.top_species
-    ? `${event.top_species}${event.top_count ? ` (${event.top_count})` : ""}`
+    ? `${prettySpecies(event.top_species)}${
+        event.top_count ? ` (${event.top_count})` : ""
+      }`
     : "—";
 
   return (
@@ -139,20 +149,26 @@ export default async function EventDetailPage(props: any) {
         </Link>
       </div>
 
-      <div className="rounded-xl border p-4">
-        <div className="text-sm">
-          <span className="font-medium">Kamera:</span> {cameraLabel}
-        </div>
+      <div className="rounded-xl border bg-white p-4">
+        <div className="grid gap-3 md:grid-cols-2">
+          <div className="text-sm text-gray-700">
+            <span className="font-medium">Kamera:</span> {cameraLabel}
+          </div>
 
-        <div className="mt-2 text-sm text-gray-700">
-          <span className="font-medium">Top:</span> {topLabel}
-          {typeof event.relevance_score === "number"
-            ? ` · Score: ${event.relevance_score.toFixed(2)}`
-            : ""}
-        </div>
+          <div className="text-sm text-gray-700">
+            <span className="font-medium">Assets im Event:</span> {assets.length}
+          </div>
 
-        <div className="mt-2 text-sm text-gray-700">
-          <span className="font-medium">Assets im Event:</span> {assets.length}
+          <div className="text-sm text-gray-700">
+            <span className="font-medium">Top Species:</span> {topLabel}
+          </div>
+
+          <div className="text-sm text-gray-700">
+            <span className="font-medium">Relevance Score:</span>{" "}
+            {typeof event.relevance_score === "number"
+              ? `${event.relevance_score.toFixed(3)} · ${scoreBadge(event.relevance_score)}`
+              : "—"}
+          </div>
         </div>
       </div>
 
