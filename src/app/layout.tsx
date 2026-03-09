@@ -1,6 +1,6 @@
 // src/app/layout.tsx
 import "./globals.css";
-import Link from "next/link";
+import MainNav from "@/components/MainNav";
 
 export const metadata = {
   title: "Venaris",
@@ -18,23 +18,7 @@ export default function RootLayout({
           <div className="mx-auto flex max-w-5xl items-center justify-between px-6 py-3">
             <div className="font-semibold">Venaris</div>
 
-            <nav className="flex items-center gap-2 text-sm">
-              <Link className="rounded-md border px-3 py-1" href="/">
-                Home
-              </Link>
-              <Link className="rounded-md border px-3 py-1" href="/cameras">
-                Cameras
-              </Link>
-              <Link className="rounded-md border px-3 py-1" href="/import">
-                Import
-              </Link>
-              <Link className="rounded-md border px-3 py-1" href="/ingest">
-                Ingest
-              </Link>
-              <Link className="rounded-md border px-3 py-1" href="/events">
-                Events
-              </Link>
-            </nav>
+            <MainNav />
           </div>
         </header>
 

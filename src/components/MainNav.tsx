@@ -1,0 +1,42 @@
+"use client";
+
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+
+const items = [
+  { href: "/", label: "Home" },
+  { href: "/intelligence", label: "Intelligence" },
+  { href: "/events", label: "Events" },
+  { href: "/cameras", label: "Cameras" },
+  { href: "/import", label: "Import" },
+  { href: "/ingest", label: "Ingest" },
+];
+
+export default function MainNav() {
+  const pathname = usePathname();
+
+  return (
+    <nav className="flex items-center gap-2 text-sm">
+      {items.map((item) => {
+        const active =
+          item.href === "/"
+            ? pathname === "/"
+            : pathname.startsWith(item.href);
+
+        return (
+          <Link
+            key={item.href}
+            href={item.href}
+            className={`rounded-md border px-3 py-1 ${
+              active
+                ? "bg-black text-white border-black"
+                : "bg-white text-black hover:bg-gray-100"
+            }`}
+          >
+            {item.label}
+          </Link>
+        );
+      })}
+    </nav>
+  );
+}
