@@ -1,42 +1,85 @@
 Venaris – MVP Roadmap Target (Version 1.0)
+Last updated 2026-03-09
+
+
 
 Target Delivery: 31.03.2026 (EOD)
+
 Goal: Visible Wildlife Intelligence + Operational Stability
+
+
+
 Workdays only (Mon–Fri). Weekends excluded.
+
+
 
 🎯 MVP Definition (Version 1.0)
 
+
+
 Venaris delivers:
+
+
 
 Automatic image classification (empty / non-empty)
 
+
+
 Species recognition (taxonomy v1)
+
+
 
 Event clustering
 
+
+
 System relevance scoring (system) + manual relevance override (UI)
+
+
 
 Camera monitoring (health)
 
+
+
 Activity intelligence (basic)
+
+
 
 Wilddruck indicator (basic)
 
+
+
 LTE / Email ingestion (FTP + SMTP + Import)
+
+
 
 Operational dashboard
 
+
+
 NOT included:
+
+
 
 Population model
 
+
+
 Individual animal ID
+
+
 
 Behavioral prediction
 
-Version 1.0 = work simplification + visible intelligence.
+
+
+Version 1.0 = work simplification + visible intelligence
+
+
 
 🧱 Layer Completion Targets
+
+
 
 Ingestion Layer → 100% stable
 
@@ -50,326 +93,957 @@ Monitoring Layer → health + KPIs
 
 Application Layer → dashboard + insight views
 
+
+
 📆 Execution Plan (Workdays Only)
 
-Start: 04.03.2026 (Wed)
-End: 31.03.2026 (Tue)
+
+
+Start: 04.03.2026
+
+End: 31.03.2026
+
+
 
 ✅ Phase 1 – Processing Foundation (DONE)
-📅 04.03 (Wed) – DONE
+
+04.03 – DONE
+
+
 
 Asset Status System – Design
 
-lifecycle: queued → processing → processed / failed
+
+
+lifecycle:
+
+
+
+queued → processing → processed / failed
+
+
 
 assets schema update
 
 remove any detection from ingest
 
-delivery: ingest pipeline writes status only
 
-📅 05.03 (Thu) – DONE
+
+delivery:
+
+
+
+ingest pipeline writes status only
+
+
+
+05.03 – DONE
+
+
 
 Asset Status System – Implementation
 
+
+
 /api/ingest creates assets with status=queued
 
-ingest remains fast & idempotent
 
-delivery: pure ingest → queue model
 
-📅 06.03 (Fri) – DONE (as designed earlier; implementation already live)
+ingest remains:
+
+
+
+fast
+
+
+
+idempotent
+
+
+
+delivery:
+
+
+
+pure ingest → queue model
+
+
+
+06.03 – DONE
+
+
 
 Detection Worker Skeleton – Architecture
 
-runtime decided: Node worker
 
-poll strategy: RPC claim_queued_assets
 
-retries concept
+runtime decided:
 
-delivery: worker design locked
 
-📅 09.03 (Mon) – DONE (system running + verified)
+
+Node worker
+
+
+
+poll strategy:
+
+
+
+claim\_queued\_assets
+
+
+
+retry concept implemented
+
+
+
+delivery:
+
+
+
+worker architecture locked
+
+
+
+09.03 – DONE
+
+
 
 Detection Worker Skeleton – Implementation
 
+
+
 systemd service on Hetzner
 
-claims queued assets
 
-processing → processed (real pipeline now; no longer mock)
 
-errors → failed with retry logic
+worker now runs real AI pipeline
 
-captured_at fallback + EXIF backfill strategy integrated
 
-delivery: async processing loop running
+
+processing loop:
+
+
+
+queued → processing → processed
+
+
+
+errors:
+
+
+
+failed + retry
+
+
+
+delivery:
+
+
+
+async AI processing loop running
+
+
 
 🟢 Phase 2 – Detection v1 (Core Intelligence)
 
-Chosen Stack (Option A):
-Camera → Ingest → MegaDetector → Empty Filter → Species Classifier → Event Clustering → Intelligence
 
-Taxonomy v1: 15 classes (incl. wolf)
 
-📅 10.03 (Tue) – DONE (completed early on 05.03)
+Pipeline:
 
-MegaDetector Integration – v1
 
-integrate MegaDetector (animal/human/vehicle)
 
-store detection outputs (bboxes + confidence) in detections
+Camera
 
-delivery: MegaDetector runs automatically on queued assets ✅
+→ Ingest
 
-Notes from production run (05.03):
+→ MegaDetector
 
-worker processed large backlog (hundreds of assets)
+→ Empty Filter
 
-MD thresholds managed via env: MD_MIN_CONF, MD_MAX_DETECTIONS
+→ Species Classifier
 
-📅 11.03 (Wed) – DONE (completed early on 05.03)
+→ Event Clustering
 
-Empty Filter – v1 (System Decision)
+→ Intelligence
 
-derive empty/non-empty from MegaDetector output
 
-write to assets.empty + assets.empty_confidence
 
-set system relevance automatically: empty=true → relevant=false
+Taxonomy v1: 15 species
 
-delivery: automatic empty filtering works ✅
 
-📅 12.03 (Thu) – DONE (completed early on 05.03)
 
-Species Mapping – Taxonomy v1 + Schema
+MegaDetector Integration – DONE
 
-taxonomy v1 finalized (15 classes):
 
-roe_deer, wild_boar, red_deer, fallow_deer, mouflon
 
-fox, wolf, badger
+Completed earlier (05.03)
 
-raccoon, raccoon_dog
 
-hare, rabbit
 
-pheasant, crow
+MegaDetector:
+
+
+
+animal
+
+
+
+human
+
+
+
+vehicle
+
+
+
+detections written to DB
+
+
+
+Environment control:
+
+
+
+MD\_MIN\_CONF
+
+MD\_MAX\_DETECTIONS
+
+
+
+delivery:
+
+
+
+MegaDetector running in production worker
+
+
+
+Empty Filter – DONE
+
+
+
+Automatic empty detection:
+
+
+
+animal present → relevant=true
+
+no animals → relevant=false
+
+
+
+delivery:
+
+
+
+automatic empty filtering working
+
+
+
+Species Mapping – DONE
+
+
+
+Taxonomy v1 finalized:
+
+
+
+roe\_deer
+
+wild\_boar
+
+red\_deer
+
+fallow\_deer
+
+mouflon
+
+fox
+
+wolf
+
+badger
+
+raccoon
+
+raccoon\_dog
+
+hare
+
+rabbit
+
+pheasant
+
+crow
 
 other
 
-DB schema aligned:
 
-detections.species converted to ENUM taxonomy_species_v1
 
-delivery: detection data model finalized ✅
+detections.species converted to ENUM.
 
-📅 13.03 (Fri) – DONE (integration completed early on 05.03; accuracy validation pending)
 
-Species Classifier – Integration (Option A / CLIP)
 
-run classifier only if MegaDetector sees animal
+delivery:
 
-store species in DB (detections.species)
 
-store similarity score (e.g. species_sim) for debugging/QA
 
-thresholding v1:
+detection data model finalized
 
-SPECIES_SIM_THRESHOLD
 
-bbox padding via SPECIES_BBOX_PAD
 
-SPECIES_SPECIES_SOFTMAX=0 (score = sim, consistent)
+Species Classifier – DONE
 
-delivery: automatic species detection working end-to-end ✅
 
-Open validation (planned for 06–10.03):
 
-quantify misclassifications (e.g. grill→vehicle, boar→roe_deer)
+CLIP classifier integrated.
 
-add UI for human verification
+
+
+logic:
+
+
+
+run classifier only if label = animal
+
+
+
+stores:
+
+
+
+detections.species
+
+species similarity score
+
+
+
+threshold control:
+
+
+
+SPECIES\_SIM\_THRESHOLD
+
+SPECIES\_BBOX\_PAD
+
+
+
+delivery:
+
+
+
+species classification working end-to-end
+
+
+
+accuracy validation ongoing.
+
+
 
 🟡 Phase 3 – Visible Intelligence Layer
-📅 16.03 (Mon)
 
-Event Relevance Scoring v1
 
-score based on:
 
-detection density
+Phase 3 focuses on exposing intelligence to the user interface.
 
-species weights (wolf high)
+
+
+Large parts were implemented earlier during architecture validation.
+
+
+
+Event Relevance Scoring – DONE
+
+
+
+Event scoring now implemented.
+
+
+
+Score factors:
+
+
+
+species weight
+
+
+
+animal count
+
+
 
 confidence
 
-store in events: relevance_score_system
 
-delivery: events become ranked
 
-📅 17.03 (Tue)
+detection density
 
-Event Feed Upgrade
 
-show:
 
-top species + count
+stored in:
 
-confidence hint
 
-sort by relevance_score_system
 
-delivery: feed feels intelligent
+events.relevance\_score
 
-📅 18.03 (Wed)
 
-Relevance Model Finalization (System vs User)
-Decision point:
 
-keep only assets.relevant (simple MVP)
-OR
+delivery:
 
-add assets.relevant_user override (clean separation)
 
-If override enabled:
 
-effective logic = COALESCE(relevant_user, relevant, true)
+events ranked by relevance.
 
-Delivery: relevance model locked + UI consistent
 
-📅 19.03 (Thu)
 
-Activity Diagram (Per Camera)
+Event Feed Upgrade – DONE
 
-hourly activity histogram
 
-split by:
 
-all detections
+/events page upgraded.
 
-relevant detections
 
-delivery: first activity visualization
 
-📅 20.03 (Fri)
+shows:
 
-Species Frequency View (7 / 30 Days)
 
-aggregated species counts
 
-trends (simple deltas)
+top species
 
-delivery: species intelligence visible
 
-🔴 Phase 4 – Wilddruck & Dashboard
-📅 23.03 (Mon)
 
-Wilddruck Indicator v1
+top count
 
-normalized activity index
 
-per camera + aggregated
 
-delivery: basic wilddruck metric
+asset count
 
-📅 24.03 (Tue)
 
-Dashboard MVP
-Includes:
+
+camera
+
+
+
+relevance score
+
+
+
+events sorted by relevance.
+
+
+
+delivery:
+
+
+
+event feed feels intelligent.
+
+
+
+Intelligence Dashboard v1 – DONE
+
+
+
+New route:
+
+
+
+/intelligence
+
+
+
+Modules implemented:
+
+
+
+Species Overview
+
+
+
+Where \& When
+
+
+
+Activity
+
+
+
+Capabilities:
+
+
+
+species overview
+
+
+
+observed animals
+
+
+
+top cameras
+
+
+
+top time windows
+
+
+
+activity histogram
+
+
+
+camera activity
+
+
+
+latest wildlife events
+
+
+
+Dashboard currently uses seed cameras only.
+
+
+
+delivery:
+
+
+
+first operational wildlife intelligence dashboard.
+
+
+
+Seed Intelligence Dataset – DONE
+
+
+
+New script:
+
+
+
+scripts/seed-intelligence.mjs
+
+
+
+Purpose:
+
+
+
+generate realistic wildlife data
+
+
+
+test dashboard statistics
+
+
+
+enable UI development without AI workers
+
+
+
+Dataset includes:
+
+
+
+5 seed cameras
+
+
+
+~1300 events
+
+
+
+realistic species distributions
+
+
+
+realistic time-of-day patterns
+
+
+
+multi-animal detection simulation
+
+
+
+Seed data bypasses AI pipeline intentionally.
+
+
+
+delivery:
+
+
+
+stable dataset for dashboard development.
+
+
+
+🟡 Remaining Phase 3 Tasks
+
+18.03 – Relevance Model Finalization
+
+
+
+Decision:
+
+
+
+simple MVP model:
+
+
+
+assets.relevant
+
+
+
+optional future:
+
+
+
+assets.relevant\_user override
+
+
+
+goal:
+
+
+
+clean relevance concept in UI.
+
+
+
+19.03 – Activity Diagram (Per Camera)
+
+
+
+camera-level activity histogram
+
+
+
+split:
+
+
+
+all wildlife events
+
+
+
+relevant events
+
+
+
+delivery:
+
+
+
+camera activity insight.
+
+
+
+20.03 – Species Frequency View
+
+
+
+time windows:
+
+
+
+7 days
+
+
+
+30 days
+
+
+
+delivery:
+
+
+
+simple wildlife trend indicators.
+
+
+
+🔴 Phase 4 – Wilddruck \& Dashboard
+
+23.03 – Wilddruck Indicator v1
+
+
+
+basic wildlife pressure indicator.
+
+
+
+inputs:
+
+
+
+activity density
+
+
+
+species weight
+
+
+
+time distribution
+
+
+
+output:
+
+
+
+normalized activity index per camera.
+
+
+
+24.03 – Dashboard MVP
+
+
+
+final dashboard includes:
+
+
 
 camera health
 
-events (last 7 days)
 
-top species (7/30)
 
-activity graph
+events (recent)
+
+
+
+top species
+
+
+
+activity graphs
+
+
 
 wilddruck indicator
-Delivery: full operational overview
 
-📅 25.03 (Wed)
 
-Load & Stability Test
 
-300–500 images batch
+delivery:
 
-worker throughput + retry behavior
 
-DB query load sanity
-delivery: system stress-tested
 
-📅 26.03 (Thu)
+complete operational dashboard.
 
-Query Optimization
 
-index review
 
-event_feed optimization
+25.03 – Load \& Stability Test
 
-detection joins tuning
-delivery: performance hardened
 
-📅 27.03 (Fri)
 
-Detection Taxonomy Cleanup
+simulate:
+
+
+
+300–500 images
+
+
+
+verify:
+
+
+
+worker throughput
+
+
+
+retry behavior
+
+
+
+DB query load
+
+
+
+delivery:
+
+
+
+system stress-tested.
+
+
+
+26.03 – Query Optimization
+
+
+
+review:
+
+
+
+DB indexes
+
+
+
+event\_feed queries
+
+
+
+detection joins
+
+
+
+goal:
+
+
+
+performance hardening.
+
+
+
+27.03 – Detection Taxonomy Cleanup
+
+
+
+final cleanup:
+
+
 
 label normalization
 
+
+
 confidence tuning
 
-“other” policy
-delivery: clean detection output
+
+
+“other” classification policy
+
+
+
+delivery:
+
+
+
+clean detection output.
+
+
 
 🟣 Finalization Phase
-📅 30.03 (Mon)
 
-Field Validation Day
+30.03 – Field Validation Day
 
-real workflow test on terrace cameras (Reolink/X-View/ZEISS)
 
-motion latency sanity tests (single shot vs burst)
 
-relevance override test
-delivery: real-world validated
+real camera validation.
 
-📅 31.03 (Tue)
 
-Version 1.0 Freeze
+
+hardware:
+
+
+
+Reolink
+
+
+
+X-View
+
+
+
+ZEISS
+
+
+
+tests:
+
+
+
+motion trigger latency
+
+
+
+burst vs single-shot
+
+
+
+relevance override
+
+
+
+delivery:
+
+
+
+real-world validation complete.
+
+
+
+31.03 – Version 1.0 Freeze
+
+
+
+tasks:
+
+
 
 feature lock
 
-docs pass (current-state + architecture + dev-notes + roadmap)
+
+
+documentation pass
+
+
 
 define v2 scope
-delivery: Venaris v1.0 complete
+
+
+
+delivery:
+
+
+
+Venaris v1.0 complete
+
+
 
 🧩 Cross-Cutting (UI Consistency Block)
 
-Do in parallel whenever UI causes friction:
 
-single navigation model
 
-consistent back navigation (Events → Event → Back)
+Do continuously:
 
-unify “Relevant” UI: one concept, one label, one toggle
 
-avoid “debug-like” terms in UI unless in debug view
+
+unified navigation
+
+
+
+consistent back navigation
+
+
+
+unified relevance concept
+
+
+
+avoid debug language in UI
+
+
 
 📊 MVP Success Criteria (31.03)
 
+
+
 By end of month:
+
+
 
 MegaDetector runs automatically ✅
 
 Empty images auto-filtered ✅
 
-Species detection functional (taxonomy v1) ✅ (accuracy validation pending)
+Species detection functional (taxonomy v1) ✅
 
 Event clustering active ✅
 
-Relevance scoring operational (event-level) ⏳
+Event relevance scoring operational ✅
 
 Dashboard usable ⏳
 
@@ -379,33 +1053,75 @@ Monitoring stable ✅
 
 Real hardware validated ⏳
 
+
+
 🚀 After Version 1.0
 
-Version 2.0:
+Version 2.0
+
+
 
 population index
 
+
+
 trend comparison
+
+
 
 seasonal analysis
 
+
+
 reporting layer
 
-Version 3.0:
+
+
+Version 3.0
+
+
 
 individual animal ID
 
+
+
 movement clustering
+
+
 
 prediction layer
 
+
+
 wildlife intelligence moat
+
+
 
 🧠 Strategic Note
 
-Infra is stable.
-From 04.03 onward, Venaris shifts from:
 
-Transport reliability → Visible intelligence
 
-Detection is now the critical path.
+Infrastructure is stable.
+
+
+
+Venaris has transitioned from:
+
+
+
+transport reliability
+
+→ wildlife intelligence
+
+
+
+The system now operates as a wildlife data platform.
+
+
+
+Next focus:
+
+
+
+turning observations into ecological insights.
+
