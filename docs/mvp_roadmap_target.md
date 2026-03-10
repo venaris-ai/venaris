@@ -1,5 +1,8 @@
 Venaris – MVP Roadmap Target (Version 1.0)
-Last updated 2026-03-09
+
+
+
+Last updated: 2026-03-10 (Direct SMTP Ingest + Maildir Queue + Ingestion Layer Stabilized)
 
 
 
@@ -79,21 +82,19 @@ Version 1.0 = work simplification + visible intelligence
 
 🧱 Layer Completion Targets
 
+Layer	Target
 
+Ingestion Layer	100% stable
 
-Ingestion Layer → 100% stable
+Storage Layer	structured lifecycle
 
-Storage Layer → structured lifecycle
+Processing Layer	worker orchestration
 
-Processing Layer → worker orchestration
+Intelligence Layer	Detection v1 (MegaDetector + species classifier)
 
-Intelligence Layer → Detection v1 (MegaDetector + species classifier)
+Monitoring Layer	health + KPIs
 
-Monitoring Layer → health + KPIs
-
-Application Layer → dashboard + insight views
-
-
+Application Layer	dashboard + insight views
 
 📆 Execution Plan (Workdays Only)
 
@@ -115,7 +116,7 @@ Asset Status System – Design
 
 
 
-lifecycle:
+Lifecycle:
 
 
 
@@ -125,7 +126,9 @@ queued → processing → processed / failed
 
 assets schema update
 
-remove any detection from ingest
+
+
+remove detection from ingest
 
 
 
@@ -145,11 +148,15 @@ Asset Status System – Implementation
 
 
 
-/api/ingest creates assets with status=queued
+/api/ingest creates assets with:
 
 
 
-ingest remains:
+status = queued
+
+
+
+Ingest remains:
 
 
 
@@ -177,7 +184,7 @@ Detection Worker Skeleton – Architecture
 
 
 
-runtime decided:
+Runtime decided:
 
 
 
@@ -185,7 +192,7 @@ Node worker
 
 
 
-poll strategy:
+Poll strategy:
 
 
 
@@ -193,7 +200,7 @@ claim\_queued\_assets
 
 
 
-retry concept implemented
+Retry concept implemented.
 
 
 
@@ -201,7 +208,7 @@ delivery:
 
 
 
-worker architecture locked
+worker architecture locked.
 
 
 
@@ -217,11 +224,11 @@ systemd service on Hetzner
 
 
 
-worker now runs real AI pipeline
+Worker now runs real AI pipeline.
 
 
 
-processing loop:
+Processing loop:
 
 
 
@@ -229,7 +236,7 @@ queued → processing → processed
 
 
 
-errors:
+Errors:
 
 
 
@@ -241,7 +248,7 @@ delivery:
 
 
 
-async AI processing loop running
+async AI processing loop running.
 
 
 
@@ -269,9 +276,11 @@ Camera
 
 
 
-Taxonomy v1: 15 species
+Taxonomy v1:
 
 
+
+15 species
 
 MegaDetector Integration – DONE
 
@@ -281,7 +290,7 @@ Completed earlier (05.03)
 
 
 
-MegaDetector:
+MegaDetector detects:
 
 
 
@@ -297,7 +306,7 @@ vehicle
 
 
 
-detections written to DB
+detections written to DB.
 
 
 
@@ -315,7 +324,7 @@ delivery:
 
 
 
-MegaDetector running in production worker
+MegaDetector running in production worker.
 
 
 
@@ -337,7 +346,7 @@ delivery:
 
 
 
-automatic empty filtering working
+automatic empty filtering working.
 
 
 
@@ -389,7 +398,7 @@ delivery:
 
 
 
-detection data model finalized
+detection data model finalized.
 
 
 
@@ -401,7 +410,7 @@ CLIP classifier integrated.
 
 
 
-logic:
+Logic:
 
 
 
@@ -409,17 +418,19 @@ run classifier only if label = animal
 
 
 
-stores:
+Stores:
 
 
 
 detections.species
 
+
+
 species similarity score
 
 
 
-threshold control:
+Threshold control:
 
 
 
@@ -433,11 +444,161 @@ delivery:
 
 
 
-species classification working end-to-end
+species classification working end-to-end.
 
 
 
-accuracy validation ongoing.
+Accuracy validation ongoing.
+
+
+
+🟢 Phase 2.5 – Ingestion Infrastructure Hardening (DONE)
+
+
+
+This phase emerged during real hardware integration.
+
+
+
+Goal:
+
+
+
+Ensure ingestion works reliably with real cameras and field infrastructure.
+
+
+
+FTP Gateway – DONE
+
+
+
+Hetzner VPS gateway implemented.
+
+
+
+Architecture:
+
+
+
+Camera
+
+→ FTP
+
+→ Hetzner gateway
+
+→ FTP worker
+
+→ /api/ingest
+
+
+
+Features:
+
+
+
+per-camera FTP users
+
+
+
+chroot isolation
+
+
+
+passive FTP
+
+
+
+worker polling
+
+
+
+automatic delete after ingest
+
+
+
+delivery:
+
+
+
+stable ingest path for X-View LTE cameras.
+
+
+
+Direct SMTP Ingest – DONE
+
+
+
+SMTP ingest migrated to direct infrastructure routing.
+
+
+
+Architecture:
+
+
+
+Camera
+
+→ SMTP
+
+→ MX cams.venaris.io
+
+→ Hetzner Postfix
+
+→ Maildir queue
+
+→ maildir-bridge worker
+
+→ /api/ingest
+
+
+
+This replaced the earlier IMAP mailbox polling model.
+
+
+
+Advantages:
+
+
+
+no external mailbox dependency
+
+
+
+infrastructure-controlled ingest
+
+
+
+queue-based processing
+
+
+
+scalable to many cameras
+
+
+
+reliable retry model
+
+
+
+Maildir states:
+
+
+
+new
+
+processed
+
+invalid
+
+error
+
+
+
+delivery:
+
+
+
+stable SMTP ingest for camera email delivery.
 
 
 
@@ -457,7 +618,7 @@ Event Relevance Scoring – DONE
 
 
 
-Event scoring now implemented.
+Event scoring implemented.
 
 
 
@@ -505,7 +666,7 @@ Event Feed Upgrade – DONE
 
 
 
-shows:
+Shows:
 
 
 
@@ -529,7 +690,7 @@ relevance score
 
 
 
-events sorted by relevance.
+Events sorted by relevance.
 
 
 
@@ -545,7 +706,7 @@ Intelligence Dashboard v1 – DONE
 
 
 
-New route:
+Route:
 
 
 
@@ -617,7 +778,7 @@ Seed Intelligence Dataset – DONE
 
 
 
-New script:
+Script:
 
 
 
@@ -763,17 +924,65 @@ simple wildlife trend indicators.
 
 
 
+21.03 – Camera Provisioning Model
+
+
+
+Goal:
+
+
+
+Stabilize camera configuration for real deployments.
+
+
+
+Introduce:
+
+
+
+camera\_ingest\_configs
+
+
+
+Responsibilities:
+
+
+
+SMTP alias routing
+
+
+
+FTP user mapping
+
+
+
+ingest tokens
+
+
+
+vendor identification
+
+
+
+delivery:
+
+
+
+infrastructure routing decoupled from .env.
+
+
+
 🔴 Phase 4 – Wilddruck \& Dashboard
 
 23.03 – Wilddruck Indicator v1
 
 
 
-basic wildlife pressure indicator.
+Basic wildlife pressure indicator.
 
 
 
-inputs:
+Inputs:
 
 
 
@@ -789,7 +998,7 @@ time distribution
 
 
 
-output:
+Output:
 
 
 
@@ -801,7 +1010,7 @@ normalized activity index per camera.
 
 
 
-final dashboard includes:
+Final dashboard includes:
 
 
 
@@ -837,7 +1046,7 @@ complete operational dashboard.
 
 
 
-simulate:
+Simulate:
 
 
 
@@ -845,7 +1054,7 @@ simulate:
 
 
 
-verify:
+Verify:
 
 
 
@@ -873,7 +1082,7 @@ system stress-tested.
 
 
 
-review:
+Review:
 
 
 
@@ -901,7 +1110,7 @@ performance hardening.
 
 
 
-final cleanup:
+Final cleanup:
 
 
 
@@ -931,11 +1140,11 @@ clean detection output.
 
 
 
-real camera validation.
+Real camera validation.
 
 
 
-hardware:
+Hardware:
 
 
 
@@ -951,7 +1160,7 @@ ZEISS
 
 
 
-tests:
+Tests:
 
 
 
@@ -979,7 +1188,7 @@ real-world validation complete.
 
 
 
-tasks:
+Tasks:
 
 
 
@@ -999,7 +1208,7 @@ delivery:
 
 
 
-Venaris v1.0 complete
+Venaris v1.0 complete.
 
 
 
@@ -1035,25 +1244,25 @@ By end of month:
 
 
 
-MegaDetector runs automatically ✅
+Feature	Status
 
-Empty images auto-filtered ✅
+MegaDetector runs automatically	✅
 
-Species detection functional (taxonomy v1) ✅
+Empty images auto-filtered	✅
 
-Event clustering active ✅
+Species detection functional	✅
 
-Event relevance scoring operational ✅
+Event clustering active	✅
 
-Dashboard usable ⏳
+Event relevance scoring operational	✅
 
-Wilddruck indicator visible ⏳
+Dashboard usable	⏳
 
-Monitoring stable ✅
+Wilddruck indicator visible	⏳
 
-Real hardware validated ⏳
+Monitoring stable	✅
 
-
+Real hardware validated	⏳
 
 🚀 After Version 1.0
 
@@ -1101,7 +1310,7 @@ wildlife intelligence moat
 
 
 
-Infrastructure is stable.
+Infrastructure is now stable.
 
 
 
@@ -1115,7 +1324,23 @@ transport reliability
 
 
 
-The system now operates as a wildlife data platform.
+The platform now provides:
+
+
+
+multi-source camera ingestion
+
+
+
+automated AI wildlife detection
+
+
+
+event-based wildlife interpretation
+
+
+
+visible ecological intelligence.
 
 
 
@@ -1123,5 +1348,5 @@ Next focus:
 
 
 
-turning observations into ecological insights.
+turning wildlife observations into actionable ecological insights.
 

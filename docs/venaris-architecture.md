@@ -1,6 +1,6 @@
 Venaris – Architecture (MVP)
 
-Last updated: 2026-03-09 (Visible Intelligence Layer v1 + Counting Model v1)
+Last updated: 2026-03-10 (Direct SMTP Ingest + Maildir Queue + Organizations Layer)
 
 🎯 Vision
 
@@ -46,7 +46,7 @@ System State (MVP Status)
 
 The Ingestion Layer is production-stable for:
 
-SMTP (Reolink)
+SMTP (direct SMTP ingest via Hetzner)
 
 FTP (X-View via Hetzner Gateway)
 
@@ -88,7 +88,7 @@ Primary endpoint:
 
 POST /api/ingest
 
-Requirements:
+Requirements
 
 Header
 
@@ -119,7 +119,7 @@ Endpoint:
 
 POST /api/upload
 
-Capabilities:
+Capabilities
 
 multi-file upload
 
@@ -129,7 +129,7 @@ JSZip auto-extraction
 
 metadata.source = "manual"
 
-Guard rails:
+Guard rails
 
 MAX_FILES
 
@@ -142,7 +142,6 @@ ingestCore
 This creates ingest_batches with:
 
 source = manual
-
 Ingest Responsibilities (Unified)
 
 Each ingest:
@@ -161,45 +160,126 @@ writes asset into async AI queue
 
 Important update:
 
-Event creation is no longer thought of as an ingest concern.
+Event creation is no longer treated as an ingest concern.
 Event clustering becomes meaningful only after wildlife-relevant detections exist.
 
 Deduplication is per-camera and idempotent.
 
-SMTP Ingestion (Vendor-Aware Bridge)
+SMTP Ingestion (Direct SMTP Gateway)
+Current architecture
+Camera
+↓
+SMTP
+↓
+MX cams.venaris.io
+↓
+Hetzner Postfix
+↓
+Maildir queue
+↓
+maildir-bridge worker
+↓
+POST /api/ingest
 
-Architecture:
+This replaces the earlier IMAP polling architecture for production SMTP ingestion.
 
-Mailbox (IMAP)
-→ smtp-bridge.mjs
-→ POST /api/ingest
+Properties
 
-Features:
+direct SMTP delivery to Venaris-controlled infrastructure
 
-attachment extraction
+no external mailbox dependency
 
-inline image support (CID)
+queue-based ingest
 
-vendor flag (reolink)
+scalable for many cameras
 
-UID deduplication
+camera resolution via DB lookup
 
-UNSEEN-only processing
+robust error handling through Maildir state folders
 
-Poll interval:
+Queue model
 
-60 seconds
+Incoming SMTP messages are written to:
+
+/home/venaris/Maildir/new
+
+Worker outcome folders:
+
+/home/venaris/Maildir/processed
+/home/venaris/Maildir/error
+/home/venaris/Maildir/invalid
+
+Meaning:
+
+new → not processed yet
+
+processed → ingest successful
+
+error → ingest failed
+
+invalid → unknown camera alias / unusable mail
+
+This avoids reprocessing loops and provides operational transparency.
+
+Camera routing
+
+SMTP routing is no longer hard coded in .env.
+
+The worker resolves cameras by querying:
+
+camera_ingest_configs.smtp_alias
+
+Example:
+
+test-cam-0002@cams.venaris.io
+
+The worker then loads:
+
+camera_id
+
+ingest_token
+
+vendor
+
+from database configuration.
+
+Image handling
+
+SMTP ingest supports:
+
+classic file attachments
+
+CID / inline images
+
+image MIME filtering
+
+Previous SMTP architecture (deprecated)
+
+Previous path:
+
+Camera
+↓
+external mailbox
+↓
+IMAP polling
+↓
+smtp-bridge.mjs
+↓
+POST /api/ingest
+
+Status:
+
+Deprecated / disabled
+
+It remains archived for reference, but is no longer the target production path.
 
 FTP Ingestion (Gateway Architecture)
-
-Architecture:
-
+Architecture
 Wildlife Camera
 → Hetzner FTP Gateway
 → /data/ftp-ingest/<user>/inbox
 → FTP Worker
 → POST /api/ingest
-
 Gateway Characteristics
 
 Hetzner VPS
@@ -220,10 +300,9 @@ Directory Model
 /data/ftp-ingest/
    └── xview01/
         └── inbox/
+Permissions
 
-Permissions:
-
-Owner: ftp user
+Owner: FTP user
 
 Group: ftp-ingest
 
@@ -263,10 +342,81 @@ signed URLs
 
 server-generated
 
-FTP gateway holds no persistent data.
+FTP gateway and SMTP gateway hold no persistent wildlife data.
 Supabase is the single source of truth.
 
+Multi-Tenant Structure (new)
+
+Venaris now distinguishes between:
+
+organizations
+↓
+reviers
+↓
+cameras
+organizations
+
+Represents the tenant/customer boundary.
+
+organization_members
+
+Maps authenticated users into organizations.
+
+reviers
+
+Belong to one organization.
+
+cameras
+
+Belong to one revier.
+
+This enables:
+
+demo tenant
+
+internal test tenant
+
+future live customer tenant
+
+clean customer separation
+
 Database Core Tables
+organizations
+
+Tenant/customer layer.
+
+Fields:
+
+id
+
+name
+
+slug
+
+kind
+
+status
+
+owner_user_id
+
+created_at
+
+notes
+
+organization_members
+
+Maps users to organizations.
+
+Fields:
+
+organization_id
+
+user_id
+
+role
+
+created_at
+
 reviers
 
 Wildlife management areas.
@@ -280,6 +430,10 @@ name
 area_ha
 
 region
+
+country
+
+organization_id
 
 created_at
 
@@ -304,6 +458,46 @@ ingest_token
 created_at
 
 last_seen_at
+
+Additional product-facing fields may evolve here over time.
+
+camera_ingest_configs
+
+Technical ingest routing configuration per camera.
+
+Purpose:
+
+Decouple ingest routing from .env and worker hardcoding.
+
+Current fields:
+
+id
+
+camera_id
+
+method
+
+is_active
+
+smtp_alias
+
+ftp_username
+
+ftp_inbox_path
+
+manual_label
+
+ingest_token
+
+vendor
+
+external_key
+
+notes
+
+created_at
+
+This is the key bridge between customer-facing camera objects and infrastructure-level routing.
 
 assets
 
@@ -452,7 +646,6 @@ updated_at
 The Intelligence Layer converts images → ecological signals.
 
 Detection Pipeline
-
 asset
 ↓
 MegaDetector
@@ -461,7 +654,7 @@ empty filtering
 ↓
 species classifier
 ↓
-detections table
+detections
 ↓
 asset wildlife summary
 ↓
@@ -470,7 +663,6 @@ event clustering
 event wildlife summary
 ↓
 event ranking / intelligence
-
 MegaDetector
 Purpose
 
@@ -483,9 +675,7 @@ human
 vehicle
 
 Model
-
 md_v1000.0.0-redwood.pt
-
 Output
 
 label
@@ -524,11 +714,8 @@ Model
 CLIP ViT-B/32
 
 Runner
-
 species/runner.py
-
 Process
-
 MegaDetector bbox
 ↓
 image crop
@@ -536,7 +723,6 @@ image crop
 CLIP zero-shot classification
 ↓
 taxonomy_species_v1
-
 Taxonomy v1
 
 roe_deer
@@ -570,11 +756,8 @@ crow
 other
 
 Classification threshold
-
 SPECIES_SIM_THRESHOLD=0.22
-
 Bounding box padding
-
 SPECIES_BBOX_PAD=0.10
 
 Validated examples:
@@ -655,12 +838,6 @@ event species count = MAX(asset_species_count) per species within an event
 
 This prevents blind overcounting across repeated frames.
 
-Interpretation:
-
-three consecutive images of the same roe deer should not automatically become count 3
-
-one image with three roe deer should still count as 3
-
 D. Activity Layer
 
 Activity is treated separately from count.
@@ -696,10 +873,6 @@ animal_count
 
 best_score
 
-Meaning:
-
-Asset-level wildlife presence and count summary.
-
 event_species_summary
 
 Purpose:
@@ -715,10 +888,6 @@ species
 event_species_count
 
 best_score
-
-Meaning:
-
-Event-level wildlife count summary using the MAX(asset_species_count) heuristic.
 
 These two views are now the core bridge between raw detections and visible intelligence.
 
@@ -872,6 +1041,14 @@ asset preview
 
 ingest monitoring
 
+Future role:
+
+tenant-aware camera setup
+
+technical routing visibility
+
+provisioning support
+
 Ingest (/ingest)
 
 Technical monitoring.
@@ -1001,6 +1178,18 @@ restricted passive port range
 
 firewall enforced
 
+SMTP Gateway Security
+
+direct MX routing for cams.venaris.io
+
+queue-based processing
+
+camera resolution only via known DB aliases
+
+invalid aliases routed to Maildir invalid state
+
+no mailbox-per-camera dependency
+
 📦 Runtime Documentation
 
 The Hetzner worker runtime is archived in the repository under:
@@ -1011,7 +1200,7 @@ This includes:
 
 FTP worker
 
-SMTP bridge
+Maildir bridge
 
 AI runners
 
@@ -1071,4 +1260,8 @@ Venaris now operates on this core intelligence chain:
 
 Images → Assets → Detections → Asset Wildlife Summary → Event Wildlife Summary → Ranked Events → Visible Intelligence
 
-That chain is now the architectural backbone for MVP 1.0.
+And on this core infrastructure chain for SMTP ingest:
+
+Camera → SMTP → Postfix → Maildir Queue → maildir-bridge → /api/ingest → Assets
+
+Together these now form the architectural backbone for MVP 1.0.

@@ -1,6 +1,6 @@
 Venaris – Dev Notes
 
-Last updated: 2026-03-09 (Visible Intelligence Layer v1 + Seed Intelligence Dataset)
+Last updated: 2026-03-10 (Direct SMTP Ingest + Postfix + Maildir Bridge)
 
 This file documents operational setup, real-world behavior, and important implementation details that are not purely architectural.
 
@@ -106,7 +106,6 @@ Example metadata:
 metadata.source determines:
 
 ingest_batches.source
-
 4️⃣ Common Failure Modes (Already Encountered)
 ❌ Raw binary upload (application/octet-stream)
 
@@ -160,6 +159,74 @@ Always use bypass query parameter.
 
 Worker handles redirects but still relies on correct base URL.
 
+❌ Invalid ingest token
+
+Observed in new Maildir SMTP worker during direct SMTP migration.
+
+Result:
+
+401 {"error":"invalid ingest token"}
+
+Root cause:
+
+camera_ingest_configs.ingest_token was not yet aligned with the live camera token.
+
+Fix:
+
+Store the valid per-camera ingest token in:
+
+camera_ingest_configs.ingest_token
+
+Important architectural lesson:
+
+SMTP worker must no longer rely on hardcoded .env camera tokens.
+Tokens must come from DB camera routing config.
+
+❌ Unknown SMTP camera alias
+
+Observed during external SMTP tests with addresses such as:
+
+test-cam-9999@cams.venaris.io
+
+Result:
+
+Worker correctly logged:
+
+unknown camera alias
+
+Fix:
+
+Move such messages into:
+
+/home/venaris/Maildir/invalid
+
+This prevents reprocessing loops.
+
+❌ Maildir processing loop on unknown camera
+
+Observed in first Maildir worker iteration.
+
+Root cause:
+
+Failed messages remained inside:
+
+/home/venaris/Maildir/new
+
+and were reprocessed every cycle.
+
+Fix:
+
+Unknown alias messages must be moved to:
+
+Maildir/invalid
+
+API failures must be moved to:
+
+Maildir/error
+
+Successful messages must be moved to:
+
+Maildir/processed
 ⚠️ Real Incident (2026-03-06)
 
 Symptom:
@@ -230,33 +297,215 @@ UI:
 
 /import
 
-Human ingestion entrypoint.
+Human ingestion entry point.
 
-6️⃣ SMTP Bridge (Reolink)
+6️⃣ SMTP Ingest (Current Production Path)
+Current production flow
+Camera
+↓
+SMTP
+↓
+MX cams.venaris.io
+↓
+Hetzner Postfix
+↓
+Maildir
+↓
+maildir-bridge.mjs
+↓
+/api/ingest
 
-Flow:
+This is now the preferred SMTP ingest architecture.
 
-IMAP mailbox → smtp-bridge.mjs → /api/ingest
+Why this replaced IMAP polling
+
+Benefits:
+
+no dependency on external mailbox routing
+
+no mailbox-per-camera setup
+
+no catch-all requirement from hosting provider
+
+direct infrastructure control
+
+scalable to many cameras
+
+queue-based processing
+
+7️⃣ Previous SMTP Bridge (Deprecated)
+
+Previous flow:
+
+Mailbox (IMAP)
+→ smtp-bridge.mjs
+→ /api/ingest
 
 Characteristics:
 
-processes UNSEEN only
+processed UNSEEN only
 
 dedup via IMAP UID
 
-supports inline images (CID)
+vendor-aware parsing
+
+inline image support
 
 metadata.source="smtp"
 
-Poll interval:
+Environment:
 
-60s
+/opt/venaris-worker/.env.smtp
+
+Service:
+
+venaris-smtp-bridge
 
 Status:
 
-Stable for MVP.
+DISABLED
 
-7️⃣ FTP Gateway (Hetzner)
+This service remains archived and documented, but is no longer the target SMTP production path.
+
+8️⃣ Direct SMTP Gateway (Hetzner)
+Purpose
+
+Provide Venaris-owned SMTP entry point for camera ingest.
+
+Domain
+cams.venaris.io
+DNS setup
+
+mail.cams.venaris.io → Hetzner server IP
+
+cams.venaris.io → MX → mail.cams.venaris.io
+
+Important:
+
+Only the SMTP subdomain was redirected.
+Main domain mail for venaris.io remains unaffected.
+
+SMTP server
+
+Postfix on Hetzner.
+
+Important Postfix config includes:
+
+myhostname = mail.cams.venaris.io
+mydestination = mail.cams.venaris.io, localhost
+home_mailbox = Maildir/
+inet_interfaces = all
+inet_protocols = ipv4
+virtual_alias_domains = cams.venaris.io
+virtual_alias_maps = regexp:/etc/postfix/virtual_cams
+
+Catch-all regex file:
+
+/etc/postfix/virtual_cams
+
+Rule:
+
+/^.+@cams\.venaris\.io$/ venaris
+
+This makes all mail to:
+
+*@cams.venaris.io
+
+arrive locally for user:
+
+venaris
+
+without mailbox provisioning.
+
+UFW requirement
+
+Port 25 must be explicitly opened:
+
+sudo ufw allow 25/tcp
+
+Without this, external SMTP delivery fails even if Postfix is listening.
+
+9️⃣ Maildir Queue
+
+Location:
+
+/home/venaris/Maildir
+
+Relevant folders:
+
+new
+processed
+invalid
+error
+
+Meaning:
+
+new → unprocessed SMTP messages
+
+processed → ingest successful
+
+invalid → unknown camera alias / unusable mail
+
+error → ingest/API failure
+
+Operational benefit:
+
+This gives clear SMTP ingest state visibility and prevents loops.
+
+🔟 Maildir Worker (Production)
+
+Location:
+
+/opt/venaris-worker/maildir-bridge.mjs
+
+Repository copy:
+
+infrastructure/hetzner-worker/maildir-bridge.mjs
+
+Service:
+
+venaris-maildir-bridge.service
+
+Behavior:
+
+scan Maildir queue
+
+parse raw mail with mailparser
+
+extract original recipient
+
+resolve camera using DB
+
+filter image attachments
+
+send multipart request to /api/ingest
+
+move mail to correct Maildir state
+
+Recipient resolution order:
+
+X-Original-To
+
+To
+
+This was validated with real Hetzner/Postfix-delivered email.
+
+Current lookup rule
+select *
+from camera_ingest_configs
+where smtp_alias = <recipient>
+  and is_active = true
+limit 1
+
+Resolved values used by worker:
+
+camera_id
+
+vendor
+
+ingest_token
+
+1️⃣1️⃣ FTP Gateway (Hetzner)
 
 Purpose:
 
@@ -301,7 +550,7 @@ local_umask=007
 
 ⚠️ local_umask=007 is critical so files are group-writable and worker can delete.
 
-8️⃣ FTP Worker (Production)
+1️⃣2️⃣ FTP Worker (Production)
 
 Location:
 
@@ -309,25 +558,17 @@ Location:
 
 Service:
 
-venaris-ftp-worker (systemd)
+venaris-ftp-worker
 
 Environment:
 
 /opt/venaris-worker/.env
 
-Key vars:
-
-VENARIS_INGEST_URL=https://<prod>/api/ingest?x-vercel-protection-bypass=<token>
-
-POLL_SECONDS=15
-
-CAMERA_TOKEN_XVIEW01=cam-view-1
-
 Behavior:
 
-scan inbox
+poll inbox
 
-ensure file size stable (LTE safety)
+ensure file size stable
 
 compute SHA256
 
@@ -337,32 +578,34 @@ delete file on success
 
 keep file on error (retry via polling)
 
-Dedup example:
+Example dedup log:
 
 accepted=0 skippedDup=1
 
 Inbox remains clean.
 
-9️⃣ Detection Architecture (Operational)
+1️⃣3️⃣ Detection Architecture (Operational)
 
 Detection is asynchronous.
 
 Assets are processed in background by a dedicated worker service:
 
-venaris-detection-worker (systemd)
+venaris-detection-worker
 
 Pipeline:
 
-claim queued assets (RPC)
-
+claim queued assets
+↓
 download image from Supabase Storage
-
+↓
 MegaDetector → detections
-
-Species classification (only if animal) → update detections
-
+↓
+Species classification (if animal)
+↓
+update detections
+↓
 Empty filter → assets.empty + assets.empty_confidence + assets.relevant
-
+↓
 Event clustering RPC
 
 Important operational note:
@@ -376,9 +619,9 @@ It only triggers:
 
 upsert_event_for_asset(...)
 
-The aggregation logic remains DB-centric.
+Aggregation remains DB-centric.
 
-🔟 MegaDetector (Stage 1)
+1️⃣4️⃣ MegaDetector (Stage 1)
 
 Purpose:
 
@@ -389,12 +632,6 @@ animal
 human
 
 vehicle
-
-Output:
-
-bboxes
-
-confidence scores
 
 Primary MVP role:
 
@@ -426,7 +663,7 @@ Important new interpretation:
 
 meta.md_idx is now the canonical key for wildlife counting within one image.
 
-1️⃣1️⃣ Empty Filter (System Decision)
+1️⃣5️⃣ Empty Filter (System Decision)
 
 Rule (v1):
 
@@ -456,7 +693,7 @@ best_animal_score = 0 → empty=true
 
 This is intended for MVP.
 
-1️⃣2️⃣ Species Classifier (Stage 2 – Option A)
+1️⃣6️⃣ Species Classifier (Stage 2)
 
 Approach:
 
@@ -466,19 +703,15 @@ Runs only when:
 
 MegaDetector has at least one animal detection.
 
-Input:
-
-Image + bbox list from MegaDetector.
-
 Technique:
 
 crop bbox (+ pad)
-
+↓
 CLIP similarity vs prompt set
+↓
+best label if threshold passed
 
-choose best label if similarity exceeds threshold
-
-Important config (env):
+Important config:
 
 SPECIES_PYTHON
 
@@ -502,21 +735,12 @@ wolf
 
 wild_boar
 
-Controlled test (2026-03-06):
+Observed ambiguity:
 
-All correctly classified with confidence ≈ 0.96–0.97.
+red_deer can be classified as roe_deer in IR night imagery.
+This is treated as model ambiguity, not system malfunction.
 
-Ambiguity observed:
-
-red_deer (night IR image) classified as roe_deer.
-
-Interpretation:
-
-Expected ambiguity within deer classes under infrared imagery.
-
-This is a model limitation, not a system malfunction.
-
-1️⃣3️⃣ Venaris Wildlife Taxonomy v1 (DB-backed)
+1️⃣7️⃣ Venaris Wildlife Taxonomy v1 (DB-backed)
 
 Taxonomy is a Postgres ENUM:
 
@@ -556,9 +780,8 @@ other
 
 Table mapping:
 
-detections.species uses type taxonomy_species_v1
-
-1️⃣4️⃣ Detection Tables (Current Truth)
+detections.species
+1️⃣8️⃣ Detection Tables (Current Truth)
 
 Tables exist:
 
@@ -582,7 +805,7 @@ count(distinct meta.md_idx)
 
 instead.
 
-1️⃣5️⃣ Counting Model v1 (practical implementation note)
+1️⃣9️⃣ Counting Model v1 (Practical Implementation Note)
 
 This is now an active operational rule.
 
@@ -618,7 +841,7 @@ event wildlife interpretation
 
 dashboard observation logic
 
-1️⃣6️⃣ Visible Intelligence Layer (Operational)
+2️⃣0️⃣ Visible Intelligence Layer (Operational)
 
 Visible Intelligence is now running in the application.
 
@@ -636,7 +859,7 @@ Config table:
 
 species_weights
 
-Event aggregation logic:
+Aggregation logic:
 
 update_event_aggregation(...)
 
@@ -690,19 +913,14 @@ Periods:
 
 Important implementation note:
 
-For 365d, summary loading must be chunked because large .in(eventIds) queries can cause 400 Bad Request.
+For 365d, summary loading uses chunked fetching of event_species_summary to avoid request-size issues.
 
 Current solution:
 
 fetchEventSpeciesSummaryChunked(...)
+2️⃣1️⃣ Seed Intelligence Dataset
 
-This is now part of src/app/intelligence/page.tsx.
-
-1️⃣7️⃣ Seed Intelligence Dataset
-
-A seed generator now exists for intelligence/dashboard testing.
-
-Script:
+Seed generator:
 
 scripts/seed-intelligence.mjs
 
@@ -749,13 +967,14 @@ Practical implication:
 Seed assets may show “Kein Preview” in UI.
 That is expected and acceptable.
 
-1️⃣8️⃣ Worker Operation & Debug Routine
+2️⃣2️⃣ Worker Operation & Debug Routine
 
 SSH:
 
 ssh venaris@<server-ip>
+Detection worker
 
-Check service:
+Status:
 
 sudo systemctl status venaris-detection-worker --no-pager -l
 
@@ -763,20 +982,41 @@ Logs:
 
 sudo journalctl -u venaris-detection-worker -f
 
-Key log line pattern:
+Pattern:
 
-processed asset=<id> cam="<name>" detections=<n> empty=<true/false> captured=<source> dt_ms=<ms>
-1️⃣9️⃣ Known Risk Areas (Current)
+processed asset=<id> cam="<name>" detections=<n> empty=<true/false> dt_ms=<ms>
+Maildir worker
+
+Status:
+
+sudo systemctl status venaris-maildir-bridge --no-pager -l
+
+Logs:
+
+journalctl -u venaris-maildir-bridge -f
+
+Queue counts:
+
+find /home/venaris/Maildir/new -type f | wc -l
+find /home/venaris/Maildir/processed -type f | wc -l
+find /home/venaris/Maildir/error -type f | wc -l
+find /home/venaris/Maildir/invalid -type f | wc -l
+Postfix
+
+Live logs:
+
+sudo journalctl -u postfix -f
+2️⃣3️⃣ Known Risk Areas (Current)
 
 hard backlog runs can take time
 
-no dead-letter queue
+no dead-letter queue beyond Maildir error folder
 
 LTE partial uploads
 
 token leakage risk
 
-multi-camera scaling still env-based
+some camera provisioning still manual
 
 model updates require versioning discipline
 
@@ -784,21 +1024,31 @@ current event clustering is time-window based only
 
 event clustering can over-group artificial test uploads from different species if imported too close together
 
+Maildir worker currently scans directory sequentially (not yet parallelized)
+
+SMTP spam filtering is still basic and should be hardened later
+
 Important nuance:
 
-This last issue is mainly a test-data artifact, not a production blocker for real camera usage.
+The over-grouping issue is mainly a test-data artifact, not a production blocker for real camera usage.
 
-2️⃣0️⃣ Important Production Truths
+2️⃣4️⃣ Important Production Truths
 
-Hetzner is a gateway. It must remain stateless.
+Hetzner is a gateway and worker runtime layer. It must remain operationally replaceable.
 
 Supabase is the single source of truth.
 
-If Hetzner is destroyed, no wildlife data is lost.
+If Hetzner is destroyed:
+
+no wildlife data is lost
+
+no assets are lost
+
+no events are lost
 
 All persistent state lives in Supabase.
 
-Wildlife intelligence rules now exclude:
+Wildlife intelligence rules exclude:
 
 human
 
@@ -806,9 +1056,15 @@ vehicle
 
 from biological/event intelligence.
 
+SMTP camera routing truth now lives in:
+
+camera_ingest_configs
+
+not in .env.
+
 📦 Infrastructure Archiving
 
-The full Hetzner worker runtime was archived into the repository:
+The full Hetzner worker runtime is archived into the repository:
 
 infrastructure/hetzner-worker/
 
@@ -816,7 +1072,9 @@ Included components:
 
 ftp-worker.mjs
 
-smtp-bridge.mjs
+smtp-bridge.mjs (deprecated path)
+
+maildir-bridge.mjs (current SMTP path)
 
 MegaDetector runner
 
@@ -838,6 +1096,12 @@ stable ingest
 
 stable async AI worker
 
+direct SMTP ingest via Hetzner
+
+Maildir queue-based SMTP processing
+
+DB-driven SMTP camera resolution
+
 wildlife-only event scoring
 
 asset-level wildlife summaries
@@ -853,6 +1117,8 @@ This is enough to continue with:
 dashboard refinement
 
 wilddruck indicator
+
+provisioning logic
 
 where & when refinement
 
