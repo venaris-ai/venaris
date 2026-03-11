@@ -7,11 +7,11 @@ export type OrganizationRole = "owner" | "admin" | "member" | "viewer";
 type MembershipRow = {
   organization_id: string;
   role: OrganizationRole;
-  organizations: {
+  organizations: Array<{
     id: string;
     name: string;
     slug: string;
-  } | null;
+  }> | null;
 };
 
 export async function requireUser() {
@@ -50,7 +50,7 @@ export async function getMembershipsForUser(userId: string) {
     throw new Error(`Failed to load memberships: ${error.message}`);
   }
 
-  return (data ?? []) as MembershipRow[];
+  return (data ?? []) as unknown as MembershipRow[];
 }
 
 export async function requireActiveOrganization() {
@@ -62,11 +62,19 @@ export async function requireActiveOrganization() {
   }
 
   const activeMembership = memberships[0];
+  const activeOrganization = activeMembership.organizations?.[0] ?? null;
+
+  if (!activeOrganization) {
+    throw new Error("Active organization not found");
+  }
 
   return {
     user,
     memberships,
-    activeMembership,
+    activeMembership: {
+      ...activeMembership,
+      organizations: activeOrganization,
+    },
   };
 }
 
