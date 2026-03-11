@@ -1,3 +1,4 @@
+// src/components/MainNav.tsx
 "use client";
 
 import Link from "next/link";
@@ -15,6 +16,11 @@ const items = [
 export default function MainNav() {
   const pathname = usePathname();
 
+  async function logout() {
+    await fetch("/api/auth/logout", { method: "POST" });
+    window.location.href = "/login";
+  }
+
   return (
     <nav className="flex items-center gap-2 text-sm">
       {items.map((item) => {
@@ -29,7 +35,7 @@ export default function MainNav() {
             href={item.href}
             className={`rounded-md border px-3 py-1 ${
               active
-                ? "bg-black text-white border-black"
+                ? "border-black bg-black text-white"
                 : "bg-white text-black hover:bg-gray-100"
             }`}
           >
@@ -37,6 +43,15 @@ export default function MainNav() {
           </Link>
         );
       })}
+
+      <div className="ml-2 border-l pl-2">
+        <button
+          onClick={logout}
+          className="rounded-md border px-3 py-1 hover:bg-gray-100"
+        >
+          Logout
+        </button>
+      </div>
     </nav>
   );
 }

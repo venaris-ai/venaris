@@ -1,6 +1,6 @@
 Venaris – Dev Notes
 
-Last updated: 2026-03-10 (Direct SMTP Ingest + Postfix + Maildir Bridge)
+Last updated: 2026-03-11 (Camera Provisioning Model + Multi-Tenant Auth + Product Setup Flow)
 
 This file documents operational setup, real-world behavior, and important implementation details that are not purely architectural.
 
@@ -106,7 +106,9 @@ Example metadata:
 metadata.source determines:
 
 ingest_batches.source
+
 4️⃣ Common Failure Modes (Already Encountered)
+
 ❌ Raw binary upload (application/octet-stream)
 
 Result:
@@ -227,6 +229,7 @@ Maildir/error
 Successful messages must be moved to:
 
 Maildir/processed
+
 ⚠️ Real Incident (2026-03-06)
 
 Symptom:
@@ -300,7 +303,9 @@ UI:
 Human ingestion entry point.
 
 6️⃣ SMTP Ingest (Current Production Path)
+
 Current production flow
+
 Camera
 ↓
 SMTP
@@ -368,12 +373,15 @@ DISABLED
 This service remains archived and documented, but is no longer the target SMTP production path.
 
 8️⃣ Direct SMTP Gateway (Hetzner)
+
 Purpose
 
 Provide Venaris-owned SMTP entry point for camera ingest.
 
 Domain
+
 cams.venaris.io
+
 DNS setup
 
 mail.cams.venaris.io → Hetzner server IP
@@ -491,6 +499,7 @@ To
 This was validated with real Hetzner/Postfix-delivered email.
 
 Current lookup rule
+
 select *
 from camera_ingest_configs
 where smtp_alias = <recipient>
@@ -781,6 +790,7 @@ other
 Table mapping:
 
 detections.species
+
 1️⃣8️⃣ Detection Tables (Current Truth)
 
 Tables exist:
@@ -918,6 +928,7 @@ For 365d, summary loading uses chunked fetching of event_species_summary to avoi
 Current solution:
 
 fetchEventSpeciesSummaryChunked(...)
+
 2️⃣1️⃣ Seed Intelligence Dataset
 
 Seed generator:
@@ -967,11 +978,363 @@ Practical implication:
 Seed assets may show “Kein Preview” in UI.
 That is expected and acceptable.
 
-2️⃣2️⃣ Worker Operation & Debug Routine
+2️⃣2️⃣ Camera Provisioning Model (NEW)
+
+This is the main architectural milestone of today.
+
+Venaris now has a database-driven camera provisioning model.
+
+Canonical camera provisioning key:
+
+cameras.technical_name
+
+Format:
+
+<organization-slug>-cam-<4-digit-sequence>
+
+Examples:
+
+demo-cam-0001
+
+test-cam-0004
+
+heubachwiesen-cam-0001
+
+Important decisions:
+
+cameras.id remains the primary key
+
+cameras.technical_name is the canonical provisioning key
+
+camera_ingest_configs is the new routing truth
+
+cameras.ingest_token and cameras.import_method remain temporarily as legacy compatibility fields
+
+Sequence logic:
+
+per organization
+
+starts at 0001
+
+current intended range 0001–9999
+
+never reuse numbers
+
+prefer is_active=false over deletion
+
+Provisioning values are derived from technical_name:
+
+SMTP alias:
+
+<technical_name>@cams.venaris.io
+
+FTP username:
+
+<technical_name>
+
+FTP inbox path:
+
+/data/ftp-ingest/<technical_name>/inbox
+
+Manual label:
+
+<technical_name>
+
+Sequence persistence table:
+
+organization_camera_sequences
+
+Provisioning function:
+
+create_camera_with_provisioning()
+
+Function responsibilities:
+
+validate organization
+
+validate optional revier assignment
+
+allocate next organization sequence
+
+build technical_name
+
+generate secure ingest token
+
+insert camera row
+
+insert ingest config row
+
+return provisioning data
+
+Token decision:
+
+Provisioning generates a fresh secure token.
+
+The same generated token is written into both:
+
+cameras.ingest_token
+
+camera_ingest_configs.ingest_token
+
+Reason:
+
+keep legacy compatibility while moving routing truth into camera_ingest_configs
+
+Vendor decision:
+
+Vendor is validated against controlled list:
+
+berger&schröter
+
+blazevideo
+
+braun
+
+bushnell
+
+gardepro
+
+hikmicro
+
+maginon
+
+minox
+
+reconyx
+
+reolink
+
+seissiger
+
+spypoint
+
+xview
+
+zeiss
+
+other
+
+Provisioning validation status:
+
+Function tested successfully with real test provisioning flow.
+
+Validated:
+
+technical_name generation
+
+correct per-organization sequence increment
+
+organization assignment
+
+optional revier assignment
+
+correct FTP routing derivation
+
+token synchronization across both token fields
+
+Example result observed:
+
+technical_name = test-cam-0005
+
+ftp_username = test-cam-0005
+
+ftp_inbox_path = /data/ftp-ingest/test-cam-0005/inbox
+
+2️⃣3️⃣ Product Data Model Update (NEW)
+
+The product model was clarified today.
+
+Organization
+=
+administrative / tenant / billing / ownership layer
+
+Revier
+=
+operational wildlife management area
+
+Camera
+=
+administratively belongs to organization
+and may optionally be assigned to a revier
+
+Important decision:
+
+organizations and reviers are intentionally not merged.
+
+Reason:
+
+organization is the administrative and commercial scope
+
+revier is the operational field scope
+
+This means:
+
+organizations
+  ├── organization_members
+  ├── cameras
+  └── reviers
+
+Cameras no longer conceptually depend only on revier.
+
+Current DB direction:
+
+cameras.organization_id = administrative ownership
+
+cameras.revier_id = optional operational assignment
+
+2️⃣4️⃣ Authentication / Multitenancy MVP Layer (NEW)
+
+Supabase Auth is now integrated.
+
+Current auth flow:
+
+email/password login
+
+protected app routes
+
+logout route
+
+authenticated navigation flow
+
+Relevant frontend pieces:
+
+/login
+
+proxy.ts
+
+src/lib/supabaseAuthServer.ts
+
+src/lib/supabaseBrowser.ts
+
+Important implementation note:
+
+Service-role DB access and session-based auth access are intentionally separated.
+
+Use:
+
+supabaseServer()
+for service-role / admin DB access
+
+Use:
+
+supabaseAuthServer()
+for cookie/session-bound user auth checks
+
+Use:
+
+supabaseBrowser()
+for browser login/session handling
+
+Important debugging lesson from today:
+
+Browser auth client must use SSR-compatible browser client logic.
+
+Using plain supabase-js browser client alongside SSR auth flow caused session detection mismatch between browser and protected server routes.
+
+After switching supabaseBrowser() to SSR-compatible browser client, login + protected routes worked correctly.
+
+Current protected routes:
+
+/
+
+ /cameras
+
+ /cameras/new
+
+ /events
+
+ /intelligence
+
+ /import
+
+ /ingest
+
+Role model decision (MVP):
+
+organization_members.role
+
+allowed values:
+
+owner
+
+admin
+
+member
+
+viewer
+
+Current MVP authorization decision:
+
+camera creation allowed only for owner/admin
+
+Active organization context decision:
+
+For MVP, the first / only membership is treated as active organization context.
+Full org switcher is still pending.
+
+2️⃣5️⃣ Product UI Update (NEW)
+
+New camera creation route implemented:
+
+/cameras/new
+
+Purpose:
+
+real product camera setup flow, not internal dev-only tooling
+
+Current camera creation UI supports:
+
+organization context
+
+optional revier assignment
+
+camera name
+
+method
+
+vendor
+
+optional location name
+
+optional latitude / longitude
+
+optional direction
+
+optional notes
+
+Current API route:
+
+POST /api/cameras/create
+
+Uses:
+
+create_camera_with_provisioning()
+
+Current provisioning result UI shows:
+
+camera id
+
+technical name
+
+ingest token
+
+SMTP alias or FTP routing values or manual label
+
+Navigation now includes logout directly.
+
+This is the first real SaaS-style product loop:
+
+login
+→ protected navigation
+→ create camera
+→ receive provisioning data
+
+2️⃣6️⃣ Worker Operation & Debug Routine
 
 SSH:
 
 ssh venaris@<server-ip>
+
 Detection worker
 
 Status:
@@ -985,6 +1348,7 @@ sudo journalctl -u venaris-detection-worker -f
 Pattern:
 
 processed asset=<id> cam="<name>" detections=<n> empty=<true/false> dt_ms=<ms>
+
 Maildir worker
 
 Status:
@@ -1001,12 +1365,14 @@ find /home/venaris/Maildir/new -type f | wc -l
 find /home/venaris/Maildir/processed -type f | wc -l
 find /home/venaris/Maildir/error -type f | wc -l
 find /home/venaris/Maildir/invalid -type f | wc -l
+
 Postfix
 
 Live logs:
 
 sudo journalctl -u postfix -f
-2️⃣3️⃣ Known Risk Areas (Current)
+
+2️⃣7️⃣ Known Risk Areas (Current)
 
 hard backlog runs can take time
 
@@ -1016,7 +1382,7 @@ LTE partial uploads
 
 token leakage risk
 
-some camera provisioning still manual
+some camera provisioning still manual outside final UI coverage
 
 model updates require versioning discipline
 
@@ -1032,7 +1398,17 @@ Important nuance:
 
 The over-grouping issue is mainly a test-data artifact, not a production blocker for real camera usage.
 
-2️⃣4️⃣ Important Production Truths
+Multi-tenant specific current gaps:
+
+active organization switcher not yet implemented
+
+role checks not yet enforced in all API routes
+
+camera/event/import lists not yet fully filtered by active organization everywhere
+
+membership administration UI not yet implemented
+
+2️⃣8️⃣ Important Production Truths
 
 Hetzner is a gateway and worker runtime layer. It must remain operationally replaceable.
 
@@ -1061,6 +1437,8 @@ SMTP camera routing truth now lives in:
 camera_ingest_configs
 
 not in .env.
+
+Provisioning truth now lives in database and no longer in manual naming conventions alone.
 
 📦 Infrastructure Archiving
 
@@ -1112,14 +1490,64 @@ intelligence dashboard v1
 
 realistic seed dataset for dashboard testing
 
+database-driven camera provisioning
+
+real login/logout flow
+
+protected product routes
+
+membership-based multitenancy foundation
+
 This is enough to continue with:
+
+tenant-aware UI hardening
+
+active organization context UX
+
+role enforcement
+
+revier setup UI
 
 dashboard refinement
 
 wilddruck indicator
 
-provisioning logic
-
 where & when refinement
 
 field validation preparation
+
+Honest Project Status (2026-03-11)
+
+Green:
+
+Ingestion
+
+AI pipeline
+
+Provisioning base
+
+Camera object model
+
+Auth foundation
+
+Navigation foundation
+
+Yellow:
+
+true multi-tenant UI consolidation
+
+active organization context UX
+
+role enforcement across all relevant routes
+
+tenant-aware camera / event / import filtering
+
+revier setup UI
+
+Still open:
+
+Wilddruck indicator
+
+dashboard consolidation
+
+go-live legal / branding / payment preparation

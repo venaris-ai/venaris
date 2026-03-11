@@ -2,13 +2,13 @@ Venaris – MVP Roadmap Target (Version 1.0)
 
 
 
-Last updated: 2026-03-10 (Direct SMTP Ingest + Maildir Queue + Ingestion Layer Stabilized)
+Last updated: 2026-03-11 (Camera Provisioning + Multi-Tenant Auth + Product Setup Layer)
 
 
 
 Target Delivery: 31.03.2026 (EOD)
 
-Goal: Visible Wildlife Intelligence + Operational Stability
+Goal: Visible Wildlife Intelligence + Operational Stability + First Real SaaS Product Loop
 
 
 
@@ -60,6 +60,18 @@ Operational dashboard
 
 
 
+Database-driven camera provisioning
+
+
+
+Login / protected product access
+
+
+
+Organization-based multitenancy foundation
+
+
+
 NOT included:
 
 
@@ -76,37 +88,57 @@ Behavioral prediction
 
 
 
-Version 1.0 = work simplification + visible intelligence
+Self-service billing
+
+
+
+Invite / self-service signup flow
+
+
+
+Fine-grained permission matrix beyond MVP roles
+
+
+
+Version 1.0 = work simplification + visible intelligence + first real product operation
 
 
 
 🧱 Layer Completion Targets
 
-Layer	Target
 
-Ingestion Layer	100% stable
 
-Storage Layer	structured lifecycle
+Layer | Target
 
-Processing Layer	worker orchestration
+--- | ---
 
-Intelligence Layer	Detection v1 (MegaDetector + species classifier)
+Ingestion Layer | 100% stable
 
-Monitoring Layer	health + KPIs
+Storage Layer | structured lifecycle + product-ready camera model
 
-Application Layer	dashboard + insight views
+Processing Layer | worker orchestration
+
+Intelligence Layer | Detection v1 (MegaDetector + species classifier)
+
+Monitoring Layer | health + KPIs
+
+Application Layer | dashboard + insight views + authenticated product setup
+
+
 
 📆 Execution Plan (Workdays Only)
 
 
 
-Start: 04.03.2026
+Start: 04.03.2026  
 
 End: 31.03.2026
 
 
 
 ✅ Phase 1 – Processing Foundation (DONE)
+
+
 
 04.03 – DONE
 
@@ -282,6 +314,8 @@ Taxonomy v1:
 
 15 species
 
+
+
 MegaDetector Integration – DONE
 
 
@@ -314,7 +348,7 @@ Environment control:
 
 
 
-MD\_MIN\_CONF
+MD\_MIN\_CONF  
 
 MD\_MAX\_DETECTIONS
 
@@ -336,7 +370,7 @@ Automatic empty detection:
 
 
 
-animal present → relevant=true
+animal present → relevant=true  
 
 no animals → relevant=false
 
@@ -358,33 +392,33 @@ Taxonomy v1 finalized:
 
 
 
-roe\_deer
+roe\_deer  
 
-wild\_boar
+wild\_boar  
 
-red\_deer
+red\_deer  
 
-fallow\_deer
+fallow\_deer  
 
-mouflon
+mouflon  
 
-fox
+fox  
 
-wolf
+wolf  
 
-badger
+badger  
 
-raccoon
+raccoon  
 
-raccoon\_dog
+raccoon\_dog  
 
-hare
+hare  
 
-rabbit
+rabbit  
 
-pheasant
+pheasant  
 
-crow
+crow  
 
 other
 
@@ -434,7 +468,7 @@ Threshold control:
 
 
 
-SPECIES\_SIM\_THRESHOLD
+SPECIES\_SIM\_THRESHOLD  
 
 SPECIES\_BBOX\_PAD
 
@@ -584,11 +618,11 @@ Maildir states:
 
 
 
-new
+new  
 
-processed
+processed  
 
-invalid
+invalid  
 
 error
 
@@ -599,6 +633,398 @@ delivery:
 
 
 stable SMTP ingest for camera email delivery.
+
+
+
+🟢 Phase 2.6 – Product Model \& Provisioning Foundation (DONE)
+
+
+
+This phase was pulled forward because productization became the critical next step.
+
+
+
+Goal:
+
+
+
+Stabilize Venaris camera setup as a real product object model.
+
+
+
+Decisions completed:
+
+
+
+organizations = administrative / commercial tenant layer
+
+
+
+reviers = operational wildlife management areas
+
+
+
+cameras belong administratively to organizations
+
+
+
+cameras may optionally be assigned to reviers
+
+
+
+cameras.id remains PK
+
+
+
+cameras.technical\_name becomes canonical provisioning key
+
+
+
+camera\_ingest\_configs becomes routing truth
+
+
+
+legacy cameras.ingest\_token and cameras.import\_method remain temporarily for compatibility
+
+
+
+technical\_name – DONE
+
+
+
+Canonical format introduced:
+
+
+
+<organization-slug>-cam-<4-digit-sequence>
+
+
+
+Examples:
+
+
+
+demo-cam-0001  
+
+test-cam-0005  
+
+heubachwiesen-cam-0001
+
+
+
+delivery:
+
+
+
+stable technical identity for provisioning and routing.
+
+
+
+Per-Organization Sequence Model – DONE
+
+
+
+Sequence now increments per organization.
+
+
+
+Rules:
+
+
+
+numbers never reused
+
+
+
+deactivate instead of delete
+
+
+
+4-digit sequence as current intended range
+
+
+
+delivery:
+
+
+
+stable camera naming logic.
+
+
+
+Provisioning Function – DONE
+
+
+
+Function implemented:
+
+
+
+create\_camera\_with\_provisioning()
+
+
+
+Responsibilities:
+
+
+
+validate organization / optional revier assignment
+
+
+
+allocate next sequence
+
+
+
+build technical\_name
+
+
+
+generate secure token
+
+
+
+create camera row
+
+
+
+create active ingest config
+
+
+
+return provisioning data
+
+
+
+delivery:
+
+
+
+camera provisioning now works end-to-end via DB function.
+
+
+
+Provisioning Validation – DONE
+
+
+
+Validated with real test flow.
+
+
+
+Confirmed:
+
+
+
+technical\_name generation
+
+
+
+per-organization sequence increment
+
+
+
+organization assignment
+
+
+
+optional revier assignment
+
+
+
+FTP routing derivation
+
+
+
+token synchronization between legacy and config field
+
+
+
+delivery:
+
+
+
+provisioning architecture operational.
+
+
+
+🟢 Phase 2.7 – Auth \& Multi-Tenant Product Foundation (DONE)
+
+
+
+This phase was also pulled forward because camera setup should no longer remain in internal-admin mode.
+
+
+
+Goal:
+
+
+
+Create first real SaaS-style product access model.
+
+
+
+Login Layer – DONE
+
+
+
+Supabase Auth email/password integrated.
+
+
+
+Routes:
+
+
+
+/login  
+
+logout route
+
+
+
+Behavior:
+
+
+
+protected app routes redirect unauthenticated users to login
+
+
+
+delivery:
+
+
+
+authenticated product access working.
+
+
+
+Protected App Shell – DONE
+
+
+
+Protected product areas:
+
+
+
+/
+
+
+
+&nbsp;/cameras
+
+
+
+&nbsp;/cameras/new
+
+
+
+&nbsp;/events
+
+
+
+&nbsp;/intelligence
+
+
+
+&nbsp;/import
+
+
+
+&nbsp;/ingest
+
+
+
+delivery:
+
+
+
+application no longer behaves as public/internal-only tool.
+
+
+
+Membership Model – DONE (foundation)
+
+
+
+organization\_members role model activated.
+
+
+
+MVP roles:
+
+
+
+owner  
+
+admin  
+
+member  
+
+viewer
+
+
+
+Current MVP permission decision:
+
+
+
+camera creation only for owner/admin
+
+
+
+delivery:
+
+
+
+tenant role model defined and usable.
+
+
+
+Camera Setup UI – DONE (foundation)
+
+
+
+New route:
+
+
+
+/cameras/new
+
+
+
+Capabilities:
+
+
+
+organization-context camera creation
+
+
+
+optional revier assignment
+
+
+
+method selection
+
+
+
+vendor selection
+
+
+
+optional location / position / direction / notes
+
+
+
+direct provisioning result in UI
+
+
+
+delivery:
+
+
+
+first real product setup flow operational.
 
 
 
@@ -840,6 +1266,8 @@ stable dataset for dashboard development.
 
 🟡 Remaining Phase 3 Tasks
 
+
+
 18.03 – Relevance Model Finalization
 
 
@@ -908,9 +1336,7 @@ time windows:
 
 
 
-7 days
-
-
+7 days  
 
 30 days
 
@@ -924,7 +1350,7 @@ simple wildlife trend indicators.
 
 
 
-21.03 – Camera Provisioning Model
+21.03 – Tenant-Aware Product Views
 
 
 
@@ -932,35 +1358,23 @@ Goal:
 
 
 
-Stabilize camera configuration for real deployments.
+Turn the current auth/provisioning foundation into a coherent tenant-aware product surface.
 
 
 
-Introduce:
+Includes:
 
 
 
-camera\_ingest\_configs
+active organization context visible in UI
 
 
 
-Responsibilities:
+camera views filtered by active organization
 
 
 
-SMTP alias routing
-
-
-
-FTP user mapping
-
-
-
-ingest tokens
-
-
-
-vendor identification
+relevant event / import / setup views aligned with organization context
 
 
 
@@ -968,11 +1382,49 @@ delivery:
 
 
 
-infrastructure routing decoupled from .env.
+first cohesive multi-tenant user experience.
+
+
+
+22.03 – Role Enforcement Pass
+
+
+
+Goal:
+
+
+
+Ensure critical product actions are role-protected consistently.
+
+
+
+Scope:
+
+
+
+camera creation
+
+
+
+future camera editing / deactivation hooks
+
+
+
+relevant API route protection
+
+
+
+delivery:
+
+
+
+owner/admin-only setup actions consistently enforced.
 
 
 
 🔴 Phase 4 – Wilddruck \& Dashboard
+
+
 
 23.03 – Wilddruck Indicator v1
 
@@ -1136,6 +1588,8 @@ clean detection output.
 
 🟣 Finalization Phase
 
+
+
 30.03 – Field Validation Day
 
 
@@ -1173,6 +1627,14 @@ burst vs single-shot
 
 
 relevance override
+
+
+
+camera setup / provisioning flow
+
+
+
+role-protected camera creation flow
 
 
 
@@ -1236,6 +1698,14 @@ avoid debug language in UI
 
 
 
+make active organization context visible
+
+
+
+keep camera setup flow product-facing, not internal-admin-like
+
+
+
 📊 MVP Success Criteria (31.03)
 
 
@@ -1244,27 +1714,43 @@ By end of month:
 
 
 
-Feature	Status
+Feature | Status
 
-MegaDetector runs automatically	✅
+--- | ---
 
-Empty images auto-filtered	✅
+MegaDetector runs automatically | ✅
 
-Species detection functional	✅
+Empty images auto-filtered | ✅
 
-Event clustering active	✅
+Species detection functional | ✅
 
-Event relevance scoring operational	✅
+Event clustering active | ✅
 
-Dashboard usable	⏳
+Event relevance scoring operational | ✅
 
-Wilddruck indicator visible	⏳
+Dashboard usable | ⏳
 
-Monitoring stable	✅
+Wilddruck indicator visible | ⏳
 
-Real hardware validated	⏳
+Monitoring stable | ✅
+
+Real hardware validated | ⏳
+
+Database-driven camera provisioning working | ✅
+
+Login / protected routes working | ✅
+
+Organization-based multitenancy foundation active | ✅
+
+Role-protected camera setup working | ⏳
+
+Tenant-aware UI coherent enough for MVP | ⏳
+
+
 
 🚀 After Version 1.0
+
+
 
 Version 2.0
 
@@ -1283,6 +1769,22 @@ seasonal analysis
 
 
 reporting layer
+
+
+
+organization switcher / richer tenant UX
+
+
+
+member administration UI
+
+
+
+invite flow
+
+
+
+cleanup of legacy camera ingest fields
 
 
 
@@ -1322,6 +1824,8 @@ transport reliability
 
 → wildlife intelligence
 
+→ early SaaS product foundation
+
 
 
 The platform now provides:
@@ -1340,7 +1844,15 @@ event-based wildlife interpretation
 
 
 
-visible ecological intelligence.
+visible ecological intelligence
+
+
+
+database-driven camera provisioning
+
+
+
+authenticated tenant-aware product access
 
 
 
@@ -1348,5 +1860,7 @@ Next focus:
 
 
 
-turning wildlife observations into actionable ecological insights.
+turning wildlife observations into actionable ecological insights
+
+while making the product operationally usable for real organizations.
 

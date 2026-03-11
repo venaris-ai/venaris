@@ -1,6 +1,6 @@
 Venaris – Architecture (MVP)
 
-Last updated: 2026-03-10 (Direct SMTP Ingest + Maildir Queue + Organizations Layer)
+Last updated: 2026-03-11 (Camera Provisioning Model + Multi-Tenant Auth + Organization/Revier Split Clarified)
 
 🎯 Vision
 
@@ -76,7 +76,25 @@ The first Visible Intelligence layer is now operational via:
 
 /intelligence
 
+A first real product setup layer is now also operational via:
+
+/login
+
+/cameras/new
+
+This is an important shift:
+
+Venaris is no longer only an internal intelligence tool.
+It now has the first real SaaS-style product loop:
+
+login
+→ protected routes
+→ create camera
+→ receive provisioning data
+→ configure ingest channel
+
 1️⃣ Ingestion Layer
+
 Purpose
 
 Receive wildlife sensor data from multiple import methods
@@ -113,6 +131,7 @@ Example metadata:
   "ftp_user": "xview01",
   "filename": "IMG_1234.JPG"
 }
+
 Import Adapter (Manual Channel)
 
 Endpoint:
@@ -142,6 +161,7 @@ ingestCore
 This creates ingest_batches with:
 
 source = manual
+
 Ingest Responsibilities (Unified)
 
 Each ingest:
@@ -166,7 +186,9 @@ Event clustering becomes meaningful only after wildlife-relevant detections exis
 Deduplication is per-camera and idempotent.
 
 SMTP Ingestion (Direct SMTP Gateway)
+
 Current architecture
+
 Camera
 ↓
 SMTP
@@ -274,12 +296,15 @@ Deprecated / disabled
 It remains archived for reference, but is no longer the target production path.
 
 FTP Ingestion (Gateway Architecture)
+
 Architecture
+
 Wildlife Camera
 → Hetzner FTP Gateway
-→ /data/ftp-ingest/<user>/inbox
+→ /data/ftp-ingest/<technical_name>/inbox
 → FTP Worker
 → POST /api/ingest
+
 Gateway Characteristics
 
 Hetzner VPS
@@ -297,9 +322,11 @@ SSH key authentication only
 root login disabled
 
 Directory Model
+
 /data/ftp-ingest/
-   └── xview01/
+   └── <technical_name>/
         └── inbox/
+
 Permissions
 
 Owner: FTP user
@@ -323,7 +350,28 @@ Operational rule:
 Workers must target the active production endpoint.
 Deployment-specific Vercel URLs must not be treated as stable infrastructure endpoints.
 
+Provisioning Alignment (NEW)
+
+FTP and SMTP naming are now aligned with the canonical provisioning model.
+
+Derived routing rules:
+
+SMTP alias:
+<technical_name>@cams.venaris.io
+
+FTP username:
+<technical_name>
+
+FTP inbox path:
+/data/ftp-ingest/<technical_name>/inbox
+
+Manual label:
+<technical_name>
+
+This means ingest routing is now derived from a stable product-facing technical camera identity instead of ad hoc naming.
+
 2️⃣ Storage Layer
+
 Supabase Storage
 
 Bucket:
@@ -345,30 +393,29 @@ server-generated
 FTP gateway and SMTP gateway hold no persistent wildlife data.
 Supabase is the single source of truth.
 
-Multi-Tenant Structure (new)
+Multi-Tenant Structure (updated)
 
 Venaris now distinguishes between:
 
 organizations
-↓
-reviers
-↓
-cameras
-organizations
+├── organization_members
+├── reviers
+└── cameras
 
-Represents the tenant/customer boundary.
+Important architectural clarification (NEW)
 
-organization_members
+organizations and reviers are intentionally not merged.
 
-Maps authenticated users into organizations.
+Reason:
 
-reviers
+organization = administrative / commercial / tenant boundary
 
-Belong to one organization.
+revier = operational wildlife management area
 
-cameras
+A camera belongs administratively to an organization
+and may optionally be assigned to a revier.
 
-Belong to one revier.
+This replaces the earlier simplified model where cameras were treated as belonging only via revier.
 
 This enables:
 
@@ -380,10 +427,25 @@ future live customer tenant
 
 clean customer separation
 
+billing / ownership / role boundary on organization layer
+
+operational field logic on revier layer
+
+Example real-world mapping:
+
+Organization: B&T GbR
+
+Revier: Heubachwiesen
+
+Members: Bruno, Torsten, Agnes, Miriam, Laurent
+
+Cameras: Reolink, Zeiss, X-View
+
 Database Core Tables
+
 organizations
 
-Tenant/customer layer.
+Tenant / administrative / commercial layer.
 
 Fields:
 
@@ -403,6 +465,14 @@ created_at
 
 notes
 
+Current role:
+
+tenant boundary
+
+membership scope
+
+future billing / payment scope
+
 organization_members
 
 Maps users to organizations.
@@ -416,6 +486,24 @@ user_id
 role
 
 created_at
+
+Current role values:
+
+owner
+
+admin
+
+member
+
+viewer
+
+Current MVP permission direction:
+
+owner/admin may create cameras
+
+member may operate but not structurally provision
+
+viewer is read-only
 
 reviers
 
@@ -437,17 +525,31 @@ organization_id
 
 created_at
 
+boundary_geojson
+
+notes
+
+Current role:
+
+operational / field unit
+
+may carry boundaries, habitat, regional metadata
+
 cameras
 
 Wildlife sensors.
 
-Fields:
+Current fields include:
 
 id
+
+organization_id
 
 revier_id
 
 name
+
+technical_name
 
 location_name
 
@@ -455,11 +557,37 @@ import_method
 
 ingest_token
 
+brand
+
+model
+
+latitude
+
+longitude
+
+direction_deg
+
+is_active
+
+installed_at
+
+notes
+
 created_at
 
 last_seen_at
 
-Additional product-facing fields may evolve here over time.
+Important architecture decisions (NEW):
+
+cameras.id remains primary key
+
+cameras.technical_name is the canonical provisioning key
+
+organization_id is the administrative owner link
+
+revier_id is the optional operational assignment
+
+import_method and ingest_token remain temporarily as legacy compatibility fields
 
 camera_ingest_configs
 
@@ -497,7 +625,69 @@ notes
 
 created_at
 
-This is the key bridge between customer-facing camera objects and infrastructure-level routing.
+This is now the routing truth for ingest provisioning.
+
+Important architectural update (NEW)
+
+camera_ingest_configs is the new routing truth.
+
+Legacy compatibility remains temporarily in cameras:
+
+cameras.import_method
+
+cameras.ingest_token
+
+These fields stay for compatibility until the rest of the application / workers / pages are fully migrated.
+
+organization_camera_sequences (NEW)
+
+Technical sequence state per organization.
+
+Purpose:
+
+Allocate next camera number atomically per organization.
+
+Fields:
+
+organization_id
+
+last_sequence
+
+updated_at
+
+This enables race-safe technical name generation.
+
+Canonical Technical Name (NEW)
+
+Canonical provisioning key:
+
+technical_name
+
+Format:
+
+<organization-slug>-cam-<4-digit-sequence>
+
+Examples:
+
+demo-cam-0001
+
+test-cam-0005
+
+heubachwiesen-cam-0001
+
+Sequence logic:
+
+per organization
+
+increments monotonically
+
+numbers are never reused
+
+preferred camera lifecycle is deactivate, not delete
+
+Current intended numeric scope:
+
+0001–9999
 
 assets
 
@@ -641,11 +831,52 @@ notes
 
 updated_at
 
+Provisioning Function (NEW)
+
+Venaris now includes a database-driven camera provisioning function:
+
+create_camera_with_provisioning()
+
+Responsibilities:
+
+validate organization
+
+validate optional revier assignment
+
+allocate next organization sequence
+
+build technical_name
+
+generate secure ingest token
+
+create camera row
+
+create active ingest config row
+
+return provisioning result
+
+Important token decision:
+
+Provisioning generates a fresh secure token.
+
+The same token is written into both:
+
+cameras.ingest_token
+
+camera_ingest_configs.ingest_token
+
+Reason:
+
+keep the current system backward-compatible while shifting routing truth into camera_ingest_configs
+
+Vendor validation is now enforced against a controlled list.
+
 3️⃣ Intelligence Layer
 
 The Intelligence Layer converts images → ecological signals.
 
 Detection Pipeline
+
 asset
 ↓
 MegaDetector
@@ -663,7 +894,9 @@ event clustering
 event wildlife summary
 ↓
 event ranking / intelligence
+
 MegaDetector
+
 Purpose
 
 Detect:
@@ -675,7 +908,9 @@ human
 vehicle
 
 Model
+
 md_v1000.0.0-redwood.pt
+
 Output
 
 label
@@ -709,13 +944,17 @@ empty_confidence
 relevant
 
 Species Classification
+
 Model
 
 CLIP ViT-B/32
 
 Runner
+
 species/runner.py
+
 Process
+
 MegaDetector bbox
 ↓
 image crop
@@ -723,6 +962,7 @@ image crop
 CLIP zero-shot classification
 ↓
 taxonomy_species_v1
+
 Taxonomy v1
 
 roe_deer
@@ -756,8 +996,11 @@ crow
 other
 
 Classification threshold
+
 SPECIES_SIM_THRESHOLD=0.22
+
 Bounding box padding
+
 SPECIES_BBOX_PAD=0.10
 
 Validated examples:
@@ -857,6 +1100,7 @@ activity histograms
 management insights
 
 New Wildlife Summary Views
+
 asset_species_summary
 
 Purpose:
@@ -982,7 +1226,14 @@ smtp
 
 manual
 
+Important legacy note
+
+camera_health currently still depends on cameras.import_method.
+
+This is acceptable for MVP, but longer-term monitoring logic should derive from the active ingest configuration rather than legacy import_method fields.
+
 5️⃣ Application Layer
+
 Home (/)
 
 Currently still a more technical overview / earlier operational entry point.
@@ -1049,6 +1300,42 @@ technical routing visibility
 
 provisioning support
 
+Cameras New (/cameras/new) (NEW)
+
+Current purpose:
+
+real product camera setup flow
+
+Capabilities:
+
+protected route (authenticated)
+
+organization-context camera creation
+
+optional revier assignment
+
+method selection
+
+vendor selection
+
+optional location metadata
+
+optional position / direction metadata
+
+direct provisioning result in UI
+
+Provisioning result currently exposes:
+
+camera id
+
+technical name
+
+ingest token
+
+SMTP alias or FTP routing values or manual label
+
+This is the first true product-facing setup flow in the application.
+
 Ingest (/ingest)
 
 Technical monitoring.
@@ -1081,7 +1368,45 @@ asset grid
 
 relevance toggle
 
+Authentication Layer (NEW)
+
+Supabase Auth email/password login is now part of the MVP architecture.
+
+Current routes / components:
+
+/login
+
+proxy.ts
+
+server-side auth helper
+
+browser-side auth helper
+
+logout API route
+
+logout integrated into main navigation
+
+Protected route model:
+
+unauthenticated user → redirect to /login
+
+authenticated user → protected product area
+
+MVP role decision:
+
+camera creation allowed only for owner/admin
+
+Current organization context decision:
+
+for MVP, the first / only membership is used as active organization context
+
+full org switcher remains future work
+
+This means the Application Layer is now no longer only “server routes + dashboards.”
+It now contains the first real authenticated SaaS product mechanics.
+
 🧠 Relevance Model
+
 Current
 
 assets.relevant = system relevance signal from empty filtering
@@ -1190,6 +1515,34 @@ invalid aliases routed to Maildir invalid state
 
 no mailbox-per-camera dependency
 
+MVP Auth / Multitenancy Security Model (NEW)
+
+Supabase Auth provides user identity.
+
+organization_members defines tenant membership.
+
+MVP roles:
+
+owner
+
+admin
+
+member
+
+viewer
+
+Current authorization decision:
+
+camera creation only for owner/admin
+
+Important implementation split:
+
+session-bound auth checks use SSR auth client
+
+admin / DB / provisioning operations use service role server client
+
+This separation is intentional and must remain clear.
+
 📦 Runtime Documentation
 
 The Hetzner worker runtime is archived in the repository under:
@@ -1240,7 +1593,19 @@ visible intelligence dashboard
 
 seed-based dashboard validation
 
+database-driven camera provisioning
+
+authenticated multi-tenant product foundation
+
 Next phase:
+
+active organization context UX
+
+tenant-aware camera / event / import filtering
+
+role enforcement across relevant API routes
+
+revier setup UI
 
 wild pressure indicator
 
@@ -1254,6 +1619,42 @@ field validation
 
 later predictive wildlife modeling
 
+Honest Architecture Maturity Status
+
+Green:
+
+Ingestion
+
+AI pipeline
+
+Provisioning base
+
+Camera object model
+
+Auth foundation
+
+Navigation foundation
+
+Yellow:
+
+true multi-tenant UI consolidation
+
+active organization context UX
+
+role enforcement across all relevant routes
+
+tenant-aware camera / event / import filtering
+
+revier setup UI
+
+Still open:
+
+Wilddruck indicator
+
+dashboard consolidation
+
+go-live legal / branding / payment preparation
+
 Summary Architecture Statement
 
 Venaris now operates on this core intelligence chain:
@@ -1263,5 +1664,9 @@ Images → Assets → Detections → Asset Wildlife Summary → Event Wildlife S
 And on this core infrastructure chain for SMTP ingest:
 
 Camera → SMTP → Postfix → Maildir Queue → maildir-bridge → /api/ingest → Assets
+
+And on this new core product setup chain:
+
+User → Login → Active Organization Context → Create Camera → technical_name + ingest_token + routing config → operational ingest-ready camera
 
 Together these now form the architectural backbone for MVP 1.0.
