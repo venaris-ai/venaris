@@ -1,0 +1,16 @@
+[Unit]
+Description=Venaris FTP Provisioner
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/venaris-worker
+EnvironmentFile=/opt/venaris-worker/.env.provisioner
+ExecStart=/usr/bin/node /opt/venaris-worker/ftp-provisioner.mjs
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target
