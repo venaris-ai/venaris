@@ -33,6 +33,14 @@ type CreateResponse = {
       manualLabel: string | null;
     };
   };
+  ftpProvisioning?: {
+    host: string;
+    port: number;
+    username: string;
+    password: string;
+    path: string;
+    passiveMode: boolean;
+  };
 };
 
 const VENDORS = [
@@ -59,6 +67,10 @@ const METHODS = [
   { value: "manual", label: "Manual Import" },
 ] as const;
 
+function copyText(value: string) {
+  return navigator.clipboard.writeText(value);
+}
+
 export default function CreateCameraForm({ organizations, reviers }: Props) {
   const [organizationId, setOrganizationId] = useState(organizations[0]?.id ?? "");
   const [revierId, setRevierId] = useState("");
@@ -73,7 +85,8 @@ export default function CreateCameraForm({ organizations, reviers }: Props) {
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [result, setResult] = useState<CreateResponse["camera"] | null>(null);
+  const [result, setResult] = useState<CreateResponse | null>(null);
+  const [copyMsg, setCopyMsg] = useState("");
 
   const filteredReviers = useMemo(() => {
     return reviers.filter((r) => r.organization_id === organizationId);
@@ -84,6 +97,7 @@ export default function CreateCameraForm({ organizations, reviers }: Props) {
     setLoading(true);
     setError("");
     setResult(null);
+    setCopyMsg("");
 
     try {
       const res = await fetch("/api/cameras/create", {
@@ -112,7 +126,8 @@ export default function CreateCameraForm({ organizations, reviers }: Props) {
         return;
       }
 
-      setResult(json.camera);
+      setResult(json as CreateResponse);
+
       setCameraName("");
       setLocationName("");
       setLatitude("");
@@ -126,6 +141,21 @@ export default function CreateCameraForm({ organizations, reviers }: Props) {
       setLoading(false);
     }
   }
+
+  async function handleCopy(label: string, value: string | null | undefined) {
+    if (!value) return;
+    try {
+      await copyText(value);
+      setCopyMsg(`${label} copied.`);
+      window.setTimeout(() => setCopyMsg(""), 2000);
+    } catch {
+      setCopyMsg(`Could not copy ${label.toLowerCase()}.`);
+      window.setTimeout(() => setCopyMsg(""), 2000);
+    }
+  }
+
+  const camera = result?.camera ?? null;
+  const ftpProvisioning = result?.ftpProvisioning ?? null;
 
   return (
     <div className="space-y-6">
@@ -247,7 +277,7 @@ export default function CreateCameraForm({ organizations, reviers }: Props) {
           </div>
 
           <div>
-            <label className="mb-1 block text-sm font-medium">Direction (0-359, optional)</label>
+            <label className="mb-1 block text-sm font-medium">Direction (0–359, optional)</label>
             <input
               type="number"
               min={0}
@@ -288,45 +318,200 @@ export default function CreateCameraForm({ organizations, reviers }: Props) {
         </div>
       </form>
 
-      {result ? (
-        <div className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
-          <h2 className="text-lg font-semibold">Provisioning Result</h2>
-
-          <div className="mt-4 grid gap-3 text-sm">
-            <div>
-              <span className="font-medium">Camera ID:</span> {result.id}
-            </div>
-            <div>
-              <span className="font-medium">Technical Name:</span> {result.technicalName}
-            </div>
-            <div>
-              <span className="font-medium">Ingest Token:</span> {result.ingestToken}
-            </div>
-
-            {result.routing.smtpAlias ? (
-              <div>
-                <span className="font-medium">SMTP Alias:</span> {result.routing.smtpAlias}
-              </div>
-            ) : null}
-
-            {result.routing.ftpUsername ? (
-              <div>
-                <span className="font-medium">FTP Username:</span> {result.routing.ftpUsername}
-              </div>
-            ) : null}
-
-            {result.routing.ftpInboxPath ? (
-              <div>
-                <span className="font-medium">FTP Inbox Path:</span> {result.routing.ftpInboxPath}
-              </div>
-            ) : null}
-
-            {result.routing.manualLabel ? (
-              <div>
-                <span className="font-medium">Manual Label:</span> {result.routing.manualLabel}
-              </div>
-            ) : null}
+      {camera ? (
+        <div className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm space-y-5">
+          <div>
+            <h2 className="text-lg font-semibold">Provisioning Result</h2>
+            <p className="mt-1 text-sm text-neutral-600">
+              The camera has been created successfully. Save the provisioning data now.
+            </p>
           </div>
+
+          {copyMsg ? (
+            <div className="rounded-xl border border-neutral-200 bg-neutral-50 px-3 py-2 text-sm text-neutral-700">
+              {copyMsg}
+            </div>
+          ) : null}
+
+          <div className="grid gap-3 text-sm">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <span className="font-medium">Camera ID:</span> {camera.id}
+              </div>
+              <button
+                type="button"
+                onClick={() => handleCopy("Camera ID", camera.id)}
+                className="rounded-md border px-2 py-1 text-xs hover:bg-neutral-50"
+              >
+                Copy
+              </button>
+            </div>
+
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <span className="font-medium">Technical Name:</span> {camera.technicalName}
+              </div>
+              <button
+                type="button"
+                onClick={() => handleCopy("Technical Name", camera.technicalName)}
+                className="rounded-md border px-2 py-1 text-xs hover:bg-neutral-50"
+              >
+                Copy
+              </button>
+            </div>
+
+            <div className="flex items-start justify-between gap-3">
+              <div className="break-all">
+                <span className="font-medium">Ingest Token:</span> {camera.ingestToken}
+              </div>
+              <button
+                type="button"
+                onClick={() => handleCopy("Ingest Token", camera.ingestToken)}
+                className="rounded-md border px-2 py-1 text-xs hover:bg-neutral-50"
+              >
+                Copy
+              </button>
+            </div>
+          </div>
+
+          {ftpProvisioning ? (
+            <div className="space-y-4 rounded-2xl border border-neutral-200 bg-neutral-50 p-5">
+              <div>
+                <h3 className="text-base font-semibold">FTP Setup</h3>
+                <p className="mt-1 text-sm text-neutral-600">
+                  Enter these values into the camera now. The password is shown only once.
+                </p>
+              </div>
+
+              <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+                Important: store the FTP password now. It will not be shown again after this page.
+              </div>
+
+              <div className="grid gap-3 text-sm">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <span className="font-medium">FTP Server:</span> {ftpProvisioning.host}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleCopy("FTP Server", ftpProvisioning.host)}
+                    className="rounded-md border px-2 py-1 text-xs hover:bg-white"
+                  >
+                    Copy
+                  </button>
+                </div>
+
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <span className="font-medium">FTP Port:</span> {ftpProvisioning.port}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleCopy("FTP Port", String(ftpProvisioning.port))}
+                    className="rounded-md border px-2 py-1 text-xs hover:bg-white"
+                  >
+                    Copy
+                  </button>
+                </div>
+
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <span className="font-medium">FTP Username:</span> {ftpProvisioning.username}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleCopy("FTP Username", ftpProvisioning.username)}
+                    className="rounded-md border px-2 py-1 text-xs hover:bg-white"
+                  >
+                    Copy
+                  </button>
+                </div>
+
+                <div className="flex items-start justify-between gap-3 rounded-xl border border-neutral-200 bg-white px-3 py-3">
+                  <div>
+                    <span className="font-medium">FTP Password:</span> {ftpProvisioning.password}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleCopy("FTP Password", ftpProvisioning.password)}
+                    className="rounded-md border px-2 py-1 text-xs hover:bg-neutral-50"
+                  >
+                    Copy
+                  </button>
+                </div>
+
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <span className="font-medium">Path:</span> {ftpProvisioning.path}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleCopy("FTP Path", ftpProvisioning.path)}
+                    className="rounded-md border px-2 py-1 text-xs hover:bg-white"
+                  >
+                    Copy
+                  </button>
+                </div>
+
+                <div>
+                  <span className="font-medium">Passive Mode:</span>{" "}
+                  {ftpProvisioning.passiveMode ? "Enabled" : "Disabled"}
+                </div>
+              </div>
+            </div>
+          ) : null}
+
+          {!ftpProvisioning && camera.routing.smtpAlias ? (
+            <div className="space-y-4 rounded-2xl border border-neutral-200 bg-neutral-50 p-5">
+              <div>
+                <h3 className="text-base font-semibold">SMTP Setup</h3>
+                <p className="mt-1 text-sm text-neutral-600">
+                  Use this e-mail address in the camera configuration.
+                </p>
+              </div>
+
+              <div className="grid gap-3 text-sm">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <span className="font-medium">SMTP Alias:</span> {camera.routing.smtpAlias}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleCopy("SMTP Alias", camera.routing.smtpAlias)}
+                    className="rounded-md border px-2 py-1 text-xs hover:bg-white"
+                  >
+                    Copy
+                  </button>
+                </div>
+              </div>
+            </div>
+          ) : null}
+
+          {!ftpProvisioning && camera.routing.manualLabel ? (
+            <div className="space-y-4 rounded-2xl border border-neutral-200 bg-neutral-50 p-5">
+              <div>
+                <h3 className="text-base font-semibold">Manual Import Setup</h3>
+                <p className="mt-1 text-sm text-neutral-600">
+                  This camera is ready for manual uploads in the Import section.
+                </p>
+              </div>
+
+              <div className="grid gap-3 text-sm">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <span className="font-medium">Manual Label:</span> {camera.routing.manualLabel}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleCopy("Manual Label", camera.routing.manualLabel)}
+                    className="rounded-md border px-2 py-1 text-xs hover:bg-white"
+                  >
+                    Copy
+                  </button>
+                </div>
+              </div>
+            </div>
+          ) : null}
         </div>
       ) : null}
     </div>

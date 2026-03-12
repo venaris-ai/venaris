@@ -1,6 +1,6 @@
 Venaris – Architecture (MVP)
 
-Last updated: 2026-03-11 (Camera Provisioning Model + Multi-Tenant Auth + Organization/Revier Split Clarified)
+Last updated: 2026-03-12
 
 🎯 Vision
 
@@ -1670,3 +1670,433 @@ And on this new core product setup chain:
 User → Login → Active Organization Context → Create Camera → technical_name + ingest_token + routing config → operational ingest-ready camera
 
 Together these now form the architectural backbone for MVP 1.0.
+
+
+
+---
+
+## 2026-03-12 Architecture Extension – Secure FTP Provisioning + Retention + Manual Import Stabilization
+
+This section extends the architecture as of 2026-03-12.
+It is additive and does not invalidate earlier sections.
+
+### Secure FTP Provisioning Architecture (NEW)
+
+Venaris now supports fully automated FTP camera provisioning.
+
+The earlier FTP gateway architecture has evolved from:
+
+Camera
+→ FTP upload
+→ pre-created Linux user / static folder
+→ FTP worker
+→ /api/ingest
+
+to:
+
+User
+→ /cameras/new
+→ POST /api/cameras/create
+→ create_camera_with_provisioning()
+→ HTTPS call to Hetzner FTP Provisioner
+→ Linux user + password + directory lifecycle creation
+→ provisioning_status = ready
+→ camera configured by user
+→ FTP upload
+→ ftpdir-bridge
+→ /api/ingest
+
+This means FTP onboarding is now part of the real product flow,
+not an infrastructure-only admin task.
+
+### FTP Provisioner Runtime (NEW)
+
+A dedicated Hetzner provisioning runtime now exists.
+
+Service:
+
+venaris-ftp-provisioner.service
+
+Worker:
+
+/opt/venaris-worker/ftp-provisioner.mjs
+
+Responsibilities:
+
+- create Linux FTP user
+- assign ftp-ingest group
+- set camera-specific FTP password
+- create full directory lifecycle tree
+- enforce ownership and permissions
+- support password reset / disable / deprovision actions
+
+This runtime is intentionally separate from ingest workers.
+
+Reason:
+
+Provisioning is an administrative infrastructure action,
+not an ingestion action.
+
+### Provisioner Security Boundary (NEW)
+
+The FTP Provisioner is not publicly exposed on its raw worker port anymore.
+
+Internal runtime bind:
+
+127.0.0.1:8787
+
+Public endpoint:
+
+https://provisioner.venaris.io
+
+Protection model:
+
+- nginx reverse proxy
+- HTTPS via Let's Encrypt
+- bearer token authorization
+- UFW blocks raw port 8787 externally
+
+This creates a proper separation between:
+
+public TLS ingress
+and
+internal privileged provisioning runtime.
+
+### FTP Password Policy (UPDATED)
+
+Real-world camera validation showed that long generated passwords are not practical for many LTE wildlife cameras.
+
+Current MVP decision:
+
+FTP password length is reduced to 8 characters.
+
+Password properties:
+
+- random
+- camera-typable
+- shown once in UI
+- not stored for later retrieval in product UI
+
+This is an explicit usability-over-max-entropy MVP decision.
+
+### FTP Directory Lifecycle Model (NEW)
+
+The FTP gateway directory model now includes explicit lifecycle folders.
+
+Per camera:
+
+/data/ftp-ingest/<technical_name>/
+   inbox/
+   processed/
+   invalid/
+   error/
+
+Semantics:
+
+inbox
+=
+new uploaded files waiting for ingest
+
+processed
+=
+successful ingest archive (retention managed)
+
+invalid
+=
+non-image or structurally invalid files
+
+error
+=
+ingest failure / retry investigation bucket
+
+This moves FTP closer to the same operational lifecycle clarity already used by Maildir SMTP ingest.
+
+### FTP Worker Architecture Update (NEW)
+
+The old FTP worker architecture was based on a hardcoded map from ftp-user to ingest token.
+
+That model is now deprecated.
+
+Previous model:
+
+.env
+→ static ftp user
+→ static ingest token
+→ ftp-worker.mjs
+
+Current model:
+
+camera_ingest_configs
+→ method='ftp'
+→ is_active=true
+→ provisioning_status='ready'
+→ ftp_username / ftp_inbox_path / ingest_token
+→ ftpdir-bridge.mjs
+
+This means FTP ingest routing is now fully database-driven.
+
+### FTP Worker Service (NEW)
+
+Current service:
+
+venaris-ftpdir-bridge.service
+
+Worker:
+
+/opt/venaris-worker/ftpdir-bridge.mjs
+
+Repository copy:
+
+infrastructure/hetzner-worker/ftpdir-bridge.mjs
+
+Responsibilities:
+
+- load active FTP configs from DB
+- scan only ready FTP cameras
+- ensure file stability before ingest
+- compute SHA256
+- send multipart request to /api/ingest
+- move files into processed / invalid / error
+- run retention cleanup
+
+This aligns FTP ingestion operationally with the Maildir SMTP model.
+
+### Retention Lifecycle (NEW)
+
+Both SMTP and FTP workers now include retention cleanup.
+
+Reason:
+
+Hetzner is transport/runtime infrastructure, not long-term archive.
+
+Current retention intent:
+
+processed
+→ short operational window only
+
+invalid / error
+→ longer debugging window, but still temporary
+
+Architectural principle:
+
+Supabase remains the single persistent source of truth.
+Hetzner remains replaceable transport/runtime infrastructure.
+
+### SMTP Worker Architecture Update (NEW)
+
+Maildir SMTP worker now matches the quality level of the new FTP worker more closely.
+
+Enhancements now included:
+
+- Vercel protection bypass support
+- better redirect handling
+- retention cleanup
+- stricter config lookup discipline
+- readiness gating via provisioning_status
+
+This reduces the gap between SMTP and FTP operational maturity.
+
+### Provisioning Status as Runtime Gate (NEW)
+
+camera_ingest_configs.provisioning_status is now an important architectural control field.
+
+Meaning:
+
+pending
+=
+camera exists in product model, but runtime setup not yet completed
+
+ready
+=
+camera is operational and may be processed by workers / UI flows
+
+failed
+=
+provisioning failed, runtime not ready
+
+For MVP:
+
+- FTP cameras become ready only after successful Hetzner provisioning
+- SMTP cameras may become ready after alias/config activation
+- Manual cameras are now marked ready immediately because they require no infrastructure-side provisioning
+
+This field is now part of the real runtime architecture,
+not just metadata.
+
+### Manual Import Architecture Update (NEW)
+
+Manual import is no longer just a generic upload utility.
+
+It is now tied to the provisioning model.
+
+Current rules:
+
+- manual cameras get manual_label derived from technical_name
+- manual cameras are immediately provisioning_status='ready'
+- Import UI lists only ready manual cameras
+- upload route still requires cameraId
+- metadata.source='manual' enforced server-side
+
+This means manual import now behaves like a first-class ingest channel,
+not as a separate dev-only workaround.
+
+### Camera Create Flow Architecture Update (NEW)
+
+The /cameras/new product flow now has method-specific operational outcomes.
+
+For FTP:
+
+- creates DB object
+- provisions Hetzner runtime
+- returns host / port / username / password / path / passive mode
+
+For SMTP:
+
+- creates DB object
+- returns smtp alias
+
+For Manual:
+
+- creates DB object
+- returns manual label
+- camera is immediately ready for /import
+
+This means the camera setup flow is no longer only a metadata entry screen.
+It is now a real infrastructure-aware product provisioning surface.
+
+### UI Architecture Consequence (NEW)
+
+The product now contains a method-dependent setup result layer.
+
+The provisioning result UI is responsible for showing:
+
+FTP:
+- server
+- port
+- username
+- password
+- path
+- passive mode
+- one-time password warning
+
+SMTP:
+- smtp alias
+
+Manual:
+- manual label / import readiness
+
+This is the first place where the product visibly exposes different ingest channel setup semantics.
+
+### TLS Boundary Model (NEW)
+
+Hetzner-hosted subdomains now intentionally terminate TLS on Hetzner itself.
+
+Current model:
+
+venaris.io
+→ Vercel TLS
+
+provisioner.venaris.io
+→ Hetzner TLS
+
+cams.venaris.io
+→ Hetzner TLS
+
+This follows the architectural rule:
+
+TLS terminates where the service actually runs.
+
+This avoids mixing Vercel-facing and Hetzner-facing security boundaries.
+
+### Runtime Topology Update (NEW)
+
+Current intended active Hetzner runtime services:
+
+venaris-detection-worker.service
+venaris-maildir-bridge.service
+venaris-ftpdir-bridge.service
+venaris-ftp-provisioner.service
+
+Deprecated / retired:
+
+venaris-smtp-bridge.service
+venaris-ftp-worker.service
+
+This reflects the migration from:
+hardcoded bridge utilities
+to
+database-driven product runtime services.
+
+### Architecture Maturity Reassessment (UPDATED 2026-03-12)
+
+Green:
+
+- unified ingest contract
+- direct SMTP ingest
+- database-driven camera provisioning
+- secure FTP provisioning
+- manual import as first-class ingest channel
+- worker/runtime retention lifecycle
+- TLS hardened Hetzner service boundary
+- real end-to-end provisioning validation with physical camera
+
+Yellow:
+
+- deprovision / disable UX
+- camera setup UX polish
+- richer organization context handling
+- monitoring convergence from legacy import_method to active ingest config
+- stronger role enforcement in all provisioning-relevant routes
+
+Still open:
+
+- Wilddruck indicator
+- richer home dashboard consolidation
+- billing / legal / go-live layer
+- long-term worker parallelization strategy at very large camera counts
+
+### Updated Summary Architecture Statement
+
+Venaris now operates on this product + infrastructure chain:
+
+User
+→ Login
+→ Active Organization Context
+→ Create Camera
+→ technical_name + ingest_token + routing config
+→ optional infrastructure provisioning
+→ operational ingest-ready camera
+
+And on this FTP provisioning chain:
+
+User
+→ /cameras/new
+→ /api/cameras/create
+→ create_camera_with_provisioning()
+→ HTTPS Hetzner Provisioner
+→ Linux FTP user + folders + password
+→ camera configured in field
+→ ftpdir-bridge
+→ /api/ingest
+→ Assets
+
+And on this SMTP chain:
+
+Camera
+→ SMTP
+→ Postfix
+→ Maildir Queue
+→ maildir-bridge
+→ /api/ingest
+→ Assets
+
+And on this manual chain:
+
+User
+→ /import
+→ ready manual camera selection
+→ /api/upload
+→ ingestCore
+→ Assets
+
+Together these now form the current MVP 1.0 backbone.

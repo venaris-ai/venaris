@@ -6,16 +6,9 @@ import { useEffect, useRef, useState } from "react";
 type CameraRow = {
   id: string;
   name: string;
-  import_method: string | null;
-  health_status: "online" | "stale" | "offline" | "unknown" | string;
+  technicalName: string;
+  manualLabel: string | null;
 };
-
-function healthEmoji(status?: string) {
-  if (status === "online") return "🟢";
-  if (status === "stale") return "🟡";
-  if (status === "offline") return "🔴";
-  return "⚪";
-}
 
 export default function ImportPage() {
   const [cameras, setCameras] = useState<CameraRow[]>([]);
@@ -28,7 +21,7 @@ export default function ImportPage() {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   async function loadCameras() {
-    const res = await fetch("/api/camera-health", { cache: "no-store" });
+    const res = await fetch("/api/manual-cameras", { cache: "no-store" });
     const json = await res.json();
 
     if (!res.ok) {
@@ -39,8 +32,9 @@ export default function ImportPage() {
     const list = (json.items ?? []) as CameraRow[];
     setCameras(list);
 
-    // default camera selection (important for usability)
-    if (!cameraId && list.length > 0) setCameraId(list[0].id);
+    if (!cameraId && list.length > 0) {
+      setCameraId(list[0].id);
+    }
   }
 
   useEffect(() => {
@@ -49,7 +43,6 @@ export default function ImportPage() {
   }, []);
 
   function addFiles(newFiles: File[]) {
-    // Keep it simple for MVP: just append; server will dedup anyway.
     const merged = [...files, ...newFiles];
     setFiles(merged);
   }
@@ -57,25 +50,38 @@ export default function ImportPage() {
   function onPickFiles(e: React.ChangeEvent<HTMLInputElement>) {
     const picked = Array.from(e.target.files ?? []);
     if (picked.length) addFiles(picked);
-    // allow picking same file again
     e.target.value = "";
   }
 
   async function startImport() {
     setMsg("");
 
-    if (!cameraId) return setMsg("Bitte eine Kamera auswählen.");
-    if (!files.length) return setMsg("Bitte Dateien oder ZIP auswählen.");
+    if (!cameraId) {
+      setMsg("Bitte eine manuelle Kamera auswählen.");
+      return;
+    }
+
+    if (!files.length) {
+      setMsg("Bitte Dateien oder ZIP auswählen.");
+      return;
+    }
 
     setBusy(true);
+
     try {
       const fd = new FormData();
       fd.append("cameraId", cameraId);
       fd.append("channel", "import");
 
-      for (const f of files) fd.append("files", f);
+      for (const f of files) {
+        fd.append("files", f);
+      }
 
-      const res = await fetch("/api/upload", { method: "POST", body: fd });
+      const res = await fetch("/api/upload", {
+        method: "POST",
+        body: fd,
+      });
+
       const json = await res.json().catch(() => ({}));
 
       if (!res.ok || !json.ok) {
@@ -116,7 +122,6 @@ export default function ImportPage() {
       </div>
 
       <div className="rounded-xl border bg-white p-5 space-y-5">
-        {/* Camera */}
         <div className="space-y-2">
           <label className="text-sm font-medium">Ziel-Kamera</label>
           <select
@@ -124,20 +129,21 @@ export default function ImportPage() {
             value={cameraId}
             onChange={(e) => setCameraId(e.target.value)}
           >
-            {cameras.length === 0 && <option value="">(keine Kameras)</option>}
+            {cameras.length === 0 && (
+              <option value="">(keine manuellen Kameras verfügbar)</option>
+            )}
             {cameras.map((c) => (
               <option key={c.id} value={c.id}>
-                {healthEmoji(c.health_status)} {c.name}
-                {c.import_method ? ` · ${c.import_method}` : ""}
+                {c.name}
+                {c.technicalName ? ` · ${c.technicalName}` : ""}
               </option>
             ))}
           </select>
           <p className="text-xs text-gray-500">
-            Der Import wird dieser Kamera zugeordnet (für Events, Monitoring, Health).
+            Der Import wird einer als „manual“ provisionierten Kamera zugeordnet.
           </p>
         </div>
 
-        {/* Picker + Dropzone */}
         <div
           className={[
             "rounded-xl border-2 border-dashed p-5 transition",
@@ -171,7 +177,6 @@ export default function ImportPage() {
             </button>
           </div>
 
-          {/* Hidden input */}
           <input
             ref={fileInputRef}
             type="file"
@@ -182,11 +187,10 @@ export default function ImportPage() {
           />
 
           <div className="mt-4 text-xs text-gray-500">
-            Tipp: Du kannst auch einfach Dateien/ZIP hier reinziehen.
+            Tipp: Du kannst auch einfach Dateien oder ZIP hier reinziehen.
           </div>
         </div>
 
-        {/* Selected files summary */}
         <div className="flex items-center justify-between gap-3">
           <div className="text-sm text-gray-700">
             {files.length > 0 ? (

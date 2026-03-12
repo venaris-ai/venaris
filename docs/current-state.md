@@ -1,6 +1,6 @@
 Venaris – Current State
 
-Last updated: 2026-03-11 (Camera Provisioning Architecture + Multi-Tenant Auth Layer)
+Last updated: 2026-03-12
 
 ✅ System Status
 
@@ -1064,3 +1064,234 @@ Wilddruck indicator
 dashboard consolidation
 
 go-live legal / branding / payment preparation
+
+
+
+---
+
+## Infrastructure Security Hardening (NEW – 2026-03-12)
+
+Venaris infrastructure security model was significantly hardened.
+
+### FTP Provisioner Runtime
+
+New service:
+
+venaris-ftp-provisioner.service
+
+Worker:
+
+/opt/venaris-worker/ftp-provisioner.mjs
+
+Responsibilities:
+
+- create isolated Linux FTP user per camera
+- assign user to ftp-ingest group
+- generate random FTP password
+- create full directory lifecycle tree
+
+Directory structure per camera:
+
+/data/ftp-ingest/<technical_name>/
+  inbox/
+  processed/
+  invalid/
+  error/
+
+Permissions:
+
+- user owned
+- group ftp-ingest
+- SGID enforced
+- chroot isolation via vsftpd
+
+### Provisioner Network Hardening
+
+Provisioner runtime no longer exposed publicly on raw port.
+
+Internal runtime port:
+
+127.0.0.1:8787
+
+Public endpoint:
+
+https://provisioner.venaris.io
+
+Reverse proxy:
+
+nginx
+
+Firewall:
+
+Port 8787 CLOSED externally via UFW.
+
+Only ports open:
+
+21 (FTP)
+25 (SMTP)
+80 (HTTP)
+443 (HTTPS)
+
+### TLS Enablement (NEW)
+
+Let's Encrypt certificates successfully issued and deployed for:
+
+provisioner.venaris.io  
+cams.venaris.io  
+
+Certbot auto-renew enabled via system timer.
+
+---
+
+## FTP Password Policy Update (NEW – 2026-03-12)
+
+Original provisioning generated long crypto passwords.
+
+Real-world wildlife camera testing showed:
+
+many LTE cameras cannot accept long credentials.
+
+New policy:
+
+FTP password length = 8 characters.
+
+Password properties:
+
+random
+mixed case + digits
+shown only once in provisioning UI
+
+Passwords are not retrievable afterwards.
+
+---
+
+## FTP Worker Lifecycle Retention (NEW)
+
+FTP ingest worker now includes automatic lifecycle cleanup.
+
+Retention rules:
+
+processed → delete after 7 days  
+error → delete after 14 days  
+invalid → delete after 14 days  
+
+Purpose:
+
+prevent disk growth  
+maintain operational debugging window  
+keep Hetzner runtime storage lightweight  
+
+---
+
+## SMTP Worker Retention (NEW)
+
+Maildir bridge now includes lifecycle cleanup logic.
+
+Retention rules:
+
+processed → delete after 7 days  
+error → delete after 14 days  
+invalid → delete after 14 days  
+
+Queue folder "new" is never cleaned automatically.
+
+---
+
+## End-to-End Secure FTP Provisioning Validation (NEW)
+
+Full SaaS provisioning flow validated:
+
+1. User creates FTP camera via UI (/cameras/new)
+2. API calls create_camera_with_provisioning()
+3. Provisioner runtime creates Linux user + folders
+4. UI shows FTP configuration once
+5. Camera configured with credentials
+6. Image sent via FTP
+7. ftpdir-bridge processes image
+8. Asset appears in Supabase + Home dashboard
+
+This confirms:
+
+database provisioning  
+infrastructure provisioning  
+worker ingest routing  
+UI provisioning result display  
+real camera ingestion  
+
+All layers validated successfully.
+
+---
+
+## Manual Import Stabilization (NEW)
+
+Manual cameras now automatically receive:
+
+camera_ingest_configs.manual_label
+
+Import UI now filters for method=manual cameras only.
+
+Manual ingest validated:
+
+ZIP upload  
+multi-file upload  
+batch creation  
+dashboard visibility  
+
+---
+
+## Provisioning Runtime Topology (NEW)
+
+Current worker services on Hetzner:
+
+venaris-maildir-bridge.service  
+venaris-ftpdir-bridge.service  
+venaris-ftp-provisioner.service  
+venaris-detection-worker.service  
+
+Deprecated:
+
+venaris-smtp-bridge.service  
+venaris-ftp-worker.service  
+
+This reflects migration to:
+
+directory scanning ingestion  
+native SMTP MX ingest  
+database-driven provisioning  
+
+---
+
+## MVP Readiness Status Update (2026-03-12)
+
+Green:
+
+secure FTP provisioning  
+native SMTP ingest  
+manual import flow  
+AI detection pipeline  
+database provisioning architecture  
+TLS hardened infrastructure  
+retention lifecycle  
+real camera E2E validation  
+
+Yellow:
+
+camera create UI polish (copy UX)  
+active organization UX clarity  
+tenant filtering consistency  
+dashboard consolidation  
+
+Open:
+
+Wilddruck indicator  
+revier management UI  
+billing / go-live preparation  
+
+---
+
+
+
+
+
+
+

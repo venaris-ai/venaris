@@ -1,6 +1,6 @@
 Venaris – Dev Notes
 
-Last updated: 2026-03-11 (Camera Provisioning Model + Multi-Tenant Auth + Product Setup Flow)
+Last updated: 2026-03-12 (Secure FTP Provisioning + FTPDIR Bridge + SMTP/FTP Retention + Manual Import Stabilization)
 
 This file documents operational setup, real-world behavior, and important implementation details that are not purely architectural.
 
@@ -31,6 +31,16 @@ NEXT_PUBLIC_SUPABASE_URL
 NEXT_PUBLIC_SUPABASE_ANON_KEY
 
 SUPABASE_SERVICE_ROLE_KEY
+
+For local camera provisioning UI / API tests, local environment now also requires:
+
+FTP_PUBLIC_HOST
+
+FTP_PUBLIC_PORT
+
+HETZNER_PROVISIONER_URL
+
+HETZNER_PROVISIONER_TOKEN
 
 Optional:
 
@@ -99,7 +109,7 @@ Example metadata:
 
 {
   "source": "ftp",
-  "ftp_user": "xview01",
+  "ftp_user": "test-cam-0003",
   "filename": "IMG_1234.JPG"
 }
 
@@ -163,7 +173,7 @@ Worker handles redirects but still relies on correct base URL.
 
 ❌ Invalid ingest token
 
-Observed in new Maildir SMTP worker during direct SMTP migration.
+Observed in Maildir SMTP worker and later in FTPDIR bridge migration.
 
 Result:
 
@@ -171,7 +181,7 @@ Result:
 
 Root cause:
 
-camera_ingest_configs.ingest_token was not yet aligned with the live camera token.
+camera_ingest_configs.ingest_token not aligned with live camera token.
 
 Fix:
 
@@ -181,12 +191,12 @@ camera_ingest_configs.ingest_token
 
 Important architectural lesson:
 
-SMTP worker must no longer rely on hardcoded .env camera tokens.
+Workers must not rely on hardcoded .env camera tokens.
 Tokens must come from DB camera routing config.
 
 ❌ Unknown SMTP camera alias
 
-Observed during external SMTP tests with addresses such as:
+Observed during SMTP tests with addresses such as:
 
 test-cam-9999@cams.venaris.io
 
@@ -194,7 +204,7 @@ Result:
 
 Worker correctly logged:
 
-unknown camera alias
+unknown or not-ready smtp alias
 
 Fix:
 
@@ -230,6 +240,68 @@ Successful messages must be moved to:
 
 Maildir/processed
 
+❌ FTP camera inbox exists but worker does not ingest
+
+Observed during FTPDIR bridge migration.
+
+Typical causes:
+
+folder not created yet
+
+wrong ownership / permissions
+
+camera still points to old ftp user
+
+invalid ingest token in config
+
+Fix:
+
+verify Linux user exists
+
+verify /data/ftp-ingest/<technical_name>/inbox exists
+
+verify ownership + group ftp-ingest
+
+verify camera points to new technical_name-based ftp user
+
+verify camera_ingest_configs.ingest_token
+
+❌ Local /cameras/new fails with missing HETZNER_PROVISIONER_URL or HETZNER_PROVISIONER_TOKEN
+
+Observed during localhost UI test.
+
+Root cause:
+
+local .env.local did not include Hetzner provisioning env vars.
+
+Fix:
+
+add provisioning env vars to local .env.local and restart dev server.
+
+❌ create_camera_with_provisioning() failed with gen_random_bytes not found
+
+Observed during first full /api/cameras/create E2E test.
+
+Root cause:
+
+Function used:
+
+gen_random_bytes(...)
+
+while running with:
+
+SET search_path TO ''
+
+On Supabase, extension function needed schema qualification.
+
+Fix:
+
+Use:
+
+extensions.gen_random_bytes(...)
+
+inside the SQL function.
+
 ⚠️ Real Incident (2026-03-06)
 
 Symptom:
@@ -264,7 +336,7 @@ Workers must always reference the active production deployment.
 
 Long-term improvement:
 
-Prefer stable domain (e.g. venaris.ai) instead of ephemeral Vercel deployment URLs.
+Prefer stable domain instead of ephemeral Vercel deployment URLs.
 
 5️⃣ Import Adapter (Manual Channel)
 
@@ -277,6 +349,8 @@ Capabilities:
 multi-file upload
 
 ZIP upload (via JSZip)
+
+drag & drop
 
 Metadata:
 
@@ -301,6 +375,30 @@ UI:
 /import
 
 Human ingestion entry point.
+
+Manual Import Stabilization (NEW)
+
+Manual import is no longer treated as a generic upload against arbitrary cameras.
+
+Current rule:
+
+Import UI now lists only cameras where:
+
+camera_ingest_configs.method = 'manual'
+
+camera_ingest_configs.is_active = true
+
+camera_ingest_configs.provisioning_status = 'ready'
+
+Manual cameras now become ready automatically at creation time.
+
+Existing manual cameras were backfilled to:
+
+provisioning_status = 'ready'
+
+Manual ingest has now been validated end-to-end:
+
+camera creation → manual camera visible in import dropdown → upload → ingest batch visible in UI.
 
 6️⃣ SMTP Ingest (Current Production Path)
 
@@ -413,7 +511,8 @@ Catch-all regex file:
 
 Rule:
 
-/^.+@cams\.venaris\.io$/ venaris
+/^.+@cams.venaris.io
+$/ venaris
 
 This makes all mail to:
 
@@ -433,6 +532,17 @@ sudo ufw allow 25/tcp
 
 Without this, external SMTP delivery fails even if Postfix is listening.
 
+TLS / nginx note (NEW)
+
+HTTPS certificate for:
+
+cams.venaris.io
+
+is now active via nginx + certbot.
+
+This is not required for SMTP transport itself,
+but it hardens the Hetzner-side subdomain boundary and keeps infrastructure naming consistent.
+
 9️⃣ Maildir Queue
 
 Location:
@@ -442,8 +552,11 @@ Location:
 Relevant folders:
 
 new
+
 processed
+
 invalid
+
 error
 
 Meaning:
@@ -459,6 +572,28 @@ error → ingest/API failure
 Operational benefit:
 
 This gives clear SMTP ingest state visibility and prevents loops.
+
+Retention (NEW)
+
+Maildir bridge now includes retention cleanup.
+
+Current retention policy:
+
+processed → 7 days
+
+invalid → 14 days
+
+error → 14 days
+
+new is never auto-cleaned.
+
+Purpose:
+
+prevent unbounded disk growth on Hetzner
+
+keep useful operational debugging window
+
+keep Hetzner as runtime/transport layer, not long-term archive
 
 🔟 Maildir Worker (Production)
 
@@ -490,6 +625,8 @@ send multipart request to /api/ingest
 
 move mail to correct Maildir state
 
+run retention cleanup
+
 Recipient resolution order:
 
 X-Original-To
@@ -504,6 +641,7 @@ select *
 from camera_ingest_configs
 where smtp_alias = <recipient>
   and is_active = true
+  and provisioning_status = 'ready'
 limit 1
 
 Resolved values used by worker:
@@ -513,6 +651,24 @@ camera_id
 vendor
 
 ingest_token
+
+Important practical improvement:
+
+maildir-bridge now supports Vercel protection bypass consistently like the new ftpdir-bridge.
+
+Environment:
+
+/opt/venaris-worker/.env.maildir
+
+Important entries:
+
+NEXT_PUBLIC_SUPABASE_URL
+
+SUPABASE_SERVICE_ROLE_KEY
+
+VENARIS_INGEST_URL
+
+VERCEL_BYPASS_TOKEN
 
 1️⃣1️⃣ FTP Gateway (Hetzner)
 
@@ -559,23 +715,63 @@ local_umask=007
 
 ⚠️ local_umask=007 is critical so files are group-writable and worker can delete.
 
-1️⃣2️⃣ FTP Worker (Production)
+Directory Lifecycle (NEW)
 
-Location:
+Per FTP camera, provisioning now creates:
 
-/opt/venaris-worker
+/data/ftp-ingest/<technical_name>/
+inbox/
+processed/
+invalid/
+error/
 
-Service:
+This is no longer just a static inbox-only setup.
+
+1️⃣2️⃣ FTP Worker (Current Production Path)
+
+Previous FTP production worker:
 
 venaris-ftp-worker
 
+Status:
+
+DISABLED / retired
+
+Reason:
+
+It depended on hardcoded .env token mapping and static inbox scanning.
+
+That architecture has been replaced.
+
+Current FTP production worker
+
+Service:
+
+venaris-ftpdir-bridge.service
+
+Worker:
+
+/opt/venaris-worker/ftpdir-bridge.mjs
+
+Repository copy:
+
+infrastructure/hetzner-worker/ftpdir-bridge.mjs
+
 Environment:
 
-/opt/venaris-worker/.env
+/opt/venaris-worker/.env.ftpdir
 
 Behavior:
 
-poll inbox
+load active FTP configs from DB
+
+filter for method='ftp'
+
+filter for is_active=true
+
+filter for provisioning_status='ready'
+
+scan only provisioned inboxes
 
 ensure file size stable
 
@@ -583,17 +779,75 @@ compute SHA256
 
 send multipart FormData (metadata.source="ftp")
 
-delete file on success
+move files into processed / invalid / error
 
-keep file on error (retry via polling)
+run retention cleanup
 
-Example dedup log:
+delete only after successful ingest
 
-accepted=0 skippedDup=1
+Important architectural lesson:
 
-Inbox remains clean.
+FTP worker must now behave analogously to SMTP:
+DB-driven, not .env-driven.
 
-1️⃣3️⃣ Detection Architecture (Operational)
+1️⃣3️⃣ FTP Provisioner Runtime (NEW)
+
+Purpose:
+
+Automate Linux-side FTP onboarding for real product camera provisioning.
+
+Service:
+
+venaris-ftp-provisioner.service
+
+Runtime:
+
+/opt/venaris-worker/ftp-provisioner.mjs
+
+Environment:
+
+/opt/venaris-worker/.env.provisioner
+
+Public URL:
+
+https://provisioner.venaris.io
+
+Internal bind:
+
+127.0.0.1:8787
+
+Security model:
+
+raw worker port not exposed externally
+
+nginx reverse proxy
+
+HTTPS via Let's Encrypt
+
+bearer token required
+
+UFW port 8787 closed
+
+Responsibilities:
+
+create Linux ftp user
+
+assign ftp-ingest group
+
+set camera FTP password
+
+create full directory tree
+
+set ownership + SGID permissions
+
+support password reset / disable / deprovision actions
+
+Practical result:
+
+FTP provisioning is now part of the SaaS product flow,
+not an external manual sysadmin step.
+
+1️⃣4️⃣ Detection Architecture (Operational)
 
 Detection is asynchronous.
 
@@ -630,7 +884,7 @@ upsert_event_for_asset(...)
 
 Aggregation remains DB-centric.
 
-1️⃣4️⃣ MegaDetector (Stage 1)
+1️⃣5️⃣ MegaDetector (Stage 1)
 
 Purpose:
 
@@ -672,7 +926,7 @@ Important new interpretation:
 
 meta.md_idx is now the canonical key for wildlife counting within one image.
 
-1️⃣5️⃣ Empty Filter (System Decision)
+1️⃣6️⃣ Empty Filter (System Decision)
 
 Rule (v1):
 
@@ -702,7 +956,7 @@ best_animal_score = 0 → empty=true
 
 This is intended for MVP.
 
-1️⃣6️⃣ Species Classifier (Stage 2)
+1️⃣7️⃣ Species Classifier (Stage 2)
 
 Approach:
 
@@ -749,7 +1003,7 @@ Observed ambiguity:
 red_deer can be classified as roe_deer in IR night imagery.
 This is treated as model ambiguity, not system malfunction.
 
-1️⃣7️⃣ Venaris Wildlife Taxonomy v1 (DB-backed)
+1️⃣8️⃣ Venaris Wildlife Taxonomy v1 (DB-backed)
 
 Taxonomy is a Postgres ENUM:
 
@@ -791,7 +1045,7 @@ Table mapping:
 
 detections.species
 
-1️⃣8️⃣ Detection Tables (Current Truth)
+1️⃣9️⃣ Detection Tables (Current Truth)
 
 Tables exist:
 
@@ -815,7 +1069,7 @@ count(distinct meta.md_idx)
 
 instead.
 
-1️⃣9️⃣ Counting Model v1 (Practical Implementation Note)
+2️⃣0️⃣ Counting Model v1 (Practical Implementation Note)
 
 This is now an active operational rule.
 
@@ -851,7 +1105,7 @@ event wildlife interpretation
 
 dashboard observation logic
 
-2️⃣0️⃣ Visible Intelligence Layer (Operational)
+2️⃣1️⃣ Visible Intelligence Layer (Operational)
 
 Visible Intelligence is now running in the application.
 
@@ -929,7 +1183,7 @@ Current solution:
 
 fetchEventSpeciesSummaryChunked(...)
 
-2️⃣1️⃣ Seed Intelligence Dataset
+2️⃣2️⃣ Seed Intelligence Dataset
 
 Seed generator:
 
@@ -978,9 +1232,7 @@ Practical implication:
 Seed assets may show “Kein Preview” in UI.
 That is expected and acceptable.
 
-2️⃣2️⃣ Camera Provisioning Model (NEW)
-
-This is the main architectural milestone of today.
+2️⃣3️⃣ Camera Provisioning Model
 
 Venaris now has a database-driven camera provisioning model.
 
@@ -1140,20 +1392,37 @@ ftp_username = test-cam-0005
 
 ftp_inbox_path = /data/ftp-ingest/test-cam-0005/inbox
 
-2️⃣3️⃣ Product Data Model Update (NEW)
+New practical provisioning rules (2026-03-12)
 
-The product model was clarified today.
+Manual cameras now become:
 
+provisioning_status = 'ready'
+
+immediately.
+
+Reason:
+
+manual cameras require no Hetzner-side runtime provisioning.
+
+FTP cameras remain:
+
+pending
+
+until successful Hetzner provisioning has completed.
+
+SMTP cameras are expected to become operational only when alias/config state is ready.
+
+2️⃣4️⃣ Product Data Model Update
 Organization
-=
+
 administrative / tenant / billing / ownership layer
 
 Revier
-=
+
 operational wildlife management area
 
 Camera
-=
+
 administratively belongs to organization
 and may optionally be assigned to a revier
 
@@ -1170,9 +1439,9 @@ revier is the operational field scope
 This means:
 
 organizations
-  ├── organization_members
-  ├── cameras
-  └── reviers
+├── organization_members
+├── cameras
+└── reviers
 
 Cameras no longer conceptually depend only on revier.
 
@@ -1182,7 +1451,7 @@ cameras.organization_id = administrative ownership
 
 cameras.revier_id = optional operational assignment
 
-2️⃣4️⃣ Authentication / Multitenancy MVP Layer (NEW)
+2️⃣5️⃣ Authentication / Multitenancy MVP Layer
 
 Supabase Auth is now integrated.
 
@@ -1206,6 +1475,8 @@ src/lib/supabaseAuthServer.ts
 
 src/lib/supabaseBrowser.ts
 
+src/lib/auth.ts
+
 Important implementation note:
 
 Service-role DB access and session-based auth access are intentionally separated.
@@ -1225,29 +1496,33 @@ Use:
 supabaseBrowser()
 for browser login/session handling
 
-Important debugging lesson from today:
+Important debugging lesson:
 
-Browser auth client must use SSR-compatible browser client logic.
+auth helper must normalize organizations relation consistently.
 
-Using plain supabase-js browser client alongside SSR auth flow caused session detection mismatch between browser and protected server routes.
+Observed issue:
 
-After switching supabaseBrowser() to SSR-compatible browser client, login + protected routes worked correctly.
+organizations relation can resolve as object or array depending on runtime shape.
+
+Fix:
+
+normalize relation in src/lib/auth.ts before selecting active organization.
 
 Current protected routes:
 
 /
 
- /cameras
+/cameras
 
- /cameras/new
+/cameras/new
 
- /events
+/events
 
- /intelligence
+/intelligence
 
- /import
+/import
 
- /ingest
+/ingest
 
 Role model decision (MVP):
 
@@ -1272,7 +1547,7 @@ Active organization context decision:
 For MVP, the first / only membership is treated as active organization context.
 Full org switcher is still pending.
 
-2️⃣5️⃣ Product UI Update (NEW)
+2️⃣6️⃣ Product UI Update
 
 New camera creation route implemented:
 
@@ -1310,7 +1585,9 @@ Uses:
 
 create_camera_with_provisioning()
 
-Current provisioning result UI shows:
+Current provisioning result UI now shows method-dependent setup output:
+
+For SMTP:
 
 camera id
 
@@ -1318,7 +1595,41 @@ technical name
 
 ingest token
 
-SMTP alias or FTP routing values or manual label
+SMTP alias
+
+For FTP:
+
+camera id
+
+technical name
+
+ingest token
+
+FTP host
+
+FTP port
+
+FTP username
+
+FTP password
+
+path
+
+passive mode
+
+For Manual:
+
+camera id
+
+technical name
+
+ingest token
+
+manual label
+
+Important practical rule:
+
+FTP password is shown once in UI and should be stored by the user immediately.
 
 Navigation now includes logout directly.
 
@@ -1328,8 +1639,10 @@ login
 → protected navigation
 → create camera
 → receive provisioning data
+→ configure real ingest channel
+→ send first image
 
-2️⃣6️⃣ Worker Operation & Debug Routine
+2️⃣7️⃣ Worker Operation & Debug Routine
 
 SSH:
 
@@ -1357,7 +1670,7 @@ sudo systemctl status venaris-maildir-bridge --no-pager -l
 
 Logs:
 
-journalctl -u venaris-maildir-bridge -f
+sudo journalctl -u venaris-maildir-bridge -f
 
 Queue counts:
 
@@ -1366,13 +1679,39 @@ find /home/venaris/Maildir/processed -type f | wc -l
 find /home/venaris/Maildir/error -type f | wc -l
 find /home/venaris/Maildir/invalid -type f | wc -l
 
+FTPDIR bridge
+
+Status:
+
+sudo systemctl status venaris-ftpdir-bridge --no-pager -l
+
+Logs:
+
+sudo journalctl -u venaris-ftpdir-bridge -f
+
+FTP provisioner
+
+Status:
+
+sudo systemctl status venaris-ftp-provisioner --no-pager -l
+
+Logs:
+
+sudo journalctl -u venaris-ftp-provisioner -f
+
 Postfix
 
 Live logs:
 
 sudo journalctl -u postfix -f
 
-2️⃣7️⃣ Known Risk Areas (Current)
+nginx
+
+Status:
+
+sudo systemctl status nginx --no-pager -l
+
+2️⃣8️⃣ Known Risk Areas (Current)
 
 hard backlog runs can take time
 
@@ -1382,7 +1721,7 @@ LTE partial uploads
 
 token leakage risk
 
-some camera provisioning still manual outside final UI coverage
+copy UX in provisioning result still basic
 
 model updates require versioning discipline
 
@@ -1391,6 +1730,8 @@ current event clustering is time-window based only
 event clustering can over-group artificial test uploads from different species if imported too close together
 
 Maildir worker currently scans directory sequentially (not yet parallelized)
+
+FTPDIR bridge currently scans sequentially (not yet parallelized)
 
 SMTP spam filtering is still basic and should be hardened later
 
@@ -1408,7 +1749,7 @@ camera/event/import lists not yet fully filtered by active organization everywhe
 
 membership administration UI not yet implemented
 
-2️⃣8️⃣ Important Production Truths
+2️⃣9️⃣ Important Production Truths
 
 Hetzner is a gateway and worker runtime layer. It must remain operationally replaceable.
 
@@ -1438,7 +1779,19 @@ camera_ingest_configs
 
 not in .env.
 
+FTP camera routing truth also now lives in:
+
+camera_ingest_configs
+
+not in .env.
+
 Provisioning truth now lives in database and no longer in manual naming conventions alone.
+
+Public provisioning is HTTPS terminated at:
+
+provisioner.venaris.io
+
+Raw provisioning port 8787 is not externally exposed.
 
 📦 Infrastructure Archiving
 
@@ -1448,11 +1801,15 @@ infrastructure/hetzner-worker/
 
 Included components:
 
-ftp-worker.mjs
+ftp-worker.mjs (deprecated path)
+
+ftpdir-bridge.mjs (current FTP path)
 
 smtp-bridge.mjs (deprecated path)
 
 maildir-bridge.mjs (current SMTP path)
+
+ftp-provisioner.mjs
 
 MegaDetector runner
 
@@ -1480,6 +1837,10 @@ Maildir queue-based SMTP processing
 
 DB-driven SMTP camera resolution
 
+DB-driven FTP camera resolution
+
+automated secure FTP provisioning
+
 wildlife-only event scoring
 
 asset-level wildlife summaries
@@ -1497,6 +1858,10 @@ real login/logout flow
 protected product routes
 
 membership-based multitenancy foundation
+
+manual import as first-class ready camera flow
+
+real FTP camera end-to-end validation from UI provisioning to image ingest
 
 This is enough to continue with:
 
@@ -1516,7 +1881,7 @@ where & when refinement
 
 field validation preparation
 
-Honest Project Status (2026-03-11)
+Honest Project Status (2026-03-12)
 
 Green:
 
@@ -1526,11 +1891,15 @@ AI pipeline
 
 Provisioning base
 
+Secure FTP provisioning
+
 Camera object model
 
 Auth foundation
 
 Navigation foundation
+
+Manual import stabilization
 
 Yellow:
 
@@ -1543,6 +1912,8 @@ role enforcement across all relevant routes
 tenant-aware camera / event / import filtering
 
 revier setup UI
+
+camera create result UX polish
 
 Still open:
 

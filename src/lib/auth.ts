@@ -4,14 +4,16 @@ import { supabaseAuthServer } from "@/lib/supabaseAuthServer";
 
 export type OrganizationRole = "owner" | "admin" | "member" | "viewer";
 
+type OrganizationRow = {
+  id: string;
+  name: string;
+  slug: string;
+};
+
 type MembershipRow = {
   organization_id: string;
   role: OrganizationRole;
-  organizations: Array<{
-    id: string;
-    name: string;
-    slug: string;
-  }> | null;
+  organizations: OrganizationRow | OrganizationRow[] | null;
 };
 
 export async function requireUser() {
@@ -53,6 +55,14 @@ export async function getMembershipsForUser(userId: string) {
   return (data ?? []) as unknown as MembershipRow[];
 }
 
+function normalizeOrganization(
+  organizations: MembershipRow["organizations"]
+): OrganizationRow | null {
+  if (!organizations) return null;
+  if (Array.isArray(organizations)) return organizations[0] ?? null;
+  return organizations;
+}
+
 export async function requireActiveOrganization() {
   const user = await requireUser();
   const memberships = await getMembershipsForUser(user.id);
@@ -62,7 +72,7 @@ export async function requireActiveOrganization() {
   }
 
   const activeMembership = memberships[0];
-  const activeOrganization = activeMembership.organizations?.[0] ?? null;
+  const activeOrganization = normalizeOrganization(activeMembership.organizations);
 
   if (!activeOrganization) {
     throw new Error("Active organization not found");

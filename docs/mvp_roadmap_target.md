@@ -1,8 +1,7 @@
 Venaris – MVP Roadmap Target (Version 1.0)
 
+Last updated: 2026-03-12 (Real Camera Provisioning Validation + Direct FTP Flow Confirmed)
 
-
-Last updated: 2026-03-11 (Camera Provisioning + Multi-Tenant Auth + Product Setup Layer)
 
 
 
@@ -1028,6 +1027,62 @@ first real product setup flow operational.
 
 
 
+🟢 Phase 2.8 – Real Camera Provisioning Validation (DONE)
+
+This phase validated the full real-world camera setup loop.
+
+Goal:
+
+Confirm that database-driven provisioning works end-to-end with real hardware.
+
+Validated Flow:
+
+User
+→ Login
+→ Create Camera (/cameras/new)
+→ Receive technical provisioning data
+→ Configure real camera (FTP / SMTP)
+→ Trigger capture
+→ Image arrives in ingest pipeline
+→ Asset visible in Home + Ingest + Events
+
+Validation Results:
+
+✔ technical_name provisioning works
+
+✔ per-organization sequence increments correctly
+
+✔ FTP routing derived automatically from technical_name
+
+✔ ingest token synchronization between legacy and routing config confirmed
+
+✔ real FTP camera upload successfully processed
+
+✔ ingest batch visible in UI
+
+✔ asset created correctly
+
+✔ detection pipeline triggered
+
+✔ event clustering working
+
+✔ camera health updated
+
+Important product insight:
+
+Camera provisioning is now no longer theoretical or seed-based.
+It has been validated with a real hardware ingest cycle.
+
+Delivery:
+
+Real product loop (camera setup → wildlife ingest) confirmed operational.
+
+
+
+
+
+
+
 🟡 Phase 3 – Visible Intelligence Layer
 
 
@@ -1383,6 +1438,10 @@ delivery:
 
 
 first cohesive multi-tenant user experience.
+
+Additional requirement identified:
+
+Ensure camera lists, ingest views and event feeds are filtered by active organization context consistently.
 
 
 
@@ -1746,6 +1805,8 @@ Role-protected camera setup working | ⏳
 
 Tenant-aware UI coherent enough for MVP | ⏳
 
+Real camera provisioning loop validated | ✅
+
 
 
 🚀 After Version 1.0
@@ -1863,4 +1924,18 @@ Next focus:
 turning wildlife observations into actionable ecological insights
 
 while making the product operationally usable for real organizations.
+
+
+Real-world ingest validation has reduced the main remaining risks
+from infrastructure uncertainty to product UX and tenant coherence.
+
+The next stability gains will come from:
+
+organization-context visibility
+role enforcement completeness
+tenant-aware filtering
+dashboard consolidation
+
+
+
 
