@@ -69,10 +69,18 @@ const FTP_PUBLIC_PORT = Number(process.env.FTP_PUBLIC_PORT || "21");
 const HETZNER_PROVISIONER_URL = process.env.HETZNER_PROVISIONER_URL || "";
 const HETZNER_PROVISIONER_TOKEN = process.env.HETZNER_PROVISIONER_TOKEN || "";
 
-function generateFtpPassword(): string {
-  // Kamera-tauglich, keine problematischen Sonderzeichen
-  return crypto.randomBytes(18).toString("base64url");
+function generateFtpPassword(length = 8): string {
+  const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789";
+  let out = "";
+
+  for (let i = 0; i < length; i += 1) {
+    const idx = crypto.randomInt(0, alphabet.length);
+    out += alphabet[idx];
+  }
+
+  return out;
 }
+
 
 async function updateProvisioningStatus(params: {
   cameraId: string;
