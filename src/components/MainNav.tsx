@@ -6,11 +6,9 @@ import { usePathname } from "next/navigation";
 
 const items = [
   { href: "/", label: "Home" },
-  { href: "/intelligence", label: "Intelligence" },
-  { href: "/events", label: "Events" },
+  { href: "/wildlife", label: "Wildlife" },
   { href: "/cameras", label: "Cameras" },
-  { href: "/import", label: "Import" },
-  { href: "/ingest", label: "Ingest" },
+  { href: "/orga", label: "Orga" },
 ];
 
 export default function MainNav() {

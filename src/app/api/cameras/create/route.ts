@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import crypto from "node:crypto";
 import { supabaseServer } from "@/lib/supabaseServer";
+import { requireOrganizationRole } from "@/lib/auth";
 
 type Vendor =
   | "berger&schröter"
@@ -22,7 +23,6 @@ type Vendor =
 type Method = "smtp" | "ftp" | "manual";
 
 type Payload = {
-  organizationId: string;
   cameraName: string;
   method: Method;
   vendor: Vendor;
@@ -33,6 +33,8 @@ type Payload = {
   directionDeg?: number | null;
   notes?: string | null;
 };
+
+
 
 type ProvisioningRow = {
   camera_id: string;
@@ -159,10 +161,12 @@ async function provisionFtpOnHetzner(params: {
 export async function POST(req: NextRequest) {
   try {
     const body = (await req.json()) as Partial<Payload>;
+const { activeMembership } = await requireOrganizationRole(["owner", "admin"]);
+const activeOrganization = activeMembership.organizations;
 
-    if (!body.organizationId) {
-      return NextResponse.json({ error: "organizationId required" }, { status: 400 });
-    }
+if (!activeOrganization) {
+  return NextResponse.json({ error: "active organization not found" }, { status: 400 });
+}
 
     if (!body.cameraName || !body.cameraName.trim()) {
       return NextResponse.json({ error: "cameraName required" }, { status: 400 });
@@ -188,7 +192,7 @@ export async function POST(req: NextRequest) {
     const supabase = supabaseServer();
 
     const { data, error } = await supabase.rpc("create_camera_with_provisioning", {
-      p_organization_id: body.organizationId,
+      p_organization_id: activeOrganization.id,
       p_camera_name: body.cameraName.trim(),
       p_method: body.method,
       p_vendor: body.vendor,

@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { supabaseServer } from "@/lib/supabaseServer";
 import { supabaseAuthServer } from "@/lib/supabaseAuthServer";
+import { cookies } from "next/headers";
 
 export type OrganizationRole = "owner" | "admin" | "member" | "viewer";
 
@@ -15,6 +16,8 @@ type MembershipRow = {
   role: OrganizationRole;
   organizations: OrganizationRow | OrganizationRow[] | null;
 };
+
+const ACTIVE_ORG_COOKIE = "venaris_active_org";
 
 export async function requireUser() {
   const supabase = await supabaseAuthServer();
@@ -71,7 +74,13 @@ export async function requireActiveOrganization() {
     throw new Error("User has no organization membership");
   }
 
-  const activeMembership = memberships[0];
+  const cookieStore = await cookies();
+  const requestedOrganizationId = cookieStore.get(ACTIVE_ORG_COOKIE)?.value ?? null;
+
+  let activeMembership =
+    memberships.find((m) => m.organization_id === requestedOrganizationId) ??
+    memberships[0];
+
   const activeOrganization = normalizeOrganization(activeMembership.organizations);
 
   if (!activeOrganization) {
@@ -80,13 +89,21 @@ export async function requireActiveOrganization() {
 
   return {
     user,
-    memberships,
+    memberships: memberships.map((membership) => ({
+      ...membership,
+      organizations: normalizeOrganization(membership.organizations),
+    })),
     activeMembership: {
       ...activeMembership,
       organizations: activeOrganization,
     },
   };
 }
+
+
+
+
+
 
 export async function requireOrganizationRole(
   allowedRoles: OrganizationRole[]

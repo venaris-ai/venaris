@@ -1,6 +1,9 @@
 // src/app/ingest/page.tsx
 export const dynamic = "force-dynamic";
 
+import { supabaseServer } from "@/lib/supabaseServer";
+import { requireActiveOrganization } from "@/lib/auth";
+
 type Batch = {
   id: string;
   camera_id: string;
@@ -72,11 +75,55 @@ function formatUtcTimestamp(value?: string | null) {
 }
 
 export default async function IngestPage() {
-  const base = process.env.VENARIS_BASE_URL ?? "http://localhost:3000";
-  const res = await fetch(`${base}/api/ingest-batches?limit=50`, { cache: "no-store" });
+  const { activeMembership } = await requireActiveOrganization();
+  const activeOrganization = activeMembership.organizations;
 
-  const json = await res.json().catch(() => ({}));
-  const items: Batch[] = json?.items ?? [];
+  let items: Batch[] = [];
+  let apiError: string | null = null;
+
+  if (!activeOrganization) {
+    apiError = "active organization not found";
+  } else {
+    const supabase = supabaseServer();
+
+    const { data: cameras, error: camerasError } = await supabase
+      .from("cameras")
+      .select("id")
+      .eq("organization_id", activeOrganization.id);
+
+    if (camerasError) {
+      apiError = camerasError.message;
+    } else {
+      const allowedCameraIds = (cameras ?? []).map((c) => c.id);
+
+      if (allowedCameraIds.length > 0) {
+        const { data, error } = await supabase
+          .from("ingest_batches")
+          .select(
+            `
+            id,
+            camera_id,
+            received_at,
+            source,
+            file_count,
+            status,
+            error_summary,
+            meta,
+            cameras ( id, name )
+          `
+          )
+          .in("camera_id", allowedCameraIds)
+          .order("received_at", { ascending: false })
+          .limit(50);
+
+        if (error) {
+          apiError = error.message;
+        } else {
+          items = (data ?? []) as Batch[];
+        }
+      }
+    }
+  }
 
   return (
     <div className="mx-auto max-w-6xl p-6">
@@ -157,8 +204,8 @@ export default async function IngestPage() {
         </table>
       </div>
 
-      {!res.ok && (
-        <p className="mt-3 text-sm text-red-700">API error: {JSON.stringify(json)}</p>
+      {apiError && (
+        <p className="mt-3 text-sm text-red-700">API error: {apiError}</p>
       )}
     </div>
   );

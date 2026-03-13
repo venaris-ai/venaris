@@ -43,10 +43,13 @@ export default async function NewCameraPage() {
         </p>
       </div>
 
-      <CreateCameraForm
-        organizations={[activeOrganization as Organization]}
-        reviers={(reviers ?? []) as Revier[]}
-      />
+<CreateCameraForm
+  organization={activeOrganization as Organization}
+  reviers={(reviers ?? []) as Revier[]}
+/>
+
+
+
     </main>
   );
 }

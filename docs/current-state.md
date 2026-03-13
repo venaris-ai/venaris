@@ -2,6 +2,8 @@ Venaris – Current State
 
 Last updated: 2026-03-12
 
+
+
 ✅ System Status
 
 Venaris currently operates as a functional early SaaS wildlife intelligence platform with real camera ingestion and authenticated tenant access.
@@ -23,6 +25,8 @@ authenticated product setup flow
 organization-based multitenancy foundation
 
 Infrastructure and core intelligence pipeline are operational.
+
+
 
 📡 Ingestion Layer
 
@@ -52,6 +56,8 @@ transport/runtime replaceability
 
 Supabase remains the single persistent storage layer.
 
+
+
 🤖 AI Processing Layer
 
 The asynchronous detection worker pipeline is operational.
@@ -80,6 +86,8 @@ Event feed is ranked by ecological relevance.
 
 Detection pipeline is production-validated with real hardware ingest.
 
+
+
 🧠 Visible Intelligence Layer
 
 First operational wildlife intelligence UI is live.
@@ -102,13 +110,15 @@ Counting model prevents blind overcounting across repeated frames.
 
 Configurable species weights influence event relevance scoring.
 
+
+
 📷 Camera Product Model
 
 Venaris now includes a database-driven provisioning architecture.
 
 Camera identity is defined by:
 
-canonical technical_name
+canonical technical\_name
 
 per-organization sequence
 
@@ -132,7 +142,9 @@ cameras preferably deactivated, not deleted
 
 Real end-to-end provisioning validation with physical camera ingest has been confirmed.
 
-🔐 Authentication & Multitenancy
+
+
+🔐 Authentication \& Multitenancy
 
 Supabase Auth email/password login is active.
 
@@ -155,6 +167,8 @@ camera provisioning allowed for owner/admin
 Active organization context currently derived from first membership.
 
 Full organization switcher not yet implemented.
+
+
 
 🖥 Product Setup Flow
 
@@ -182,6 +196,8 @@ FTP cameras become ready after runtime provisioning.
 
 SMTP cameras become ready after alias activation.
 
+
+
 🏗 Infrastructure Topology
 
 Production runtime components:
@@ -208,6 +224,8 @@ Transport/runtime infrastructure is intentionally replaceable.
 
 TLS boundaries terminate at the service host.
 
+
+
 🟢 Current Green Areas
 
 Unified ingestion across SMTP / FTP / Manual
@@ -232,6 +250,8 @@ Membership-based multitenancy foundation
 
 Real camera ingest loop validated
 
+
+
 🟡 Current Yellow Areas
 
 Active organization context visibility in UI
@@ -244,9 +264,11 @@ Camera setup result UX polish
 
 Dashboard consolidation into operational home surface
 
-Monitoring migration from legacy import_method to ingest config logic
+Monitoring migration from legacy import\_method to ingest config logic
 
 Revier management UI
+
+
 
 🔴 Still Open for MVP 1.0
 
@@ -260,6 +282,8 @@ Member administration UI
 
 Billing / legal / go-live preparation
 
+
+
 🎯 Immediate Development Focus
 
 coherent tenant-aware product surface
@@ -271,3 +295,4 @@ intelligence UI refinement
 first wildlife pressure signal
 
 field validation readiness
+

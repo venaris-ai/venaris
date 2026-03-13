@@ -1,8 +1,10 @@
+// src/app/events/[id]/page.tsx
 export const runtime = "nodejs";
 
 import Link from "next/link";
 import { supabaseServer } from "@/lib/supabaseServer";
 import AssetGrid from "./AssetGrid";
+import { requireActiveOrganization } from "@/lib/auth";
 
 function fmt(ts: string | null) {
   if (!ts) return "—";
@@ -24,7 +26,8 @@ function scoreBadge(score: number | null) {
 
 export default async function EventDetailPage(props: any) {
   const supabase = supabaseServer();
-
+  const { activeMembership } = await requireActiveOrganization();
+  const activeOrganization = activeMembership.organizations;
   const params = await Promise.resolve(props?.params);
   const eventId: string | undefined = params?.id;
 
@@ -76,11 +79,34 @@ export default async function EventDetailPage(props: any) {
     );
   }
 
+
   const { data: camera } = await supabase
     .from("cameras")
-    .select("id,name,location_name")
+    .select("id,name,location_name,organization_id")
     .eq("id", event.camera_id)
     .single();
+
+  if (!activeOrganization || !camera || camera.organization_id !== activeOrganization.id) {
+    return (
+      <main className="space-y-6">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h1 className="text-3xl font-semibold">Event</h1>
+            <p className="text-sm text-gray-600">Details & Assets</p>
+          </div>
+          <Link href="/events" className="rounded-md border px-3 py-2 text-sm">
+            ← Zurück
+          </Link>
+        </div>
+
+        <div className="rounded-xl border p-4 text-sm text-red-600">
+          Event nicht gefunden oder nicht erlaubt.
+        </div>
+      </main>
+    );
+  }
+
+
 
   const { data: eventAssets, error: assetsErr } = await supabase
     .from("event_assets")

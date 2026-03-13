@@ -1,24 +1,55 @@
 // src/app/api/ingest-batches/route.ts
 import { NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
+import { supabaseServer } from "@/lib/supabaseServer";
+import { requireActiveOrganization } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
-function getServiceSupabase() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-  return createClient(url, serviceKey, { auth: { persistSession: false } });
-}
-
 export async function GET(req: Request) {
   try {
-    const supabase = getServiceSupabase();
+    const { activeMembership } = await requireActiveOrganization();
+    const activeOrganization = activeMembership.organizations;
+
+    if (!activeOrganization) {
+      return NextResponse.json(
+        { error: "active organization not found" },
+        { status: 400 }
+      );
+    }
+
+    const supabase = supabaseServer();
     const { searchParams } = new URL(req.url);
 
-    const limit = Math.min(Number(searchParams.get("limit") || 50), 200);
-    const source = searchParams.get("source"); // ftp | smtp | ...
-    const status = searchParams.get("status"); // ok | error | processing | ...
+    const limitRaw = Number(searchParams.get("limit") || 50);
+    const limit = Number.isFinite(limitRaw)
+      ? Math.min(Math.max(limitRaw, 1), 200)
+      : 50;
+
+    const source = searchParams.get("source");
+    const status = searchParams.get("status");
     const cameraId = searchParams.get("cameraId");
+
+    const { data: cameras, error: camerasError } = await supabase
+      .from("cameras")
+      .select("id")
+      .eq("organization_id", activeOrganization.id);
+
+    if (camerasError) {
+      return NextResponse.json(
+        { error: "camera_lookup_failed", details: camerasError.message },
+        { status: 500 }
+      );
+    }
+
+    const allowedCameraIds = (cameras ?? []).map((c) => c.id);
+
+    if (allowedCameraIds.length === 0) {
+      return NextResponse.json({ ok: true, items: [] });
+    }
+
+    if (cameraId && !allowedCameraIds.includes(cameraId)) {
+      return NextResponse.json({ ok: true, items: [] });
+    }
 
     let q = supabase
       .from("ingest_batches")
@@ -35,16 +66,19 @@ export async function GET(req: Request) {
         cameras ( id, name )
       `
       )
+      .in("camera_id", cameraId ? [cameraId] : allowedCameraIds)
       .order("received_at", { ascending: false })
       .limit(limit);
 
     if (source) q = q.eq("source", source);
     if (status) q = q.eq("status", status);
-    if (cameraId) q = q.eq("camera_id", cameraId);
 
     const { data, error } = await q;
     if (error) {
-      return NextResponse.json({ error: "query_failed", details: error.message }, { status: 500 });
+      return NextResponse.json(
+        { error: "query_failed", details: error.message },
+        { status: 500 }
+      );
     }
 
     return NextResponse.json({ ok: true, items: data ?? [] });

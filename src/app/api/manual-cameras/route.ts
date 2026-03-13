@@ -1,10 +1,22 @@
+// src/app/api/manual-cameras/route.ts
 export const runtime = "nodejs";
 
 import { NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabaseServer";
+import { requireOrganizationRole } from "@/lib/auth";
 
 export async function GET() {
   try {
+    const { activeMembership } = await requireOrganizationRole(["owner", "admin", "member"]);
+    const activeOrganization = activeMembership.organizations;
+
+    if (!activeOrganization) {
+      return NextResponse.json(
+        { error: "active organization not found" },
+        { status: 400 }
+      );
+    }
+
     const supabase = supabaseServer();
 
     const { data, error } = await supabase
@@ -20,6 +32,7 @@ export async function GET() {
           manual_label
         )
       `)
+      .eq("organization_id", activeOrganization.id)
       .eq("camera_ingest_configs.method", "manual")
       .eq("camera_ingest_configs.is_active", true)
       .eq("camera_ingest_configs.provisioning_status", "ready")

@@ -6,31 +6,11 @@ Scope of this document
 
 This document tracks the MVP delivery plan for Venaris.
 
-It defines:
+It defines: MVP scope, Milestones, Phase Status, done vs open work, next priorities, success criteria
 
-MVP scope
+It does not document: runtime file paths, service configs, operational commands, debugging procedures, deep architecture prose
 
-milestones
 
-phase status
-
-done vs open work
-
-next priorities
-
-success criteria
-
-It does not document:
-
-runtime file paths
-
-service configs
-
-operational commands
-
-debugging procedures
-
-deep architecture prose
 
 Target Delivery
 
@@ -71,6 +51,8 @@ Organization-based multitenancy foundation
 
 Secure FTP provisioning validated with real camera flow
 
+
+
 Not included
 
 Population model
@@ -85,6 +67,8 @@ Invite / self-service signup flow
 
 Fine-grained permission matrix beyond MVP roles
 
+
+
 MVP statement
 
 Version 1.0 = work simplification + visible intelligence + first real product operation
@@ -97,6 +81,8 @@ Processing Layer	worker orchestration
 Intelligence Layer	Detection v1 (MegaDetector + species classifier)
 Monitoring Layer	health + KPIs
 Application Layer	dashboard + insight views + authenticated product setup
+
+
 📆 Execution Window
 
 Start: 04.03.2026
@@ -216,7 +202,7 @@ Delivery:
 
 SMTP and FTP ingest are both infrastructure-controlled and stable
 
-🟢 Phase 2.6 – Product Model & Provisioning Foundation (DONE)
+🟢 Phase 2.6 – Product Model \& Provisioning Foundation (DONE)
 
 Goal:
 Turn cameras into a real product object with provisioning identity and routing.
@@ -233,13 +219,13 @@ cameras may optionally belong to reviers
 
 cameras.id remains PK
 
-cameras.technical_name becomes canonical provisioning key
+cameras.technical\_name becomes canonical provisioning key
 
-camera_ingest_configs becomes routing truth
+camera\_ingest\_configs becomes routing truth
 
 legacy camera ingest fields remain temporarily for compatibility
 
-technical_name model – DONE
+technical\_name model – DONE
 
 canonical format established
 
@@ -263,7 +249,7 @@ Delivery:
 
 camera provisioning architecture operational
 
-🟢 Phase 2.7 – Auth & Multi-Tenant Product Foundation (DONE)
+🟢 Phase 2.7 – Auth \& Multi-Tenant Product Foundation (DONE)
 
 Goal:
 Create first real SaaS-style product access model.
@@ -280,7 +266,7 @@ Protected product areas now require authentication.
 
 Membership Model – DONE (foundation)
 
-organization_members role model active
+organization\_members role model active
 
 MVP roles defined
 
@@ -318,11 +304,11 @@ User
 
 Validated results:
 
-technical_name provisioning works
+technical\_name provisioning works
 
 per-organization sequence increments correctly
 
-FTP routing derived automatically from technical_name
+FTP routing derived automatically from technical\_name
 
 token synchronization confirmed
 
@@ -341,6 +327,8 @@ camera health updated
 Delivery:
 
 real product loop confirmed operational
+
+
 
 🟡 Phase 3 – Visible Intelligence Layer
 
@@ -439,7 +427,9 @@ Delivery target:
 
 owner/admin-only structural actions consistently enforced
 
-🔴 Phase 4 – Wilddruck & Dashboard
+
+
+🔴 Phase 4 – Wilddruck \& Dashboard
 23.03 – Wilddruck Indicator v1
 
 Goal:
@@ -460,7 +450,7 @@ Delivery target:
 
 complete MVP dashboard surface
 
-25.03 – Load & Stability Test
+25.03 – Load \& Stability Test
 
 Goal:
 
@@ -490,6 +480,8 @@ Delivery target:
 
 clean detection output for MVP freeze
 
+
+
 🟣 Finalization Phase
 30.03 – Field Validation Day
 
@@ -517,6 +509,8 @@ Delivery target:
 
 Venaris v1.0 complete
 
+
+
 🧩 Cross-Cutting Focus
 
 Do continuously:
@@ -535,6 +529,8 @@ keep setup flow product-facing
 
 improve setup result UX without reopening provisioning architecture
 
+
+
 📊 MVP Success Criteria (31.03)
 Feature	Status
 MegaDetector runs automatically	✅
@@ -552,6 +548,8 @@ Organization-based multitenancy foundation active	✅
 Role-protected camera setup working	⏳
 Tenant-aware UI coherent enough for MVP	⏳
 Real camera provisioning loop validated	✅
+
+
 🚀 After Version 1.0
 Version 2.0
 
@@ -583,6 +581,8 @@ prediction layer
 
 stronger wildlife intelligence moat
 
+
+
 🧠 Strategic Note
 
 Infrastructure is now stable.
@@ -608,6 +608,8 @@ database-driven camera provisioning
 
 authenticated tenant-aware product access
 
+
+
 The main remaining risks are now less about infrastructure uncertainty and more about:
 
 product UX coherence
@@ -618,7 +620,10 @@ dashboard composition
 
 role enforcement completeness
 
+
+
 Next focus
 
 Turn wildlife observations into actionable ecological insight
 while making the product coherent and operationally usable for real organizations.
+

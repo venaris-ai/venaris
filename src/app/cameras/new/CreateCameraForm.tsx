@@ -15,7 +15,7 @@ type Revier = {
 };
 
 type Props = {
-  organizations: Organization[];
+  organization: Organization;
   reviers: Revier[];
 };
 
@@ -71,8 +71,9 @@ function copyText(value: string) {
   return navigator.clipboard.writeText(value);
 }
 
-export default function CreateCameraForm({ organizations, reviers }: Props) {
-  const [organizationId, setOrganizationId] = useState(organizations[0]?.id ?? "");
+
+export default function CreateCameraForm({ organization, reviers }: Props) {
+  const organizationId = organization.id;
   const [revierId, setRevierId] = useState("");
   const [cameraName, setCameraName] = useState("");
   const [method, setMethod] = useState<"smtp" | "ftp" | "manual">("smtp");
@@ -164,24 +165,12 @@ export default function CreateCameraForm({ organizations, reviers }: Props) {
         className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm"
       >
         <div className="grid gap-5 md:grid-cols-2">
-          <div className="md:col-span-2">
-            <label className="mb-1 block text-sm font-medium">Organization</label>
-            <select
-              value={organizationId}
-              onChange={(e) => {
-                setOrganizationId(e.target.value);
-                setRevierId("");
-              }}
-              className="w-full rounded-xl border border-neutral-300 px-3 py-2"
-              required
-            >
-              {organizations.map((org) => (
-                <option key={org.id} value={org.id}>
-                  {org.name} ({org.slug})
-                </option>
-              ))}
-            </select>
-          </div>
+<div className="md:col-span-2">
+  <label className="mb-1 block text-sm font-medium">Organization</label>
+  <div className="w-full rounded-xl border border-neutral-200 bg-neutral-50 px-3 py-2 text-sm text-neutral-700">
+    {organization.name} ({organization.slug})
+  </div>
+</div>
 
           <div className="md:col-span-2">
             <label className="mb-1 block text-sm font-medium">Camera Name</label>

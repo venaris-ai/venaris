@@ -5,6 +5,7 @@ import { NextResponse } from "next/server";
 import JSZip from "jszip";
 import { supabaseServer } from "@/lib/supabaseServer";
 import { ingestFiles, safeJsonParse } from "@/lib/ingestCore";
+import { requireOrganizationRole } from "@/lib/auth";
 
 const MAX_FILES = 500; // MVP Guard
 const MAX_ZIP_BYTES = 150 * 1024 * 1024; // 150MB Guard
@@ -59,9 +60,8 @@ async function extractImagesFromZip(zipFile: File): Promise<File[]> {
       entry.name.split("/").pop() || `image-${Date.now()}.jpg`;
     const ct = guessContentType(filename);
 
-    // Buffer from JSZip (Node). Then copy into a TS-safe Uint8Array with real ArrayBuffer.
-    const buf = await entry.async("nodebuffer"); // => Buffer
-    const u8 = Uint8Array.from(buf); // TS-safe BlobPart (fresh ArrayBuffer)
+    const buf = await entry.async("nodebuffer");
+    const u8 = Uint8Array.from(buf);
     out.push(new File([u8], filename, { type: ct }));
 
     if (out.length >= MAX_FILES) break;
@@ -72,12 +72,40 @@ async function extractImagesFromZip(zipFile: File): Promise<File[]> {
 
 export async function POST(req: Request) {
   try {
+    const { activeMembership } = await requireOrganizationRole(["owner", "admin", "member"]);
+    const activeOrganization = activeMembership.organizations;
+
+    if (!activeOrganization) {
+      return NextResponse.json(
+        { error: "active organization not found" },
+        { status: 400 }
+      );
+    }
+
     const supabase = supabaseServer();
     const formData = await req.formData();
 
     const cameraId = (formData.get("cameraId") as string | null)?.trim() ?? null;
     if (!cameraId) {
       return NextResponse.json({ error: "cameraId required" }, { status: 400 });
+    }
+
+    const { data: camera, error: cameraError } = await supabase
+      .from("cameras")
+      .select("id, organization_id")
+      .eq("id", cameraId)
+      .maybeSingle();
+
+    if (cameraError) {
+      return NextResponse.json({ error: cameraError.message }, { status: 500 });
+    }
+
+    if (!camera) {
+      return NextResponse.json({ error: "camera not found" }, { status: 404 });
+    }
+
+    if (camera.organization_id !== activeOrganization.id) {
+      return NextResponse.json({ error: "not allowed" }, { status: 403 });
     }
 
     // Backward compatible: accept single + multi
@@ -98,7 +126,6 @@ export async function POST(req: Request) {
     const channel = (formData.get("channel") as string | null) ?? "upload";
     const capturedAtOverride = (formData.get("capturedAt") as string | null) ?? null;
 
-    // Expand ZIPs + keep direct images
     const expanded: File[] = [];
     for (const f of incomingFiles) {
       if (isZipFile(f)) {
@@ -110,7 +137,6 @@ export async function POST(req: Request) {
       if (expanded.length >= MAX_FILES) break;
     }
 
-    // Filter to images only (safety)
     const files = expanded.filter((f) => isImageName(f.name)).slice(0, MAX_FILES);
 
     if (files.length === 0) {
@@ -120,11 +146,10 @@ export async function POST(req: Request) {
       );
     }
 
-    // Enforce manual source here
     const metadata = {
       ...clientMeta,
       source: "manual",
-      channel, // "import" oder "upload"
+      channel,
       file_count: files.length,
       adapter: "upload",
     };

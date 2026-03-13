@@ -1,7 +1,9 @@
+// src/app/events/page.tsx
 export const runtime = "nodejs";
 
 import Link from "next/link";
 import { supabaseServer } from "@/lib/supabaseServer";
+import { requireActiveOrganization } from "@/lib/auth";
 
 function fmt(ts: string | null) {
   if (!ts) return "—";
@@ -22,13 +24,75 @@ function scoreBadge(score: number | null) {
 }
 
 export default async function EventsPage() {
+  const { activeMembership } = await requireActiveOrganization();
+  const activeOrganization = activeMembership.organizations;
+
+  if (!activeOrganization) {
+    return (
+      <main className="space-y-6">
+        <div>
+          <h1 className="text-3xl font-semibold">Events</h1>
+          <p className="text-sm text-gray-600">
+            Priorisierte Event-Zusammenfassungen
+          </p>
+        </div>
+
+        <div className="rounded-xl border p-4 text-sm text-red-600">
+          Active organization not found.
+        </div>
+      </main>
+    );
+  }
+
   const supabase = supabaseServer();
+
+  const { data: cameras, error: camerasError } = await supabase
+    .from("cameras")
+    .select("id,name,location_name")
+    .eq("organization_id", activeOrganization.id);
+
+  if (camerasError) {
+    return (
+      <main className="space-y-6">
+        <div>
+          <h1 className="text-3xl font-semibold">Events</h1>
+          <p className="text-sm text-gray-600">
+            Priorisierte Event-Zusammenfassungen
+          </p>
+        </div>
+
+        <div className="rounded-xl border p-4 text-sm text-red-600">
+          Fehler: {camerasError.message}
+        </div>
+      </main>
+    );
+  }
+
+  const allowedCameraIds = (cameras ?? []).map((c) => c.id);
+
+  if (allowedCameraIds.length === 0) {
+    return (
+      <main className="space-y-6">
+        <div>
+          <h1 className="text-3xl font-semibold">Events</h1>
+          <p className="text-sm text-gray-600">
+            Priorisierte Event-Zusammenfassungen nach Relevanz
+          </p>
+        </div>
+
+        <div className="rounded-xl border p-4 text-sm text-gray-600">
+          Noch keine Events vorhanden.
+        </div>
+      </main>
+    );
+  }
 
   const { data: events, error } = await supabase
     .from("event_feed")
     .select(
       "id,camera_id,start_at,end_at,asset_count,top_species,top_count,relevance_score"
     )
+    .in("camera_id", allowedCameraIds)
     .order("relevance_score", { ascending: false, nullsFirst: false })
     .order("end_at", { ascending: false })
     .limit(100);
@@ -50,27 +114,14 @@ export default async function EventsPage() {
     );
   }
 
-  const cameraIds = Array.from(
-    new Set((events ?? []).map((e) => e.camera_id).filter(Boolean))
+  const camerasById = Object.fromEntries(
+    (cameras ?? []).map((c) => [
+      c.id,
+      c.name
+        ? `${c.name}${c.location_name ? ` (${c.location_name})` : ""}`
+        : c.id,
+    ])
   );
-
-  let camerasById: Record<string, string> = {};
-
-  if (cameraIds.length > 0) {
-    const { data: cameras } = await supabase
-      .from("cameras")
-      .select("id,name,location_name")
-      .in("id", cameraIds);
-
-    camerasById = Object.fromEntries(
-      (cameras ?? []).map((c) => [
-        c.id,
-        c.name
-          ? `${c.name}${c.location_name ? ` (${c.location_name})` : ""}`
-          : c.id,
-      ])
-    );
-  }
 
   return (
     <main className="space-y-6">

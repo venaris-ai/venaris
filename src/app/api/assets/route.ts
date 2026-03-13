@@ -3,9 +3,20 @@ export const runtime = "nodejs";
 
 import { NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabaseServer";
+import { requireActiveOrganization } from "@/lib/auth";
 
 export async function GET(req: Request) {
   try {
+    const { activeMembership } = await requireActiveOrganization();
+    const activeOrganization = activeMembership.organizations;
+
+    if (!activeOrganization) {
+      return NextResponse.json(
+        { error: "active organization not found" },
+        { status: 400 }
+      );
+    }
+
     const supabase = supabaseServer();
     const url = new URL(req.url);
 
@@ -17,16 +28,35 @@ export async function GET(req: Request) {
       ? Math.min(Math.max(limitRaw, 1), 200)
       : 30;
 
+    const { data: cameras, error: camerasError } = await supabase
+      .from("cameras")
+      .select("id")
+      .eq("organization_id", activeOrganization.id);
+
+    if (camerasError) {
+      return NextResponse.json({ error: camerasError.message }, { status: 500 });
+    }
+
+    const allowedCameraIds = (cameras ?? []).map((c) => c.id);
+
+    if (allowedCameraIds.length === 0) {
+      return NextResponse.json({ assets: [] });
+    }
+
+    if (cameraId && !allowedCameraIds.includes(cameraId)) {
+      return NextResponse.json({ assets: [] });
+    }
+
     let q = supabase
       .from("assets_v")
       .select(
         "id,camera_id,storage_path,status,created_at,relevant,empty,empty_confidence,relevant_effective"
       )
+      .in("camera_id", cameraId ? [cameraId] : allowedCameraIds)
       .order("created_at", { ascending: false })
       .limit(limit);
 
     if (onlyRelevant) q = q.eq("relevant_effective", true);
-    if (cameraId) q = q.eq("camera_id", cameraId);
 
     const { data, error } = await q;
 
