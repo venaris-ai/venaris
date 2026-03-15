@@ -1,5 +1,4 @@
 // src/app/cameras/page.tsx
-// src/app/cameras/page.tsx
 "use client";
 
 import Link from "next/link";
@@ -108,7 +107,9 @@ export default function CamerasPage() {
     const next: Record<string, string> = {};
     for (const a of items) {
       try {
-        const res = await fetch(`/api/asset-url?path=${encodeURIComponent(a.storage_path)}`);
+        const res = await fetch(
+          `/api/asset-url?path=${encodeURIComponent(a.storage_path)}`
+        );
         const json = await res.json();
         if (json.url) next[a.id] = json.url;
       } catch {
@@ -143,7 +144,9 @@ export default function CamerasPage() {
       if (cameraId) params.set("cameraId", cameraId);
       if (onlyRelevant) params.set("onlyRelevant", "true");
 
-      const res = await fetch(`/api/assets?${params.toString()}`, { cache: "no-store" });
+      const res = await fetch(`/api/assets?${params.toString()}`, {
+        cache: "no-store",
+      });
       const json = await res.json();
 
       if (!res.ok) {
@@ -318,7 +321,7 @@ export default function CamerasPage() {
 
         <div className="flex flex-wrap gap-2">
           <Link
-            href="/cameras/list"
+            href="/cameras/health"
             className="rounded-md border px-3 py-2 text-sm hover:bg-gray-50"
           >
             Health
@@ -330,19 +333,19 @@ export default function CamerasPage() {
             Create New
           </Link>
           <Link
-            href="/events"
+            href="/cameras/events"
             className="rounded-md border px-3 py-2 text-sm hover:bg-gray-50"
           >
             Events
           </Link>
           <Link
-            href="/import"
+            href="/cameras/import"
             className="rounded-md border px-3 py-2 text-sm hover:bg-gray-50"
           >
             Import
           </Link>
           <Link
-            href="/ingest"
+            href="/cameras/ingest"
             className="rounded-md border px-3 py-2 text-sm hover:bg-gray-50"
           >
             Ingest
@@ -359,31 +362,43 @@ export default function CamerasPage() {
 
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
         <div className="rounded-xl border bg-white p-4">
-          <div className="text-xs uppercase tracking-wide text-gray-500">Cameras</div>
+          <div className="text-xs uppercase tracking-wide text-gray-500">
+            Cameras
+          </div>
           <div className="mt-2 text-3xl font-semibold">{cameras.length}</div>
-          <div className="mt-1 text-sm text-gray-600">aktive Kameraauswahl</div>
+          <div className="mt-1 text-sm text-gray-600">
+            aktive Kameraauswahl
+          </div>
         </div>
 
         <div className="rounded-xl border bg-white p-4">
-          <div className="text-xs uppercase tracking-wide text-gray-500">Online</div>
+          <div className="text-xs uppercase tracking-wide text-gray-500">
+            Online
+          </div>
           <div className="mt-2 text-3xl font-semibold">{healthCounts.online}</div>
           <div className="mt-1 text-sm text-gray-600">zuletzt gesehen</div>
         </div>
 
         <div className="rounded-xl border bg-white p-4">
-          <div className="text-xs uppercase tracking-wide text-gray-500">Stale</div>
+          <div className="text-xs uppercase tracking-wide text-gray-500">
+            Stale
+          </div>
           <div className="mt-2 text-3xl font-semibold">{healthCounts.stale}</div>
           <div className="mt-1 text-sm text-gray-600">Aufmerksamkeit nötig</div>
         </div>
 
         <div className="rounded-xl border bg-white p-4">
-          <div className="text-xs uppercase tracking-wide text-gray-500">Offline</div>
+          <div className="text-xs uppercase tracking-wide text-gray-500">
+            Offline
+          </div>
           <div className="mt-2 text-3xl font-semibold">{healthCounts.offline}</div>
           <div className="mt-1 text-sm text-gray-600">kritische Kameras</div>
         </div>
 
         <div className="rounded-xl border bg-white p-4">
-          <div className="text-xs uppercase tracking-wide text-gray-500">Relevante Bilder</div>
+          <div className="text-xs uppercase tracking-wide text-gray-500">
+            Relevante Bilder
+          </div>
           <div className="mt-2 text-3xl font-semibold">{relevantAssetsCount}</div>
           <div className="mt-1 text-sm text-gray-600">in aktueller Ansicht</div>
         </div>
@@ -394,7 +409,9 @@ export default function CamerasPage() {
           <div className="flex items-center justify-between">
             <div>
               <h2 className="text-lg font-medium">Schnellzugriff</h2>
-              <p className="text-sm text-gray-600">Arbeitskontext für das Dashboard steuern</p>
+              <p className="text-sm text-gray-600">
+                Arbeitskontext für das Dashboard steuern
+              </p>
             </div>
           </div>
 
@@ -481,7 +498,9 @@ export default function CamerasPage() {
           <div className="mb-4 flex items-center justify-between">
             <div>
               <h2 className="text-lg font-medium">Letzte Ingest-Batches</h2>
-              <p className="text-sm text-gray-600">jüngste Import- und Ingest-Aktivität</p>
+              <p className="text-sm text-gray-600">
+                jüngste Import- und Ingest-Aktivität
+              </p>
             </div>
             {loadingBatches && <div className="text-xs text-gray-500">lädt…</div>}
           </div>
@@ -495,8 +514,8 @@ export default function CamerasPage() {
                       {b.cameras?.name || b.camera_id || "—"}
                     </div>
                     <div className="text-xs text-gray-500">
-                      {new Date(b.received_at).toLocaleString()} · {b.source ?? "?"} · files:{" "}
-                      {b.file_count ?? "?"}
+                      {new Date(b.received_at).toLocaleString()} · {b.source ?? "?"} ·
+                      files: {b.file_count ?? "?"}
                     </div>
                   </div>
 
@@ -525,7 +544,9 @@ export default function CamerasPage() {
           <div className="mb-4 flex items-center justify-between">
             <div>
               <h2 className="text-lg font-medium">Letzte Assets</h2>
-              <p className="text-sm text-gray-600">schnelle operative Sicht auf neue Bilder</p>
+              <p className="text-sm text-gray-600">
+                schnelle operative Sicht auf neue Bilder
+              </p>
             </div>
             {loadingAssets && <div className="text-xs text-gray-500">lädt…</div>}
           </div>
@@ -538,7 +559,9 @@ export default function CamerasPage() {
               return (
                 <div key={a.id} className="rounded-lg border p-3 text-sm">
                   <div className="font-mono text-xs text-gray-500">{a.id}</div>
-                  <div className="mt-1 break-all text-xs text-gray-600">{a.storage_path}</div>
+                  <div className="mt-1 break-all text-xs text-gray-600">
+                    {a.storage_path}
+                  </div>
                   <div className="mt-1 text-xs text-gray-500">
                     {a.status} · {formatAgo(a.created_at)}
                   </div>
@@ -549,7 +572,9 @@ export default function CamerasPage() {
                       onClick={() => setRelevant(a.id, !showRelevant)}
                       className="rounded-md border px-3 py-1 text-xs hover:bg-gray-50"
                     >
-                      {showRelevant ? "Als irrelevant markieren" : "Als relevant markieren"}
+                      {showRelevant
+                        ? "Als irrelevant markieren"
+                        : "Als relevant markieren"}
                     </button>
                   </div>
 
@@ -565,7 +590,9 @@ export default function CamerasPage() {
             })}
 
             {assets.length === 0 && (
-              <div className="text-sm text-gray-600">Noch keine Assets in der aktuellen Ansicht.</div>
+              <div className="text-sm text-gray-600">
+                Noch keine Assets in der aktuellen Ansicht.
+              </div>
             )}
           </div>
         </div>

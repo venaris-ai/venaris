@@ -1,4 +1,4 @@
-// src/app/events/[id]/page.tsx
+// src/app/cameras/events/[id]/page.tsx
 export const runtime = "nodejs";
 
 import Link from "next/link";
@@ -24,7 +24,7 @@ function scoreBadge(score: number | null) {
   return "low";
 }
 
-export default async function EventDetailPage(props: any) {
+export default async function CameraEventDetailPage(props: any) {
   const supabase = supabaseServer();
   const { activeMembership } = await requireActiveOrganization();
   const activeOrganization = activeMembership.organizations;
@@ -39,7 +39,10 @@ export default async function EventDetailPage(props: any) {
             <h1 className="text-3xl font-semibold">Event</h1>
             <p className="text-sm text-gray-600">Details & Assets</p>
           </div>
-          <Link href="/events" className="rounded-md border px-3 py-2 text-sm">
+          <Link
+            href="/cameras/events"
+            className="rounded-md border px-3 py-2 text-sm"
+          >
             ← Zurück
           </Link>
         </div>
@@ -67,7 +70,10 @@ export default async function EventDetailPage(props: any) {
             <h1 className="text-3xl font-semibold">Event</h1>
             <p className="text-sm text-gray-600">Details & Assets</p>
           </div>
-          <Link href="/events" className="rounded-md border px-3 py-2 text-sm">
+          <Link
+            href="/cameras/events"
+            className="rounded-md border px-3 py-2 text-sm"
+          >
             ← Zurück
           </Link>
         </div>
@@ -78,7 +84,6 @@ export default async function EventDetailPage(props: any) {
       </main>
     );
   }
-
 
   const { data: camera } = await supabase
     .from("cameras")
@@ -94,7 +99,10 @@ export default async function EventDetailPage(props: any) {
             <h1 className="text-3xl font-semibold">Event</h1>
             <p className="text-sm text-gray-600">Details & Assets</p>
           </div>
-          <Link href="/events" className="rounded-md border px-3 py-2 text-sm">
+          <Link
+            href="/cameras/events"
+            className="rounded-md border px-3 py-2 text-sm"
+          >
             ← Zurück
           </Link>
         </div>
@@ -105,8 +113,6 @@ export default async function EventDetailPage(props: any) {
       </main>
     );
   }
-
-
 
   const { data: eventAssets, error: assetsErr } = await supabase
     .from("event_assets")
@@ -170,7 +176,10 @@ export default async function EventDetailPage(props: any) {
           </p>
         </div>
 
-        <Link href="/events" className="rounded-md border px-3 py-2 text-sm">
+        <Link
+          href="/cameras/events"
+          className="rounded-md border px-3 py-2 text-sm"
+        >
           ← Zurück
         </Link>
       </div>

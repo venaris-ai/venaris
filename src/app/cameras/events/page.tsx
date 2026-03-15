@@ -1,4 +1,4 @@
-// src/app/events/page.tsx
+// src/app/cameras/events/page.tsx
 export const runtime = "nodejs";
 
 import Link from "next/link";
@@ -23,7 +23,7 @@ function scoreBadge(score: number | null) {
   return "low";
 }
 
-export default async function EventsPage() {
+export default async function CameraEventsPage() {
   const { activeMembership } = await requireActiveOrganization();
   const activeOrganization = activeMembership.organizations;
 
@@ -139,7 +139,7 @@ export default async function EventsPage() {
           return (
             <Link
               key={e.id}
-              href={`/events/${e.id}`}
+              href={`/cameras/events/${e.id}`}
               className="block rounded-xl border bg-white p-4 transition hover:bg-gray-50"
             >
               <div className="flex flex-wrap items-start justify-between gap-3">

@@ -1,3 +1,4 @@
+// src/app/cameras/events/[id]/AssetGrid.tsx
 "use client";
 
 import { useState } from "react";
@@ -7,20 +8,13 @@ type AssetItem = {
   previewUrl?: string;
   timestampLabel: string;
   storagePath?: string;
-
-  // User override: true/false, null = auto
   relevant: boolean | null;
-
-  // Auto-signal (from empty filter)
   empty?: boolean | null;
   emptyConfidence?: number | null;
 };
 
 function effectiveRelevant(a: AssetItem) {
-  // If user overrides, it wins
   if (typeof a.relevant === "boolean") return a.relevant;
-
-  // Auto: empty => irrelevant, otherwise relevant
   if (a.empty === true) return false;
   return true;
 }
@@ -51,7 +45,6 @@ function badgeClasses(a: AssetItem) {
       : "bg-white text-gray-800 border-gray-300";
   }
 
-  // auto mode
   if (a.empty === true) return "bg-white text-gray-800 border-gray-300";
   return "bg-black text-white border-black";
 }
@@ -61,7 +54,6 @@ export default function AssetGrid({ initialAssets }: { initialAssets: AssetItem[
   const [busyId, setBusyId] = useState<string | null>(null);
 
   async function setOverride(assetId: string, next: boolean | null) {
-    // optimistic update
     const prev = assets;
     setAssets((p) => p.map((a) => (a.id === assetId ? { ...a, relevant: next } : a)));
     setBusyId(assetId);
@@ -78,7 +70,7 @@ export default function AssetGrid({ initialAssets }: { initialAssets: AssetItem[
         throw new Error(txt || `HTTP ${res.status}`);
       }
     } catch (e) {
-      setAssets(prev); // rollback
+      setAssets(prev);
       alert(`Konnte Relevanz nicht speichern: ${(e as any)?.message ?? String(e)}`);
     } finally {
       setBusyId(null);
@@ -112,7 +104,6 @@ export default function AssetGrid({ initialAssets }: { initialAssets: AssetItem[
 
             <div className="mt-2 aspect-video w-full overflow-hidden rounded-lg bg-gray-100">
               {a.previewUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
                 <img src={a.previewUrl} alt="asset" className="h-full w-full object-cover" />
               ) : (
                 <div className="flex h-full items-center justify-center text-sm text-gray-500">
@@ -166,7 +157,7 @@ export default function AssetGrid({ initialAssets }: { initialAssets: AssetItem[
             </div>
 
             {a.storagePath && (
-              <div className="mt-2 text-xs text-gray-600 break-all">{a.storagePath}</div>
+              <div className="mt-2 break-all text-xs text-gray-600">{a.storagePath}</div>
             )}
           </div>
         );

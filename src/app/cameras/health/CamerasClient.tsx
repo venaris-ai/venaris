@@ -1,4 +1,4 @@
-// src/app/cameras/CamerasClient.tsx
+// src/app/cameras/health/CamerasClient.tsx
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
@@ -335,11 +335,15 @@ export default function CamerasClient({ role }: Props) {
               <div className="mt-3 text-xs text-gray-600 space-y-1">
                 <div>
                   Expected every{" "}
-                  <span className="font-medium">{selected.stale_after_minutes} min</span>
+                  <span className="font-medium">
+                    {selected.stale_after_minutes} min
+                  </span>
                 </div>
                 <div>
                   Offline after{" "}
-                  <span className="font-medium">{selected.offline_after_minutes} min</span>
+                  <span className="font-medium">
+                    {selected.offline_after_minutes} min
+                  </span>
                 </div>
               </div>
             </div>
@@ -411,8 +415,8 @@ export default function CamerasClient({ role }: Props) {
               <div key={b.id} className="rounded-md border p-3">
                 <div className="text-xs text-gray-500 font-mono">{b.id}</div>
                 <div className="mt-1 text-gray-700">
-                  {new Date(b.received_at).toLocaleString()} ·{" "}
-                  {b.source ?? "?"} · files: {b.file_count ?? "?"}
+                  {new Date(b.received_at).toLocaleString()} · {b.source ?? "?"} ·
+                  files: {b.file_count ?? "?"}
                 </div>
                 <div className="text-gray-600">
                   status: {b.status ?? "?"}

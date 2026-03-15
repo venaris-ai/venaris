@@ -1,4 +1,4 @@
-// src/app/ingest/page.tsx
+// src/app/cameras/ingest/page.tsx
 export const dynamic = "force-dynamic";
 
 import { supabaseServer } from "@/lib/supabaseServer";
@@ -33,7 +33,9 @@ function Badge({
       : "bg-gray-100 text-gray-800";
 
   return (
-    <span className={`inline-flex items-center rounded px-2 py-0.5 text-xs font-medium ${cls}`}>
+    <span
+      className={`inline-flex items-center rounded px-2 py-0.5 text-xs font-medium ${cls}`}
+    >
       {children}
     </span>
   );
@@ -46,9 +48,15 @@ function isTerminalErr(status?: string | null) {
 
 function statusTone(status?: string | null) {
   const s = (status || "").toLowerCase();
-  if (s === "completed" || s === "ok" || s === "success" || s === "done") return "ok" as const;
-  if (s === "error" || s === "failed") return "err" as const;
-  if (s === "processing" || s === "running") return "warn" as const;
+  if (s === "completed" || s === "ok" || s === "success" || s === "done") {
+    return "ok" as const;
+  }
+  if (s === "error" || s === "failed") {
+    return "err" as const;
+  }
+  if (s === "processing" || s === "running") {
+    return "warn" as const;
+  }
   return "muted" as const;
 }
 
@@ -74,7 +82,7 @@ function formatUtcTimestamp(value?: string | null) {
   return d.toISOString().replace("T", " ").slice(0, 19) + " UTC";
 }
 
-export default async function IngestPage() {
+export default async function CamerasIngestPage() {
   const { activeMembership } = await requireActiveOrganization();
   const activeOrganization = activeMembership.organizations;
 
@@ -130,7 +138,7 @@ export default async function IngestPage() {
       <div className="mb-4 flex items-center justify-between">
         <h1 className="text-xl font-semibold">Ingest Monitoring</h1>
         <a
-          href="/ingest"
+          href="/cameras/ingest"
           className="rounded-md border px-3 py-1 text-sm hover:bg-gray-50"
           title="Reload page"
         >
@@ -181,7 +189,9 @@ export default async function IngestPage() {
                       <Badge tone={srcTone}>{b.source || "-"}</Badge>
                     </td>
 
-                    <td className="px-3 py-2">{b.cameras?.name || b.camera_id || "-"}</td>
+                    <td className="px-3 py-2">
+                      {b.cameras?.name || b.camera_id || "-"}
+                    </td>
 
                     <td className="px-3 py-2">{b.file_count ?? "-"}</td>
 
@@ -190,7 +200,11 @@ export default async function IngestPage() {
                     </td>
 
                     <td className={`px-3 py-2 ${errClass}`}>
-                      {b.error_summary ? b.error_summary : <span className="text-gray-400">-</span>}
+                      {b.error_summary ? (
+                        b.error_summary
+                      ) : (
+                        <span className="text-gray-400">-</span>
+                      )}
                     </td>
 
                     <td className="px-3 py-2 font-mono text-xs text-gray-600">

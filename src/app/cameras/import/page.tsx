@@ -1,4 +1,4 @@
-// src/app/import/page.tsx
+// src/app/cameras/import/page.tsx
 "use client";
 
 import { useEffect, useRef, useState } from "react";
@@ -10,7 +10,7 @@ type CameraRow = {
   manualLabel: string | null;
 };
 
-export default function ImportPage() {
+export default function CamerasImportPage() {
   const [cameras, setCameras] = useState<CameraRow[]>([]);
   const [cameraId, setCameraId] = useState("");
   const [files, setFiles] = useState<File[]>([]);
