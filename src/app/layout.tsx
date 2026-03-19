@@ -1,6 +1,9 @@
 // src/app/layout.tsx
 import "./globals.css";
 import MainNav from "@/components/MainNav";
+import SectionNav from "@/components/SectionNav";
+import ContextBar from "@/components/ContextBar";
+import LogoutButton from "@/components/LogoutButton";
 
 export const metadata = {
   title: "Venaris",
@@ -15,10 +18,24 @@ export default function RootLayout({
     <html lang="de">
       <body>
         <header className="border-b">
-          <div className="mx-auto flex max-w-5xl items-center justify-between px-6 py-3">
-            <div className="font-semibold">Venaris</div>
+          <div className="mx-auto max-w-5xl px-6 py-3">
+            <div className="flex items-end justify-between gap-6">
+              <div className="min-w-0">
+                <div className="font-semibold">Venaris</div>
+                <div className="mt-2">
+                  <ContextBar />
+                </div>
+              </div>
 
-            <MainNav />
+              <div className="flex flex-col items-end gap-2">
+                <div className="flex items-center gap-2">
+                  <MainNav />
+                  <LogoutButton />
+                </div>
+
+                <SectionNav />
+              </div>
+            </div>
           </div>
         </header>
 

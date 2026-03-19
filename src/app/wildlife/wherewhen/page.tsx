@@ -4,8 +4,18 @@ export const runtime = "nodejs";
 import Link from "next/link";
 import { supabaseServer } from "@/lib/supabaseServer";
 import { requireActiveOrganization } from "@/lib/auth";
+import {
+  resolveRevierScope,
+  type RevierOption,
+} from "@/lib/intelligence/revierScope";
 
 type PeriodKey = "30d" | "90d" | "365d";
+
+type SearchParams = {
+  period?: string;
+  revier?: string;
+  species?: string;
+};
 
 type EventFeedRow = {
   id: string;
@@ -26,6 +36,12 @@ type CameraRow = {
   id: string;
   name: string;
   location_name: string | null;
+  revier_id: string;
+};
+
+type RevierRow = {
+  id: string;
+  name: string;
 };
 
 function resolvePeriodRange(period: PeriodKey) {
@@ -61,9 +77,14 @@ function fmtWindow(startHour: number, spanHours = 2) {
   return `${String(startHour).padStart(2, "0")}:00–${String(endHour).padStart(2, "0")}:00`;
 }
 
-function buildHref(period: PeriodKey, species?: string | null) {
+function buildHref(
+  period: PeriodKey,
+  revierValue: string,
+  species?: string | null
+) {
   const params = new URLSearchParams();
   params.set("period", period);
+  params.set("revier", revierValue);
   if (species) params.set("species", species);
   return `/wildlife/wherewhen?${params.toString()}`;
 }
@@ -97,12 +118,59 @@ async function fetchEventSpeciesSummaryChunked(
   return rows;
 }
 
-export default async function WildlifeWhereWhenPage(props: any) {
+function WhereWhenPageHeader({
+  period,
+  revierValue,
+  selectedSpecies,
+}: {
+  period: PeriodKey;
+  revierValue: string;
+  selectedSpecies?: string | null;
+}) {
+  return (
+    <section className="space-y-3">
+      <div>
+        <h1 className="text-3xl font-semibold">Where &amp; When</h1>
+        <p className="text-sm text-gray-600">
+          Wo und wann ausgewählte Arten im aktuellen Revier-Scope sichtbar werden.
+        </p>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-1.5">
+        {(["30d", "90d", "365d"] as PeriodKey[]).map((p) => {
+          const active = p === period;
+          return (
+            <Link
+              key={p}
+              href={buildHref(p, revierValue, selectedSpecies)}
+              className={`rounded-md border px-2.5 py-1 text-xs ${
+                active
+                  ? "border-black bg-black text-white"
+                  : "border-gray-300 bg-white text-black hover:bg-gray-100"
+              }`}
+            >
+              {p}
+            </Link>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+export default async function WildlifeWhereWhenPage(props: {
+  searchParams?: Promise<SearchParams> | SearchParams;
+}) {
   const { activeMembership } = await requireActiveOrganization();
   const activeOrganization = activeMembership.organizations;
 
-  const searchParams = await Promise.resolve(props?.searchParams);
+  const searchParams = props?.searchParams
+    ? await Promise.resolve(props.searchParams)
+    : undefined;
+
   const rawPeriod = searchParams?.period;
+  const rawRevier = searchParams?.revier;
+
   const period: PeriodKey =
     rawPeriod === "30d" || rawPeriod === "90d" || rawPeriod === "365d"
       ? rawPeriod
@@ -111,21 +179,7 @@ export default async function WildlifeWhereWhenPage(props: any) {
   if (!activeOrganization) {
     return (
       <main className="space-y-8">
-        <section className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-          <div>
-            <h1 className="text-3xl font-semibold">Where &amp; When</h1>
-            <p className="text-sm text-gray-600">
-              Wo und wann Arten in der aktiven Organisation sichtbar werden.
-            </p>
-          </div>
-
-          <Link
-            href="/wildlife"
-            className="rounded-md border px-3 py-2 text-sm hover:bg-gray-50"
-          >
-            Zurück zu Wildlife
-          </Link>
-        </section>
+        <WhereWhenPageHeader period={period} revierValue="all" />
 
         <div className="rounded-xl border bg-white p-4 text-sm text-red-600">
           Active organization not found.
@@ -137,30 +191,69 @@ export default async function WildlifeWhereWhenPage(props: any) {
   const supabase = supabaseServer();
   const { startAt, endAt } = resolvePeriodRange(period);
 
-  const { data: cameras, error: camerasError } = await supabase
+  const { data: reviersData, error: reviersError } = await supabase
+    .from("reviers")
+    .select("id,name")
+    .eq("organization_id", activeOrganization.id)
+    .eq("status", "active")
+    .order("name", { ascending: true });
+
+  if (reviersError) {
+    return (
+      <main className="space-y-8">
+        <WhereWhenPageHeader period={period} revierValue="all" />
+
+        <div className="rounded-xl border bg-white p-4 text-sm text-red-600">
+          Fehler beim Laden der Reviere: {reviersError.message}
+        </div>
+      </main>
+    );
+  }
+
+  const reviers = (reviersData ?? []) as RevierRow[];
+  const allowedReviers: RevierOption[] = reviers.map((r) => ({
+    id: r.id,
+    name: r.name,
+  }));
+
+  const revierScope = resolveRevierScope(rawRevier, allowedReviers);
+  const currentRevierValue =
+    revierScope.type === "single" ? revierScope.revierId : "all";
+
+  const allowedRevierIds = allowedReviers.map((r) => r.id);
+
+  if (allowedRevierIds.length === 0) {
+    return (
+      <main className="space-y-8">
+        <WhereWhenPageHeader period={period} revierValue="all" />
+
+        <div className="rounded-xl border bg-white p-4 text-sm text-gray-600">
+          Für die aktive Organisation sind derzeit keine aktiven Reviere vorhanden.
+        </div>
+      </main>
+    );
+  }
+
+  let camerasQuery = supabase
     .from("cameras")
-    .select("id,name,location_name")
+    .select("id,name,location_name,revier_id")
     .eq("organization_id", activeOrganization.id)
     .order("name", { ascending: true });
+
+  camerasQuery =
+    revierScope.type === "single"
+      ? camerasQuery.eq("revier_id", revierScope.revierId)
+      : camerasQuery.in("revier_id", allowedRevierIds);
+
+  const { data: cameras, error: camerasError } = await camerasQuery;
 
   if (camerasError) {
     return (
       <main className="space-y-8">
-        <section className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-          <div>
-            <h1 className="text-3xl font-semibold">Where &amp; When</h1>
-            <p className="text-sm text-gray-600">
-              Wo und wann Arten in der aktiven Organisation sichtbar werden.
-            </p>
-          </div>
-
-          <Link
-            href="/wildlife"
-            className="rounded-md border px-3 py-2 text-sm hover:bg-gray-50"
-          >
-            Zurück zu Wildlife
-          </Link>
-        </section>
+        <WhereWhenPageHeader
+          period={period}
+          revierValue={currentRevierValue}
+        />
 
         <div className="rounded-xl border bg-white p-4 text-sm text-red-600">
           Fehler beim Laden der Kameras: {camerasError.message}
@@ -181,24 +274,13 @@ export default async function WildlifeWhereWhenPage(props: any) {
   if (cameraIds.length === 0) {
     return (
       <main className="space-y-8">
-        <section className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-          <div>
-            <h1 className="text-3xl font-semibold">Where &amp; When</h1>
-            <p className="text-sm text-gray-600">
-              Wo und wann Arten in der aktiven Organisation sichtbar werden.
-            </p>
-          </div>
-
-          <Link
-            href="/wildlife"
-            className="rounded-md border px-3 py-2 text-sm hover:bg-gray-50"
-          >
-            Zurück zu Wildlife
-          </Link>
-        </section>
+        <WhereWhenPageHeader
+          period={period}
+          revierValue={currentRevierValue}
+        />
 
         <div className="rounded-xl border bg-white p-4 text-sm text-gray-600">
-          Für die aktive Organisation sind noch keine Kameras vorhanden.
+          Für den aktuellen Revier-Scope sind keine Kameras vorhanden.
         </div>
       </main>
     );
@@ -215,21 +297,10 @@ export default async function WildlifeWhereWhenPage(props: any) {
   if (eventsError) {
     return (
       <main className="space-y-8">
-        <section className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-          <div>
-            <h1 className="text-3xl font-semibold">Where &amp; When</h1>
-            <p className="text-sm text-gray-600">
-              Wo und wann Arten in der aktiven Organisation sichtbar werden.
-            </p>
-          </div>
-
-          <Link
-            href="/wildlife"
-            className="rounded-md border px-3 py-2 text-sm hover:bg-gray-50"
-          >
-            Zurück zu Wildlife
-          </Link>
-        </section>
+        <WhereWhenPageHeader
+          period={period}
+          revierValue={currentRevierValue}
+        />
 
         <div className="rounded-xl border bg-white p-4 text-sm text-red-600">
           Fehler beim Laden der Events: {eventsError.message}
@@ -248,21 +319,10 @@ export default async function WildlifeWhereWhenPage(props: any) {
     } catch (err) {
       return (
         <main className="space-y-8">
-          <section className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-            <div>
-              <h1 className="text-3xl font-semibold">Where &amp; When</h1>
-              <p className="text-sm text-gray-600">
-                Wo und wann Arten in der aktiven Organisation sichtbar werden.
-              </p>
-            </div>
-
-            <Link
-              href="/wildlife"
-              className="rounded-md border px-3 py-2 text-sm hover:bg-gray-50"
-            >
-              Zurück zu Wildlife
-            </Link>
-          </section>
+          <WhereWhenPageHeader
+            period={period}
+            revierValue={currentRevierValue}
+          />
 
           <div className="rounded-xl border bg-white p-4 text-sm text-red-600">
             Fehler beim Laden der Species-Zusammenfassung:{" "}
@@ -371,40 +431,11 @@ export default async function WildlifeWhereWhenPage(props: any) {
 
   return (
     <main className="space-y-8">
-      <section className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-        <div>
-          <h1 className="text-3xl font-semibold">Where &amp; When</h1>
-          <p className="text-sm text-gray-600">
-            Wo und wann ausgewählte Arten in der aktiven Organisation sichtbar werden.
-          </p>
-        </div>
-
-        <div className="flex flex-wrap gap-2">
-          {(["30d", "90d", "365d"] as PeriodKey[]).map((p) => {
-            const active = p === period;
-            return (
-              <Link
-                key={p}
-                href={buildHref(p, selectedSpecies)}
-                className={`rounded-md border px-3 py-2 text-sm ${
-                  active
-                    ? "border-black bg-black text-white"
-                    : "border-gray-300 bg-white text-black hover:bg-gray-50"
-                }`}
-              >
-                {p}
-              </Link>
-            );
-          })}
-
-          <Link
-            href="/wildlife"
-            className="rounded-md border px-3 py-2 text-sm hover:bg-gray-50"
-          >
-            Zurück
-          </Link>
-        </div>
-      </section>
+      <WhereWhenPageHeader
+        period={period}
+        revierValue={currentRevierValue}
+        selectedSpecies={selectedSpecies}
+      />
 
       <section className="rounded-xl border bg-white p-5">
         <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
@@ -421,6 +452,7 @@ export default async function WildlifeWhereWhenPage(props: any) {
             className="flex flex-wrap items-end gap-2"
           >
             <input type="hidden" name="period" value={period} />
+            <input type="hidden" name="revier" value={currentRevierValue} />
 
             <div className="flex flex-col gap-1">
               <label htmlFor="species" className="text-sm font-medium">

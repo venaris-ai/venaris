@@ -14,11 +14,6 @@ const items = [
 export default function MainNav() {
   const pathname = usePathname();
 
-  async function logout() {
-    await fetch("/api/auth/logout", { method: "POST" });
-    window.location.href = "/login";
-  }
-
   return (
     <nav className="flex items-center gap-2 text-sm">
       {items.map((item) => {
@@ -41,15 +36,6 @@ export default function MainNav() {
           </Link>
         );
       })}
-
-      <div className="ml-2 border-l pl-2">
-        <button
-          onClick={logout}
-          className="rounded-md border px-3 py-1 hover:bg-gray-100"
-        >
-          Logout
-        </button>
-      </div>
     </nav>
   );
 }
