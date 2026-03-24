@@ -1,7 +1,6 @@
-// src/app/cameras/page.tsx
+// src/app/cameras/page.tsx #3
 "use client";
 
-import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
 type AssetRow = {
@@ -69,6 +68,11 @@ function formatAgo(ts: string | null | undefined) {
   return `vor ${days} d`;
 }
 
+function formatDateTime(ts: string | null | undefined) {
+  if (!ts) return "—";
+  return new Date(ts).toLocaleString();
+}
+
 function statusBadgeTone(status?: string | null) {
   const s = (status || "").toLowerCase();
   if (s === "completed" || s === "ok" || s === "success" || s === "done") {
@@ -83,6 +87,26 @@ function statusBadgeTone(status?: string | null) {
   return "bg-gray-100 text-gray-800";
 }
 
+function StatCard({
+  title,
+  value,
+  subline,
+}: {
+  title: string;
+  value: string | number;
+  subline: string;
+}) {
+  return (
+    <div className="rounded-2xl border bg-white p-5 shadow-sm">
+      <div className="text-xs uppercase tracking-wide text-gray-500">{title}</div>
+      <div className="mt-2 text-3xl font-semibold tracking-tight text-gray-900">
+        {value}
+      </div>
+      <div className="mt-1 text-sm text-gray-600">{subline}</div>
+    </div>
+  );
+}
+
 export default function CamerasPage() {
   const [cameraId, setCameraId] = useState<string>("");
   const [file, setFile] = useState<File | null>(null);
@@ -95,7 +119,7 @@ export default function CamerasPage() {
   const [onlyRelevant, setOnlyRelevant] = useState(true);
   const [msg, setMsg] = useState("");
 
-  const [loadingOverview, setLoadingOverview] = useState(false);
+  const [loadingInitial, setLoadingInitial] = useState(false);
   const [loadingAssets, setLoadingAssets] = useState(false);
   const [loadingBatches, setLoadingBatches] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -188,19 +212,19 @@ export default function CamerasPage() {
     }
   }
 
-  async function refreshOverview() {
+  async function loadOverview() {
     setMsg("");
-    setLoadingOverview(true);
+    setLoadingInitial(true);
     try {
       await loadCameras();
       await Promise.all([loadAssets(), loadBatches()]);
     } finally {
-      setLoadingOverview(false);
+      setLoadingInitial(false);
     }
   }
 
   useEffect(() => {
-    refreshOverview();
+    loadOverview();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -309,133 +333,78 @@ export default function CamerasPage() {
     [assets]
   );
 
+  const attentionCount = healthCounts.stale + healthCounts.offline;
+
   return (
     <main className="space-y-8">
-      <section className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+      <section className="space-y-3">
         <div>
-          <h1 className="text-3xl font-semibold">Cameras Dashboard</h1>
-          <p className="text-sm text-gray-600">
-            Health, Events, Import und Ingest im Überblick.
+          <h1 className="text-3xl font-semibold tracking-tight">Cameras</h1>
+          <p className="mt-2 max-w-3xl text-sm text-gray-600">
+            Operative Übersicht über Kamera-Health, aktuelle Assets, Ingest und
+            Quick Upload.
           </p>
-        </div>
-
-        <div className="flex flex-wrap gap-2">
-          <Link
-            href="/cameras/health"
-            className="rounded-md border px-3 py-2 text-sm hover:bg-gray-50"
-          >
-            Health
-          </Link>
-          <Link
-            href="/cameras/new"
-            className="rounded-md border px-3 py-2 text-sm hover:bg-gray-50"
-          >
-            Create New
-          </Link>
-          <Link
-            href="/cameras/events"
-            className="rounded-md border px-3 py-2 text-sm hover:bg-gray-50"
-          >
-            Events
-          </Link>
-          <Link
-            href="/cameras/import"
-            className="rounded-md border px-3 py-2 text-sm hover:bg-gray-50"
-          >
-            Import
-          </Link>
-          <Link
-            href="/cameras/ingest"
-            className="rounded-md border px-3 py-2 text-sm hover:bg-gray-50"
-          >
-            Ingest
-          </Link>
-          <button
-            onClick={refreshOverview}
-            disabled={loadingOverview}
-            className="rounded-md bg-black px-4 py-2 text-sm text-white disabled:opacity-60"
-          >
-            {loadingOverview ? "Refreshing…" : "Refresh"}
-          </button>
         </div>
       </section>
 
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
-        <div className="rounded-xl border bg-white p-4">
-          <div className="text-xs uppercase tracking-wide text-gray-500">
-            Cameras
-          </div>
-          <div className="mt-2 text-3xl font-semibold">{cameras.length}</div>
-          <div className="mt-1 text-sm text-gray-600">
-            aktive Kameraauswahl
-          </div>
-        </div>
-
-        <div className="rounded-xl border bg-white p-4">
-          <div className="text-xs uppercase tracking-wide text-gray-500">
-            Online
-          </div>
-          <div className="mt-2 text-3xl font-semibold">{healthCounts.online}</div>
-          <div className="mt-1 text-sm text-gray-600">zuletzt gesehen</div>
-        </div>
-
-        <div className="rounded-xl border bg-white p-4">
-          <div className="text-xs uppercase tracking-wide text-gray-500">
-            Stale
-          </div>
-          <div className="mt-2 text-3xl font-semibold">{healthCounts.stale}</div>
-          <div className="mt-1 text-sm text-gray-600">Aufmerksamkeit nötig</div>
-        </div>
-
-        <div className="rounded-xl border bg-white p-4">
-          <div className="text-xs uppercase tracking-wide text-gray-500">
-            Offline
-          </div>
-          <div className="mt-2 text-3xl font-semibold">{healthCounts.offline}</div>
-          <div className="mt-1 text-sm text-gray-600">kritische Kameras</div>
-        </div>
-
-        <div className="rounded-xl border bg-white p-4">
-          <div className="text-xs uppercase tracking-wide text-gray-500">
-            Relevante Bilder
-          </div>
-          <div className="mt-2 text-3xl font-semibold">{relevantAssetsCount}</div>
-          <div className="mt-1 text-sm text-gray-600">in aktueller Ansicht</div>
-        </div>
+        <StatCard
+          title="Cameras"
+          value={cameras.length}
+          subline="Kameras im aktuellen Scope"
+        />
+        <StatCard
+          title="Online"
+          value={healthCounts.online}
+          subline="zuletzt gesehen"
+        />
+        <StatCard
+          title="Stale"
+          value={healthCounts.stale}
+          subline="Aufmerksamkeit nötig"
+        />
+        <StatCard
+          title="Offline"
+          value={healthCounts.offline}
+          subline="kritische Kameras"
+        />
+        <StatCard
+          title="Relevante Assets"
+          value={relevantAssetsCount}
+          subline="in aktueller Ansicht"
+        />
       </section>
 
-      <section className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
-        <div className="rounded-xl border bg-white p-5 space-y-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-lg font-medium">Schnellzugriff</h2>
-              <p className="text-sm text-gray-600">
-                Arbeitskontext für das Dashboard steuern
-              </p>
-            </div>
+      <section className="grid gap-4 xl:grid-cols-2">
+        <section className="rounded-2xl border bg-white p-6 shadow-sm">
+          <div>
+            <h2 className="text-lg font-medium">Arbeitskontext</h2>
+            <p className="mt-1 text-sm text-gray-600">
+              Steuere hier den Scope für Assets und Ingest-Batches.
+            </p>
           </div>
 
-          <div className="space-y-2">
-            <label className="text-sm font-medium">Kamera</label>
-            <select
-              className="w-full rounded-md border p-2"
-              value={cameraId}
-              onChange={(e) => setCameraId(e.target.value)}
-            >
-              {cameraOptions.map((o) => (
-                <option key={o.id || "all"} value={o.id}>
-                  {o.label}
-                </option>
-              ))}
-            </select>
-            <div className="text-xs text-gray-500">
-              {selectedCamera
-                ? `Aktuell ausgewählt: ${selectedCamera.name}`
-                : "Aktuell: alle Kameras"}
+          <div className="mt-6 space-y-5">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Kamera</label>
+              <select
+                className="w-full rounded-md border p-2"
+                value={cameraId}
+                onChange={(e) => setCameraId(e.target.value)}
+              >
+                {cameraOptions.map((o) => (
+                  <option key={o.id || "all"} value={o.id}>
+                    {o.label}
+                  </option>
+                ))}
+              </select>
+              <div className="text-xs text-gray-500">
+                {selectedCamera
+                  ? `Aktuell ausgewählt: ${selectedCamera.name}`
+                  : "Aktuell: alle Kameras"}
+              </div>
             </div>
-          </div>
 
-          <div className="flex items-center gap-4">
             <label className="flex items-center gap-2 text-sm">
               <input
                 type="checkbox"
@@ -445,17 +414,17 @@ export default function CamerasPage() {
               Nur relevante Assets
             </label>
           </div>
-        </div>
+        </section>
 
-        <div className="rounded-xl border bg-white p-5 space-y-4">
+        <section className="rounded-2xl border bg-white p-6 shadow-sm">
           <div>
             <h2 className="text-lg font-medium">Quick Upload</h2>
-            <p className="text-sm text-gray-600">
-              Einzelbild direkt an die ausgewählte Kamera senden
+            <p className="mt-1 text-sm text-gray-600">
+              Einzelbild direkt an die ausgewählte Kamera senden.
             </p>
           </div>
 
-          <div className="flex flex-wrap items-center gap-3">
+          <div className="mt-6 flex flex-wrap items-center gap-3">
             <label className="inline-block cursor-pointer rounded-md border px-4 py-2 text-sm hover:bg-gray-50">
               Bild auswählen
               <input
@@ -475,47 +444,59 @@ export default function CamerasPage() {
             </button>
           </div>
 
-          <div className="text-xs text-gray-500">
+          <div className="mt-3 text-xs text-gray-500">
             Upload funktioniert nur mit ausgewählter Kamera.
           </div>
 
-          {file && (
-            <div className="text-sm text-gray-700">
+          {file ? (
+            <div className="mt-3 text-sm text-gray-700">
               Ausgewählt: <span className="font-medium">{file.name}</span>
             </div>
-          )}
-        </div>
+          ) : null}
+        </section>
       </section>
 
-      {msg && (
-        <div className="rounded-xl border bg-white px-4 py-3 text-sm">
+      {attentionCount > 0 ? (
+        <section className="rounded-2xl border border-amber-200 bg-amber-50 p-6 shadow-sm">
+          <h2 className="text-lg font-medium text-amber-900">Attention</h2>
+          <p className="mt-2 text-sm leading-6 text-amber-900/80">
+            {healthCounts.stale} stale und {healthCounts.offline} offline Kameras
+            benötigen Aufmerksamkeit.
+          </p>
+        </section>
+      ) : null}
+
+      {msg ? (
+        <div className="rounded-2xl border bg-white px-4 py-3 text-sm shadow-sm">
           {msg}
         </div>
-      )}
+      ) : null}
 
       <section className="grid gap-4 xl:grid-cols-2">
-        <div className="rounded-xl border bg-white p-5">
+        <section className="rounded-2xl border bg-white p-6 shadow-sm">
           <div className="mb-4 flex items-center justify-between">
             <div>
               <h2 className="text-lg font-medium">Letzte Ingest-Batches</h2>
               <p className="text-sm text-gray-600">
-                jüngste Import- und Ingest-Aktivität
+                Jüngste Import- und Ingest-Aktivität.
               </p>
             </div>
-            {loadingBatches && <div className="text-xs text-gray-500">lädt…</div>}
+            {loadingInitial || loadingBatches ? (
+              <div className="text-xs text-gray-500">lädt…</div>
+            ) : null}
           </div>
 
           <div className="space-y-3">
             {batches.map((b) => (
-              <div key={b.id} className="rounded-lg border p-3 text-sm">
+              <div key={b.id} className="rounded-xl border bg-gray-50 p-4 text-sm">
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                    <div className="font-medium">
+                    <div className="font-medium text-gray-900">
                       {b.cameras?.name || b.camera_id || "—"}
                     </div>
-                    <div className="text-xs text-gray-500">
-                      {new Date(b.received_at).toLocaleString()} · {b.source ?? "?"} ·
-                      files: {b.file_count ?? "?"}
+                    <div className="mt-1 text-xs text-gray-500">
+                      {formatDateTime(b.received_at)} · {b.source ?? "?"} · files:{" "}
+                      {b.file_count ?? "?"}
                     </div>
                   </div>
 
@@ -528,27 +509,29 @@ export default function CamerasPage() {
                   </span>
                 </div>
 
-                {b.error_summary && (
+                {b.error_summary ? (
                   <div className="mt-2 text-xs text-red-700">{b.error_summary}</div>
-                )}
+                ) : null}
               </div>
             ))}
 
-            {batches.length === 0 && (
+            {batches.length === 0 ? (
               <div className="text-sm text-gray-600">Noch keine Ingest-Batches.</div>
-            )}
+            ) : null}
           </div>
-        </div>
+        </section>
 
-        <div className="rounded-xl border bg-white p-5">
+        <section className="rounded-2xl border bg-white p-6 shadow-sm">
           <div className="mb-4 flex items-center justify-between">
             <div>
               <h2 className="text-lg font-medium">Letzte Assets</h2>
               <p className="text-sm text-gray-600">
-                schnelle operative Sicht auf neue Bilder
+                Schnelle operative Sicht auf neue Bilder.
               </p>
             </div>
-            {loadingAssets && <div className="text-xs text-gray-500">lädt…</div>}
+            {loadingInitial || loadingAssets ? (
+              <div className="text-xs text-gray-500">lädt…</div>
+            ) : null}
           </div>
 
           <div className="space-y-4">
@@ -557,7 +540,7 @@ export default function CamerasPage() {
               const showRelevant = a.relevant_effective === true;
 
               return (
-                <div key={a.id} className="rounded-lg border p-3 text-sm">
+                <div key={a.id} className="rounded-xl border bg-gray-50 p-4 text-sm">
                   <div className="font-mono text-xs text-gray-500">{a.id}</div>
                   <div className="mt-1 break-all text-xs text-gray-600">
                     {a.storage_path}
@@ -566,11 +549,11 @@ export default function CamerasPage() {
                     {a.status} · {formatAgo(a.created_at)}
                   </div>
 
-                  <div className="mt-2 flex items-center gap-3">
+                  <div className="mt-2 flex flex-wrap items-center gap-3">
                     <span className="text-xs">{rel.text}</span>
                     <button
                       onClick={() => setRelevant(a.id, !showRelevant)}
-                      className="rounded-md border px-3 py-1 text-xs hover:bg-gray-50"
+                      className="rounded-md border px-3 py-1 text-xs hover:bg-white"
                     >
                       {showRelevant
                         ? "Als irrelevant markieren"
@@ -578,24 +561,24 @@ export default function CamerasPage() {
                     </button>
                   </div>
 
-                  {urls[a.id] && (
+                  {urls[a.id] ? (
                     <img
                       src={urls[a.id]}
                       alt="asset"
                       className="mt-3 w-full max-w-md rounded-md border"
                     />
-                  )}
+                  ) : null}
                 </div>
               );
             })}
 
-            {assets.length === 0 && (
+            {assets.length === 0 ? (
               <div className="text-sm text-gray-600">
                 Noch keine Assets in der aktuellen Ansicht.
               </div>
-            )}
+            ) : null}
           </div>
-        </div>
+        </section>
       </section>
     </main>
   );

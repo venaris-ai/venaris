@@ -1,7 +1,9 @@
+// src/app/api/cameras/create/route.ts #3
 import { NextRequest, NextResponse } from "next/server";
 import crypto from "node:crypto";
 import { supabaseServer } from "@/lib/supabaseServer";
 import { requireOrganizationRole } from "@/lib/auth";
+import { canCreateCamera } from "@/lib/billing/subscriptionPolicy";
 
 type Vendor =
   | "berger&schröter"
@@ -34,8 +36,6 @@ type Payload = {
   notes?: string | null;
 };
 
-
-
 type ProvisioningRow = {
   camera_id: string;
   technical_name: string;
@@ -44,6 +44,14 @@ type ProvisioningRow = {
   ftp_username: string | null;
   ftp_inbox_path: string | null;
   manual_label: string | null;
+};
+
+type SubscriptionPolicyRow = {
+  status: "trialing" | "active" | "past_due" | "canceled" | "expired";
+  trial_ends_at: string | null;
+  current_period_end: string | null;
+  max_cameras: number;
+  max_members: number;
 };
 
 const METHODS = new Set<Method>(["smtp", "ftp", "manual"]);
@@ -82,7 +90,6 @@ function generateFtpPassword(length = 8): string {
 
   return out;
 }
-
 
 async function updateProvisioningStatus(params: {
   cameraId: string;
@@ -161,12 +168,15 @@ async function provisionFtpOnHetzner(params: {
 export async function POST(req: NextRequest) {
   try {
     const body = (await req.json()) as Partial<Payload>;
-const { activeMembership } = await requireOrganizationRole(["owner", "admin"]);
-const activeOrganization = activeMembership.organizations;
+    const { activeMembership } = await requireOrganizationRole(["owner", "admin"]);
+    const activeOrganization = activeMembership.organizations;
 
-if (!activeOrganization) {
-  return NextResponse.json({ error: "active organization not found" }, { status: 400 });
-}
+    if (!activeOrganization) {
+      return NextResponse.json(
+        { error: "active organization not found" },
+        { status: 400 }
+      );
+    }
 
     if (!body.cameraName || !body.cameraName.trim()) {
       return NextResponse.json({ error: "cameraName required" }, { status: 400 });
@@ -186,10 +196,75 @@ if (!activeOrganization) {
         body.directionDeg < 0 ||
         body.directionDeg >= 360)
     ) {
-      return NextResponse.json({ error: "directionDeg must be 0-359" }, { status: 400 });
+      return NextResponse.json(
+        { error: "directionDeg must be 0-359" },
+        { status: 400 }
+      );
     }
 
     const supabase = supabaseServer();
+
+    const [subscriptionResult, cameraCountResult] = await Promise.all([
+      supabase
+        .from("organization_subscriptions")
+        .select("status,trial_ends_at,current_period_end,max_cameras,max_members")
+        .eq("organization_id", activeOrganization.id)
+        .maybeSingle<SubscriptionPolicyRow>(),
+
+      supabase
+        .from("cameras")
+        .select("id", { count: "exact", head: true })
+        .eq("organization_id", activeOrganization.id),
+    ]);
+
+    if (subscriptionResult.error) {
+      return NextResponse.json(
+        {
+          error: "subscription check failed",
+          details: subscriptionResult.error.message,
+        },
+        { status: 500 }
+      );
+    }
+
+    if (!subscriptionResult.data) {
+      return NextResponse.json(
+        { error: "no subscription found for active organization" },
+        { status: 403 }
+      );
+    }
+
+    if (cameraCountResult.error) {
+      return NextResponse.json(
+        {
+          error: "camera usage check failed",
+          details: cameraCountResult.error.message,
+        },
+        { status: 500 }
+      );
+    }
+
+    const cameraPolicy = canCreateCamera({
+      status: subscriptionResult.data.status,
+      trialEndsAt: subscriptionResult.data.trial_ends_at,
+      currentPeriodEnd: subscriptionResult.data.current_period_end,
+      maxCameras: subscriptionResult.data.max_cameras,
+      maxMembers: subscriptionResult.data.max_members,
+      currentCameraCount: cameraCountResult.count ?? 0,
+      activeMemberCount: 0,
+      openInviteCount: 0,
+    });
+
+    if (!cameraPolicy.allowed) {
+      return NextResponse.json(
+        {
+          error: "camera creation blocked",
+          details: cameraPolicy.message,
+          reason: cameraPolicy.reason,
+        },
+        { status: 403 }
+      );
+    }
 
     const { data, error } = await supabase.rpc("create_camera_with_provisioning", {
       p_organization_id: activeOrganization.id,
@@ -220,7 +295,6 @@ if (!activeOrganization) {
       return NextResponse.json({ error: "no provisioning result" }, { status: 500 });
     }
 
-    // FTP: DB -> Hetzner -> DB ready
     if (body.method === "ftp") {
       if (!row.ftp_username || !row.ftp_inbox_path) {
         await updateProvisioningStatus({
@@ -229,11 +303,15 @@ if (!activeOrganization) {
           provisioningStatus: "failed",
           ftpHost: FTP_PUBLIC_HOST,
           ftpPort: FTP_PUBLIC_PORT,
-          lastProvisioningError: "missing ftp_username or ftp_inbox_path in provisioning result",
+          lastProvisioningError:
+            "missing ftp_username or ftp_inbox_path in provisioning result",
         });
 
         return NextResponse.json(
-          { error: "ftp provisioning failed", details: "missing ftp routing values" },
+          {
+            error: "ftp provisioning failed",
+            details: "missing ftp routing values",
+          },
           { status: 500 }
         );
       }
@@ -277,7 +355,7 @@ if (!activeOrganization) {
               host: FTP_PUBLIC_HOST,
               port: FTP_PUBLIC_PORT,
               username: row.ftp_username,
-              password: ftpPassword, // nur einmalig zurückgeben
+              password: ftpPassword,
               path: "/",
               passiveMode: true,
             },
@@ -310,7 +388,6 @@ if (!activeOrganization) {
       }
     }
 
-    // SMTP: direkt ready
     if (body.method === "smtp") {
       await updateProvisioningStatus({
         cameraId: row.camera_id,
@@ -320,7 +397,6 @@ if (!activeOrganization) {
       });
     }
 
-    // MANUAL: direkt ready
     if (body.method === "manual") {
       await updateProvisioningStatus({
         cameraId: row.camera_id,

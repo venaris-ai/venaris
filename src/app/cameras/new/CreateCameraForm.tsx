@@ -1,6 +1,11 @@
+// src/app/cameras/new/CreateCameraForm.tsx #3
 "use client";
 
 import { useMemo, useState } from "react";
+import type {
+  SubscriptionActionPolicy,
+  SubscriptionStatus,
+} from "@/lib/billing/subscriptionPolicy";
 
 type Organization = {
   id: string;
@@ -17,6 +22,11 @@ type Revier = {
 type Props = {
   organization: Organization;
   reviers: Revier[];
+  currentCameraCount: number;
+  maxCameras: number;
+  cameraPolicy: SubscriptionActionPolicy;
+  effectiveStatus: SubscriptionStatus;
+  rawStatus: SubscriptionStatus;
 };
 
 type CreateResponse = {
@@ -71,8 +81,35 @@ function copyText(value: string) {
   return navigator.clipboard.writeText(value);
 }
 
+function badgeTone(allowed: boolean) {
+  return allowed
+    ? {
+        wrap: "border-blue-200 bg-blue-50",
+        title: "text-blue-900",
+        text: "text-blue-900/80",
+        hint: "text-blue-900/70",
+        pill: "border-blue-300 bg-white text-blue-900",
+        bar: "bg-blue-700",
+      }
+    : {
+        wrap: "border-red-200 bg-red-50",
+        title: "text-red-900",
+        text: "text-red-800",
+        hint: "text-red-700",
+        pill: "border-red-300 bg-white text-red-900",
+        bar: "bg-red-600",
+      };
+}
 
-export default function CreateCameraForm({ organization, reviers }: Props) {
+export default function CreateCameraForm({
+  organization,
+  reviers,
+  currentCameraCount,
+  maxCameras,
+  cameraPolicy,
+  effectiveStatus,
+  rawStatus,
+}: Props) {
   const organizationId = organization.id;
   const [revierId, setRevierId] = useState("");
   const [cameraName, setCameraName] = useState("");
@@ -93,8 +130,18 @@ export default function CreateCameraForm({ organization, reviers }: Props) {
     return reviers.filter((r) => r.organization_id === organizationId);
   }, [reviers, organizationId]);
 
+  const usagePercent =
+    maxCameras > 0 ? Math.min((currentCameraCount / maxCameras) * 100, 100) : 0;
+  const tone = badgeTone(cameraPolicy.allowed);
+
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
+
+    if (!cameraPolicy.allowed) {
+      setError(cameraPolicy.message);
+      return;
+    }
+
     setLoading(true);
     setError("");
     setResult(null);
@@ -160,17 +207,49 @@ export default function CreateCameraForm({ organization, reviers }: Props) {
 
   return (
     <div className="space-y-6">
+      <section className={`rounded-2xl border p-5 shadow-sm ${tone.wrap}`}>
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <h2 className={`text-base font-semibold ${tone.title}`}>Kamera-Nutzung</h2>
+            <p className={`mt-1 text-sm leading-6 ${tone.text}`}>
+              {cameraPolicy.message}
+            </p>
+            <p className={`mt-1 text-xs ${tone.hint}`}>
+              Aktuell genutzt: {currentCameraCount} von {maxCameras} Kameras.
+            </p>
+          </div>
+
+          <div className={`rounded-xl border px-3 py-2 text-sm font-medium ${tone.pill}`}>
+            {currentCameraCount} / {maxCameras}
+          </div>
+        </div>
+
+        <div className="mt-4 h-2 rounded-full bg-white/70">
+          <div
+            className={`h-2 rounded-full ${tone.bar}`}
+            style={{ width: `${usagePercent}%` }}
+          />
+        </div>
+
+        {effectiveStatus !== rawStatus ? (
+          <p className="mt-3 text-xs text-red-700">
+            Hinweis: Der Trial ist fachlich bereits abgelaufen und wird effektiv als
+            `expired` behandelt.
+          </p>
+        ) : null}
+      </section>
+
       <form
         onSubmit={onSubmit}
         className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm"
       >
         <div className="grid gap-5 md:grid-cols-2">
-<div className="md:col-span-2">
-  <label className="mb-1 block text-sm font-medium">Organization</label>
-  <div className="w-full rounded-xl border border-neutral-200 bg-neutral-50 px-3 py-2 text-sm text-neutral-700">
-    {organization.name} ({organization.slug})
-  </div>
-</div>
+          <div className="md:col-span-2">
+            <label className="mb-1 block text-sm font-medium">Organization</label>
+            <div className="w-full rounded-xl border border-neutral-200 bg-neutral-50 px-3 py-2 text-sm text-neutral-700">
+              {organization.name} ({organization.slug})
+            </div>
+          </div>
 
           <div className="md:col-span-2">
             <label className="mb-1 block text-sm font-medium">Camera Name</label>
@@ -180,6 +259,7 @@ export default function CreateCameraForm({ organization, reviers }: Props) {
               className="w-full rounded-xl border border-neutral-300 px-3 py-2"
               placeholder="e.g. Reolink North Edge"
               required
+              disabled={!cameraPolicy.allowed}
             />
           </div>
 
@@ -190,6 +270,7 @@ export default function CreateCameraForm({ organization, reviers }: Props) {
               onChange={(e) => setMethod(e.target.value as "smtp" | "ftp" | "manual")}
               className="w-full rounded-xl border border-neutral-300 px-3 py-2"
               required
+              disabled={!cameraPolicy.allowed}
             >
               {METHODS.map((m) => (
                 <option key={m.value} value={m.value}>
@@ -206,6 +287,7 @@ export default function CreateCameraForm({ organization, reviers }: Props) {
               onChange={(e) => setVendor(e.target.value as (typeof VENDORS)[number])}
               className="w-full rounded-xl border border-neutral-300 px-3 py-2"
               required
+              disabled={!cameraPolicy.allowed}
             >
               {VENDORS.map((v) => (
                 <option key={v} value={v}>
@@ -221,6 +303,7 @@ export default function CreateCameraForm({ organization, reviers }: Props) {
               value={revierId}
               onChange={(e) => setRevierId(e.target.value)}
               className="w-full rounded-xl border border-neutral-300 px-3 py-2"
+              disabled={!cameraPolicy.allowed}
             >
               <option value="">No revier assigned</option>
               {filteredReviers.map((revier) => (
@@ -238,6 +321,7 @@ export default function CreateCameraForm({ organization, reviers }: Props) {
               onChange={(e) => setLocationName(e.target.value)}
               className="w-full rounded-xl border border-neutral-300 px-3 py-2"
               placeholder="e.g. Forest edge west"
+              disabled={!cameraPolicy.allowed}
             />
           </div>
 
@@ -250,6 +334,7 @@ export default function CreateCameraForm({ organization, reviers }: Props) {
               onChange={(e) => setLatitude(e.target.value)}
               className="w-full rounded-xl border border-neutral-300 px-3 py-2"
               placeholder="52.123456"
+              disabled={!cameraPolicy.allowed}
             />
           </div>
 
@@ -262,11 +347,14 @@ export default function CreateCameraForm({ organization, reviers }: Props) {
               onChange={(e) => setLongitude(e.target.value)}
               className="w-full rounded-xl border border-neutral-300 px-3 py-2"
               placeholder="8.123456"
+              disabled={!cameraPolicy.allowed}
             />
           </div>
 
           <div>
-            <label className="mb-1 block text-sm font-medium">Direction (0–359, optional)</label>
+            <label className="mb-1 block text-sm font-medium">
+              Direction (0–359, optional)
+            </label>
             <input
               type="number"
               min={0}
@@ -276,6 +364,7 @@ export default function CreateCameraForm({ organization, reviers }: Props) {
               onChange={(e) => setDirectionDeg(e.target.value)}
               className="w-full rounded-xl border border-neutral-300 px-3 py-2"
               placeholder="180"
+              disabled={!cameraPolicy.allowed}
             />
           </div>
 
@@ -286,6 +375,7 @@ export default function CreateCameraForm({ organization, reviers }: Props) {
               onChange={(e) => setNotes(e.target.value)}
               className="min-h-[100px] w-full rounded-xl border border-neutral-300 px-3 py-2"
               placeholder="Optional setup notes"
+              disabled={!cameraPolicy.allowed}
             />
           </div>
         </div>
@@ -299,16 +389,20 @@ export default function CreateCameraForm({ organization, reviers }: Props) {
         <div className="mt-6 flex items-center gap-3">
           <button
             type="submit"
-            disabled={loading}
+            disabled={loading || !cameraPolicy.allowed}
             className="rounded-xl bg-black px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
           >
-            {loading ? "Creating..." : "Create Camera"}
+            {!cameraPolicy.allowed
+              ? "Kameraanlage gesperrt"
+              : loading
+              ? "Creating..."
+              : "Create Camera"}
           </button>
         </div>
       </form>
 
       {camera ? (
-        <div className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm space-y-5">
+        <div className="space-y-5 rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
           <div>
             <h2 className="text-lg font-semibold">Provisioning Result</h2>
             <p className="mt-1 text-sm text-neutral-600">
