@@ -1,5 +1,5 @@
-// src/components/ContextBar.tsx
-import { requireActiveOrganization } from "@/lib/auth";
+// src/components/ContextBar.tsx #3
+import { getOptionalActiveOrganization } from "@/lib/auth";
 import { supabaseServer } from "@/lib/supabaseServer";
 import ClientRevierScopeField from "@/components/ClientRevierScopeField";
 
@@ -9,7 +9,13 @@ type RevierRow = {
 };
 
 export default async function ContextBar() {
-  const { activeMembership } = await requireActiveOrganization();
+  const ctx = await getOptionalActiveOrganization();
+
+  if (!ctx) {
+    return null;
+  }
+
+  const { activeMembership } = ctx;
   const activeOrganization = activeMembership.organizations;
 
   if (!activeOrganization) {
@@ -30,7 +36,7 @@ export default async function ContextBar() {
   return (
     <div className="flex flex-wrap items-center gap-2 text-xs text-gray-600">
       <div className="rounded-md border bg-white px-2.5 py-1">
-        <span className="text-gray-500">Organization:</span>{" "}
+        <span className="text-gray-500">Orga:</span>{" "}
         <span className="font-medium text-black">{activeOrganization.name}</span>
       </div>
 

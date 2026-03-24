@@ -1,3 +1,4 @@
+// src/components/SectionNav.tsx
 "use client";
 
 import Link from "next/link";
@@ -28,6 +29,10 @@ const cameraItems: NavItem[] = [
 
 const orgaItems: NavItem[] = [
   { href: "/orga", label: "Overview", match: "exact" },
+  { href: "/orga/account", label: "Mein Konto", match: "exact" },
+  { href: "/orga/reviere", label: "Reviere", match: "exact" },
+  { href: "/orga/members", label: "Members", match: "exact" },
+  { href: "/orga/subscription", label: "Subscription", match: "exact" },
 ];
 
 function isActive(pathname: string, item: NavItem) {
@@ -50,9 +55,9 @@ export default function SectionNav() {
     items = orgaItems;
   }
 
-if (items.length === 0) {
-  return <div className="h-[28px]" />;
-}
+  if (items.length === 0) {
+    return <div className="h-[28px]" />;
+  }
 
   return (
     <nav className="flex flex-wrap items-center gap-1.5 text-sm">

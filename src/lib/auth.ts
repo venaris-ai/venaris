@@ -1,3 +1,4 @@
+// src/lib/auth.ts
 import { redirect } from "next/navigation";
 import { supabaseServer } from "@/lib/supabaseServer";
 import { supabaseAuthServer } from "@/lib/supabaseAuthServer";
@@ -28,6 +29,20 @@ export async function requireUser() {
 
   if (error || !user) {
     redirect("/login");
+  }
+
+  return user;
+}
+
+export async function getOptionalUser() {
+  const supabase = await supabaseAuthServer();
+  const {
+    data: { user },
+    error,
+  } = await supabase.auth.getUser();
+
+  if (error || !user) {
+    return null;
   }
 
   return user;
@@ -75,9 +90,10 @@ export async function requireActiveOrganization() {
   }
 
   const cookieStore = await cookies();
-  const requestedOrganizationId = cookieStore.get(ACTIVE_ORG_COOKIE)?.value ?? null;
+  const requestedOrganizationId =
+    cookieStore.get(ACTIVE_ORG_COOKIE)?.value ?? null;
 
-  let activeMembership =
+  const activeMembership =
     memberships.find((m) => m.organization_id === requestedOrganizationId) ??
     memberships[0];
 
@@ -100,10 +116,45 @@ export async function requireActiveOrganization() {
   };
 }
 
+export async function getOptionalActiveOrganization() {
+  const user = await getOptionalUser();
 
+  if (!user) {
+    return null;
+  }
 
+  const memberships = await getMembershipsForUser(user.id);
 
+  if (memberships.length === 0) {
+    return null;
+  }
 
+  const cookieStore = await cookies();
+  const requestedOrganizationId =
+    cookieStore.get(ACTIVE_ORG_COOKIE)?.value ?? null;
+
+  const activeMembership =
+    memberships.find((m) => m.organization_id === requestedOrganizationId) ??
+    memberships[0];
+
+  const activeOrganization = normalizeOrganization(activeMembership.organizations);
+
+  if (!activeOrganization) {
+    return null;
+  }
+
+  return {
+    user,
+    memberships: memberships.map((membership) => ({
+      ...membership,
+      organizations: normalizeOrganization(membership.organizations),
+    })),
+    activeMembership: {
+      ...activeMembership,
+      organizations: activeOrganization,
+    },
+  };
+}
 
 export async function requireOrganizationRole(
   allowedRoles: OrganizationRole[]
