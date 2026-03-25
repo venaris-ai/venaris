@@ -1,8 +1,8 @@
-// src/app/orga/reviere/[id]/edit/page.tsx #2
+// src/app/orga/reviere/[id]/edit/page.tsx #3
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
-import { requireOrganizationRole } from "@/lib/auth";
+import { requirePathAccess } from "@/lib/authz";
 import { supabaseServer } from "@/lib/supabaseServer";
 import SubmitButton from "@/components/SubmitButton";
 
@@ -20,8 +20,17 @@ type RevierRow = {
 async function updateRevier(revierId: string, formData: FormData) {
   "use server";
 
-  const { activeMembership } = await requireOrganizationRole(["owner", "admin"]);
-  const organization = activeMembership.organizations;
+  const ctx = await requirePathAccess(`/orga/reviere/${revierId}/edit`);
+
+  if (!ctx.activeMembership) {
+    throw new Error("Active organization context required");
+  }
+
+  const organization = ctx.activeMembership.organizations;
+
+  if (!organization) {
+    throw new Error("Active organization not found");
+  }
 
   const name = String(formData.get("name") ?? "").trim();
   const areaHaRaw = String(formData.get("area_ha") ?? "").trim();
@@ -77,8 +86,17 @@ export default async function EditRevierPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const { activeMembership } = await requireOrganizationRole(["owner", "admin"]);
-  const organization = activeMembership.organizations;
+  const ctx = await requirePathAccess(`/orga/reviere/${id}/edit`);
+
+  if (!ctx.activeMembership) {
+    throw new Error("Active organization context required");
+  }
+
+  const organization = ctx.activeMembership.organizations;
+
+  if (!organization) {
+    throw new Error("Active organization not found");
+  }
 
   const supabase = supabaseServer();
 

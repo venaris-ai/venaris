@@ -1,8 +1,25 @@
-// src/app/cameras/ingest/page.tsx
+// src/app/cameras/ingest/page.tsx #2
 export const dynamic = "force-dynamic";
 
+import { requirePathAccess } from "@/lib/authz";
 import { supabaseServer } from "@/lib/supabaseServer";
-import { requireActiveOrganization } from "@/lib/auth";
+
+type BatchDb = {
+  id: string;
+  camera_id: string;
+  received_at: string;
+  source: string | null;
+  file_count: number | null;
+  status: string | null;
+  error_summary: string | null;
+  meta: Record<string, unknown> | null;
+  cameras:
+    | {
+        id: string;
+        name: string;
+      }[]
+    | null;
+};
 
 type Batch = {
   id: string;
@@ -12,9 +29,28 @@ type Batch = {
   file_count: number | null;
   status: string | null;
   error_summary: string | null;
-  meta: any;
-  cameras?: { id: string; name: string } | null;
+  meta: Record<string, unknown> | null;
+  camera:
+    | {
+        id: string;
+        name: string;
+      }
+    | null;
 };
+
+function normalizeBatch(row: BatchDb): Batch {
+  return {
+    id: row.id,
+    camera_id: row.camera_id,
+    received_at: row.received_at,
+    source: row.source,
+    file_count: row.file_count,
+    status: row.status,
+    error_summary: row.error_summary,
+    meta: row.meta,
+    camera: row.cameras?.[0] ?? null,
+  };
+}
 
 function Badge({
   children,
@@ -48,24 +84,30 @@ function isTerminalErr(status?: string | null) {
 
 function statusTone(status?: string | null) {
   const s = (status || "").toLowerCase();
+
   if (s === "completed" || s === "ok" || s === "success" || s === "done") {
     return "ok" as const;
   }
+
   if (s === "error" || s === "failed") {
     return "err" as const;
   }
+
   if (s === "processing" || s === "running") {
     return "warn" as const;
   }
+
   return "muted" as const;
 }
 
 function sourceTone(source?: string | null) {
   const s = (source || "").toLowerCase();
+
   if (s === "smtp") return "warn" as const;
   if (s === "ftp") return "muted" as const;
   if (s === "manual") return "ok" as const;
   if (s === "token" || s === "token-ingest") return "muted" as const;
+
   return "muted" as const;
 }
 
@@ -77,76 +119,92 @@ function errorTone(status?: string | null, error?: string | null) {
 
 function formatUtcTimestamp(value?: string | null) {
   if (!value) return "-";
+
   const d = new Date(value);
+
   if (Number.isNaN(d.getTime())) return "-";
+
   return d.toISOString().replace("T", " ").slice(0, 19) + " UTC";
 }
 
 export default async function CamerasIngestPage() {
-  const { activeMembership } = await requireActiveOrganization();
-  const activeOrganization = activeMembership.organizations;
+  const ctx = await requirePathAccess("/cameras/ingest");
+
+  if (!ctx.activeMembership) {
+    throw new Error("Active organization context required");
+  }
+
+  const activeOrganization = ctx.activeMembership.organizations;
+
+  if (!activeOrganization) {
+    throw new Error("Active organization not found");
+  }
+
+  const supabase = supabaseServer();
 
   let items: Batch[] = [];
   let apiError: string | null = null;
 
-  if (!activeOrganization) {
-    apiError = "active organization not found";
+  const { data: cameras, error: camerasError } = await supabase
+    .from("cameras")
+    .select("id")
+    .eq("organization_id", activeOrganization.id);
+
+  if (camerasError) {
+    apiError = camerasError.message;
   } else {
-    const supabase = supabaseServer();
+    const allowedCameraIds = (cameras ?? []).map((camera) => camera.id);
 
-    const { data: cameras, error: camerasError } = await supabase
-      .from("cameras")
-      .select("id")
-      .eq("organization_id", activeOrganization.id);
-
-    if (camerasError) {
-      apiError = camerasError.message;
-    } else {
-      const allowedCameraIds = (cameras ?? []).map((c) => c.id);
-
-      if (allowedCameraIds.length > 0) {
-        const { data, error } = await supabase
-          .from("ingest_batches")
-          .select(
-            `
-            id,
-            camera_id,
-            received_at,
-            source,
-            file_count,
-            status,
-            error_summary,
-            meta,
-            cameras ( id, name )
+    if (allowedCameraIds.length > 0) {
+      const { data, error } = await supabase
+        .from("ingest_batches")
+        .select(
           `
-          )
-          .in("camera_id", allowedCameraIds)
-          .order("received_at", { ascending: false })
-          .limit(50);
+          id,
+          camera_id,
+          received_at,
+          source,
+          file_count,
+          status,
+          error_summary,
+          meta,
+          cameras ( id, name )
+          `
+        )
+        .in("camera_id", allowedCameraIds)
+        .order("received_at", { ascending: false })
+        .limit(50);
 
-        if (error) {
-          apiError = error.message;
-        } else {
-          items = (data ?? []) as Batch[];
-        }
+      if (error) {
+        apiError = error.message;
+      } else {
+        items = ((data ?? []) as BatchDb[]).map(normalizeBatch);
       }
     }
   }
 
   return (
-    <div className="mx-auto max-w-6xl p-6">
-      <div className="mb-4 flex items-center justify-between">
-        <h1 className="text-xl font-semibold">Ingest Monitoring</h1>
+    <main className="space-y-6">
+      <section className="flex items-center justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-semibold tracking-tight">
+            Ingest Monitoring
+          </h1>
+          <p className="mt-2 text-sm text-gray-600">
+            Überblick über die letzten Ingest-Batches der aktiven Organisation.
+          </p>
+        </div>
+
         <a
           href="/cameras/ingest"
-          className="rounded-md border px-3 py-1 text-sm hover:bg-gray-50"
+          className="rounded-md border px-3 py-2 text-sm hover:bg-gray-50"
           title="Reload page"
         >
           Refresh
         </a>
-      </div>
+      </section>
 
-      <div className="overflow-hidden rounded-lg border bg-white">
+      <section className="overflow-hidden rounded-2xl border bg-white shadow-sm">
         <table className="w-full text-sm">
           <thead className="border-b bg-gray-50 text-left">
             <tr>
@@ -167,48 +225,48 @@ export default async function CamerasIngestPage() {
                 </td>
               </tr>
             ) : (
-              items.map((b) => {
-                const stTone = statusTone(b.status);
-                const srcTone = sourceTone(b.source);
-                const errTone = errorTone(b.status, b.error_summary);
+              items.map((batch) => {
+                const stTone = statusTone(batch.status);
+                const srcTone = sourceTone(batch.source);
+                const errTone = errorTone(batch.status, batch.error_summary);
 
                 const errClass =
                   errTone === "err"
-                    ? "text-red-700 font-medium"
+                    ? "font-medium text-red-700"
                     : errTone === "warn"
-                    ? "text-yellow-700 font-medium"
+                    ? "font-medium text-yellow-700"
                     : "text-gray-400";
 
                 return (
-                  <tr key={b.id} className="border-b last:border-b-0">
-                    <td className="px-3 py-2 whitespace-nowrap text-gray-700">
-                      {formatUtcTimestamp(b.received_at)}
+                  <tr key={batch.id} className="border-b last:border-b-0">
+                    <td className="whitespace-nowrap px-3 py-2 text-gray-700">
+                      {formatUtcTimestamp(batch.received_at)}
                     </td>
 
                     <td className="px-3 py-2">
-                      <Badge tone={srcTone}>{b.source || "-"}</Badge>
+                      <Badge tone={srcTone}>{batch.source || "-"}</Badge>
                     </td>
 
                     <td className="px-3 py-2">
-                      {b.cameras?.name || b.camera_id || "-"}
+                      {batch.camera?.name || batch.camera_id || "-"}
                     </td>
 
-                    <td className="px-3 py-2">{b.file_count ?? "-"}</td>
+                    <td className="px-3 py-2">{batch.file_count ?? "-"}</td>
 
                     <td className="px-3 py-2">
-                      <Badge tone={stTone}>{b.status || "-"}</Badge>
+                      <Badge tone={stTone}>{batch.status || "-"}</Badge>
                     </td>
 
                     <td className={`px-3 py-2 ${errClass}`}>
-                      {b.error_summary ? (
-                        b.error_summary
+                      {batch.error_summary ? (
+                        batch.error_summary
                       ) : (
                         <span className="text-gray-400">-</span>
                       )}
                     </td>
 
                     <td className="px-3 py-2 font-mono text-xs text-gray-600">
-                      {b.id.slice(0, 8)}…
+                      {batch.id.slice(0, 8)}…
                     </td>
                   </tr>
                 );
@@ -216,11 +274,11 @@ export default async function CamerasIngestPage() {
             )}
           </tbody>
         </table>
-      </div>
+      </section>
 
-      {apiError && (
-        <p className="mt-3 text-sm text-red-700">API error: {apiError}</p>
-      )}
-    </div>
+      {apiError ? (
+        <p className="text-sm text-red-700">API error: {apiError}</p>
+      ) : null}
+    </main>
   );
 }

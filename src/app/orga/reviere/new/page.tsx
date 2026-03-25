@@ -1,15 +1,24 @@
-// src/app/orga/reviere/new/page.tsx
+// src/app/orga/reviere/new/page.tsx #2
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { requireOrganizationRole } from "@/lib/auth";
+import { requirePathAccess } from "@/lib/authz";
 import { supabaseServer } from "@/lib/supabaseServer";
 import SubmitButton from "@/components/SubmitButton";
 
 async function createRevier(formData: FormData) {
   "use server";
 
-  const { activeMembership } = await requireOrganizationRole(["owner", "admin"]);
-  const organization = activeMembership.organizations;
+  const ctx = await requirePathAccess("/orga/reviere/new");
+
+  if (!ctx.activeMembership) {
+    throw new Error("Active organization context required");
+  }
+
+  const organization = ctx.activeMembership.organizations;
+
+  if (!organization) {
+    throw new Error("Active organization not found");
+  }
 
   const name = String(formData.get("name") ?? "").trim();
   const areaHaRaw = String(formData.get("area_ha") ?? "").trim();
@@ -54,7 +63,7 @@ async function createRevier(formData: FormData) {
 }
 
 export default async function NewRevierPage() {
-  await requireOrganizationRole(["owner", "admin"]);
+  await requirePathAccess("/orga/reviere/new");
 
   return (
     <main className="space-y-8">

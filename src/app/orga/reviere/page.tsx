@@ -1,6 +1,6 @@
-// src/app/orga/reviere/page.tsx #2
+// src/app/orga/reviere/page.tsx #4
 import Link from "next/link";
-import { requireActiveOrganization } from "@/lib/auth";
+import { requirePathAccess } from "@/lib/authz";
 import { supabaseServer } from "@/lib/supabaseServer";
 
 type RevierRow = {
@@ -42,8 +42,17 @@ export default async function OrgaRevierePage({
   const created = params.created === "1";
   const updated = params.updated === "1";
 
-  const { activeMembership } = await requireActiveOrganization();
-  const organization = activeMembership.organizations;
+  const ctx = await requirePathAccess("/orga/reviere");
+
+  if (!ctx.activeMembership) {
+    throw new Error("Active organization context required");
+  }
+
+  const organization = ctx.activeMembership.organizations;
+
+  if (!organization) {
+    throw new Error("Active organization not found");
+  }
 
   const supabase = supabaseServer();
 
@@ -200,10 +209,11 @@ export default async function OrgaRevierePage({
       </section>
 
       <section className="rounded-2xl border border-amber-200 bg-amber-50 p-6">
-        <h2 className="text-lg font-medium text-amber-900">Nächster Schritt</h2>
+        <h2 className="text-lg font-medium text-amber-900">Hinweis</h2>
         <p className="mt-2 max-w-3xl text-sm leading-6 text-amber-900/80">
-          Als Nächstes sollte der Edit-Pfad für Reviere ergänzt werden.
-          Boundary-Import und Kartenlogik können danach folgen.
+          Boundary-Import, Kartenlogik und Geometrien folgen später. Für den MVP
+          erfassen und pflegen wir hier zunächst die operativ wichtigen
+          Stammdaten der Reviere.
         </p>
       </section>
     </main>

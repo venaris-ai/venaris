@@ -1,59 +1,47 @@
-// src/components/SectionNav.tsx
+// src/components/SectionNav.tsx #3
 "use client";
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import {
+  SECTION_NAV_ITEMS,
+  canAccessPath,
+  isNavItemActive,
+  type AppRole,
+  type NavItem,
+} from "@/lib/routeAccess";
 
-type NavItem = {
-  href: string;
-  label: string;
-  match?: "exact" | "startsWith";
+type Props = {
+  role?: AppRole | null;
+  email?: string | null;
 };
 
-const wildlifeItems: NavItem[] = [
-  { href: "/wildlife", label: "Overview", match: "exact" },
-  { href: "/wildlife/species", label: "Species", match: "exact" },
-  { href: "/wildlife/wherewhen", label: "Where & When", match: "exact" },
-  { href: "/wildlife/activity", label: "Activity", match: "exact" },
-  { href: "/wildlife/popsim", label: "PopSim", match: "exact" },
-];
-
-const cameraItems: NavItem[] = [
-  { href: "/cameras", label: "Overview", match: "exact" },
-  { href: "/cameras/new", label: "New", match: "exact" },
-  { href: "/cameras/health", label: "Health", match: "exact" },
-  { href: "/cameras/events", label: "Events", match: "startsWith" },
-  { href: "/cameras/import", label: "Import", match: "exact" },
-  { href: "/cameras/ingest", label: "Ingest", match: "exact" },
-];
-
-const orgaItems: NavItem[] = [
-  { href: "/orga", label: "Overview", match: "exact" },
-  { href: "/orga/account", label: "Mein Konto", match: "exact" },
-  { href: "/orga/reviere", label: "Reviere", match: "exact" },
-  { href: "/orga/members", label: "Members", match: "exact" },
-  { href: "/orga/subscription", label: "Subscription", match: "exact" },
-];
-
-function isActive(pathname: string, item: NavItem) {
-  if (item.match === "startsWith") {
-    return pathname.startsWith(item.href);
+function getSectionItems(pathname: string): NavItem[] {
+  if (pathname.startsWith("/wildlife")) {
+    return SECTION_NAV_ITEMS.wildlife;
   }
-  return pathname === item.href;
+
+  if (pathname.startsWith("/cameras")) {
+    return SECTION_NAV_ITEMS.cameras;
+  }
+
+  if (pathname.startsWith("/orga")) {
+    return SECTION_NAV_ITEMS.orga;
+  }
+
+  return [];
 }
 
-export default function SectionNav() {
+export default function SectionNav({ role, email }: Props) {
   const pathname = usePathname();
 
-  let items: NavItem[] = [];
-
-  if (pathname.startsWith("/wildlife")) {
-    items = wildlifeItems;
-  } else if (pathname.startsWith("/cameras")) {
-    items = cameraItems;
-  } else if (pathname.startsWith("/orga")) {
-    items = orgaItems;
-  }
+  const items = getSectionItems(pathname).filter((item) =>
+    canAccessPath({
+      pathname: item.href,
+      role,
+      email,
+    })
+  );
 
   if (items.length === 0) {
     return <div className="h-[28px]" />;
@@ -62,7 +50,7 @@ export default function SectionNav() {
   return (
     <nav className="flex flex-wrap items-center gap-1.5 text-sm">
       {items.map((item) => {
-        const active = isActive(pathname, item);
+        const active = isNavItemActive(pathname, item);
 
         return (
           <Link

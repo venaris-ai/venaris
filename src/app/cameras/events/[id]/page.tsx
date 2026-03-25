@@ -1,10 +1,10 @@
-// src/app/cameras/events/[id]/page.tsx
+// src/app/cameras/events/[id]/page.tsx #2
 export const runtime = "nodejs";
 
 import Link from "next/link";
 import { supabaseServer } from "@/lib/supabaseServer";
 import AssetGrid from "./AssetGrid";
-import { requireActiveOrganization } from "@/lib/auth";
+import { requirePathAccess } from "@/lib/authz";
 
 function fmt(ts: string | null) {
   if (!ts) return "—";
@@ -26,8 +26,6 @@ function scoreBadge(score: number | null) {
 
 export default async function CameraEventDetailPage(props: any) {
   const supabase = supabaseServer();
-  const { activeMembership } = await requireActiveOrganization();
-  const activeOrganization = activeMembership.organizations;
   const params = await Promise.resolve(props?.params);
   const eventId: string | undefined = params?.id;
 
@@ -53,6 +51,9 @@ export default async function CameraEventDetailPage(props: any) {
       </main>
     );
   }
+
+  const ctx = await requirePathAccess(`/cameras/events/${eventId}`);
+  const activeOrganization = ctx.activeMembership?.organizations;
 
   const { data: event, error: eventErr } = await supabase
     .from("events")

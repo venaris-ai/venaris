@@ -1,10 +1,15 @@
-// src/app/cameras/health/page.tsx
-import { requireActiveOrganization } from "@/lib/auth";
+// src/app/cameras/health/page.tsx #2
+import { requirePathAccess } from "@/lib/authz";
 import CamerasClient from "./CamerasClient";
 
 export default async function CamerasHealthPage() {
-  const { activeMembership } = await requireActiveOrganization();
-  const role = activeMembership.role;
+  const ctx = await requirePathAccess("/cameras/health");
+
+  if (!ctx.activeMembership) {
+    throw new Error("Active organization context required");
+  }
+
+  const role = ctx.activeMembership.role;
 
   return <CamerasClient role={role} />;
 }

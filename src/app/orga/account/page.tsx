@@ -1,6 +1,6 @@
-// src/app/orga/account/page.tsx
+// src/app/orga/account/page.tsx #2
 import { redirect } from "next/navigation";
-import { requireActiveOrganization, requireOrganizationRole } from "@/lib/auth";
+import { requirePathAccess } from "@/lib/authz";
 import { supabaseServer } from "@/lib/supabaseServer";
 import SubmitButton from "@/components/SubmitButton";
 
@@ -54,8 +54,17 @@ function show(value: string | null) {
 async function saveOrganizationAccount(formData: FormData) {
   "use server";
 
-  const { activeMembership } = await requireOrganizationRole(["owner", "admin"]);
-  const organization = activeMembership.organizations;
+  const ctx = await requirePathAccess("/orga/account");
+
+  if (!ctx.activeMembership) {
+    throw new Error("Active organization context required");
+  }
+
+  const organization = ctx.activeMembership.organizations;
+
+  if (!organization) {
+    throw new Error("Active organization not found");
+  }
 
   const name = String(formData.get("name") ?? "").trim();
   const legalName = String(formData.get("legal_name") ?? "").trim();
@@ -114,8 +123,17 @@ export default async function OrgaAccountPage({
   const params = (await searchParams) ?? {};
   const saved = params.saved === "1";
 
-  const { activeMembership } = await requireActiveOrganization();
-  const organization = activeMembership.organizations;
+  const ctx = await requirePathAccess("/orga/account");
+
+  if (!ctx.activeMembership) {
+    throw new Error("Active organization context required");
+  }
+
+  const organization = ctx.activeMembership.organizations;
+
+  if (!organization) {
+    throw new Error("Active organization not found");
+  }
 
   const supabase = supabaseServer();
 
@@ -386,7 +404,7 @@ export default async function OrgaAccountPage({
           <dl className="mt-4 divide-y">
             <div className="grid gap-2 py-3">
               <dt className="text-sm font-medium text-gray-500">Organisation ID</dt>
-              <dd className="text-sm text-gray-900 break-all">{org.id}</dd>
+              <dd className="text-sm break-all text-gray-900">{org.id}</dd>
             </div>
 
             <div className="grid gap-2 py-3">
@@ -406,7 +424,7 @@ export default async function OrgaAccountPage({
 
             <div className="grid gap-2 py-3">
               <dt className="text-sm font-medium text-gray-500">Owner User ID</dt>
-              <dd className="text-sm text-gray-900 break-all">
+              <dd className="text-sm break-all text-gray-900">
                 {show(org.owner_user_id)}
               </dd>
             </div>
@@ -418,7 +436,7 @@ export default async function OrgaAccountPage({
 
             <div className="grid gap-2 py-3">
               <dt className="text-sm font-medium text-gray-500">Logo URL</dt>
-              <dd className="text-sm text-gray-900 break-all">
+              <dd className="text-sm break-all text-gray-900">
                 {show(org.logo_url)}
               </dd>
             </div>

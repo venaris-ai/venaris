@@ -1,5 +1,5 @@
-// src/app/cameras/new/page.tsx #3
-import { requireOrganizationRole } from "@/lib/auth";
+// src/app/cameras/new/page.tsx #4
+import { requirePathAccess } from "@/lib/authz";
 import { supabaseServer } from "@/lib/supabaseServer";
 import { canCreateCamera, resolveSubscriptionState } from "@/lib/billing/subscriptionPolicy";
 import CreateCameraForm from "./CreateCameraForm";
@@ -25,10 +25,14 @@ type SubscriptionPolicyRow = {
 };
 
 export default async function NewCameraPage() {
-  const { activeMembership } = await requireOrganizationRole(["owner", "admin"]);
+  const ctx = await requirePathAccess("/cameras/new");
   const supabase = supabaseServer();
 
-  const activeOrganization = activeMembership.organizations;
+  if (!ctx.activeMembership) {
+    throw new Error("Active organization context required");
+  }
+
+  const activeOrganization = ctx.activeMembership.organizations;
 
   if (!activeOrganization) {
     throw new Error("Active organization not found");

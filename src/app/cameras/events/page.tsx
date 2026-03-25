@@ -1,9 +1,9 @@
-// src/app/cameras/events/page.tsx
+// src/app/cameras/events/page.tsx #2
 export const runtime = "nodejs";
 
 import Link from "next/link";
 import { supabaseServer } from "@/lib/supabaseServer";
-import { requireActiveOrganization } from "@/lib/auth";
+import { requirePathAccess } from "@/lib/authz";
 
 function fmt(ts: string | null) {
   if (!ts) return "—";
@@ -24,8 +24,8 @@ function scoreBadge(score: number | null) {
 }
 
 export default async function CameraEventsPage() {
-  const { activeMembership } = await requireActiveOrganization();
-  const activeOrganization = activeMembership.organizations;
+  const ctx = await requirePathAccess("/cameras/events");
+  const activeOrganization = ctx.activeMembership?.organizations;
 
   if (!activeOrganization) {
     return (

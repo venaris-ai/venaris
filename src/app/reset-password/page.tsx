@@ -1,8 +1,9 @@
-// src/app/reset-password/page.tsx #5
+// src/app/reset-password/page.tsx #6
 "use client";
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import type { AuthChangeEvent, Session } from "@supabase/supabase-js";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
 
 export default function ResetPasswordPage() {
@@ -22,7 +23,7 @@ export default function ResetPasswordPage() {
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (event) => {
+    } = supabase.auth.onAuthStateChange(async (event: AuthChangeEvent) => {
       if (!active) return;
 
       if (event === "PASSWORD_RECOVERY") {
@@ -32,24 +33,34 @@ export default function ResetPasswordPage() {
       }
     });
 
-    supabase.auth.getSession().then(({ data, error }) => {
-      if (!active || resolved) return;
+    supabase.auth
+      .getSession()
+      .then(
+        ({
+          data,
+          error,
+        }: {
+          data: { session: Session | null };
+          error: Error | null;
+        }) => {
+          if (!active || resolved) return;
 
-      if (error) {
-        resolved = true;
-        setError(
-          "Der Reset-Link konnte nicht verarbeitet werden. Bitte fordere eine neue Passwort-E-Mail an."
-        );
-        setReady(false);
-        return;
-      }
+          if (error) {
+            resolved = true;
+            setError(
+              "Der Reset-Link konnte nicht verarbeitet werden. Bitte fordere eine neue Passwort-E-Mail an."
+            );
+            setReady(false);
+            return;
+          }
 
-      if (data.session) {
-        resolved = true;
-        setReady(true);
-        setError("");
-      }
-    });
+          if (data.session) {
+            resolved = true;
+            setReady(true);
+            setError("");
+          }
+        }
+      );
 
     const fallbackTimer = window.setTimeout(() => {
       if (!active || resolved) return;

@@ -1,11 +1,30 @@
-// src/app/admin/subscriptions/page.tsx #1
-import { redirect } from "next/navigation";
-import { supabaseAuthServer } from "@/lib/supabaseAuthServer";
+// src/app/admin/subscriptions/page.tsx #2
+import { requirePathAccess } from "@/lib/authz";
 import { supabaseServer } from "@/lib/supabaseServer";
 import AdminSubscriptionRequestActions from "./AdminSubscriptionRequestActions";
 
 type RequestStatus = "open" | "approved" | "rejected" | "canceled";
 type PlanKey = "starter" | "pro" | "enterprise";
+
+type RequestRowDb = {
+  id: string;
+  organization_id: string;
+  requested_by_user_id: string;
+  current_plan_key: PlanKey;
+  requested_plan_key: PlanKey;
+  status: RequestStatus;
+  request_type: "upgrade" | "downgrade" | "change";
+  message: string | null;
+  created_at: string;
+  processed_at: string | null;
+  resolution_note: string | null;
+  organizations:
+    | {
+        name: string;
+        slug: string;
+      }[]
+    | null;
+};
 
 type RequestRow = {
   id: string;
@@ -19,13 +38,28 @@ type RequestRow = {
   created_at: string;
   processed_at: string | null;
   resolution_note: string | null;
-  organizations: {
+  organization: {
     name: string;
     slug: string;
   } | null;
 };
 
-const VENARIS_ADMIN_EMAIL = "dev@venaris.io";
+function normalizeRequestRow(row: RequestRowDb): RequestRow {
+  return {
+    id: row.id,
+    organization_id: row.organization_id,
+    requested_by_user_id: row.requested_by_user_id,
+    current_plan_key: row.current_plan_key,
+    requested_plan_key: row.requested_plan_key,
+    status: row.status,
+    request_type: row.request_type,
+    message: row.message,
+    created_at: row.created_at,
+    processed_at: row.processed_at,
+    resolution_note: row.resolution_note,
+    organization: row.organizations?.[0] ?? null,
+  };
+}
 
 function formatDateTime(value: string | null) {
   if (!value) return "—";
@@ -65,21 +99,7 @@ function statusBadge(status: RequestStatus) {
 }
 
 export default async function AdminSubscriptionsPage() {
-  const auth = await supabaseAuthServer();
-  const {
-    data: { user },
-    error: authError,
-  } = await auth.auth.getUser();
-
-  if (authError || !user) {
-    redirect("/login");
-  }
-
-  const userEmail = (user.email ?? "").toLowerCase().trim();
-
-  if (userEmail !== VENARIS_ADMIN_EMAIL) {
-    redirect("/");
-  }
+  await requirePathAccess("/admin/subscriptions");
 
   const supabase = supabaseServer();
 
@@ -146,8 +166,13 @@ export default async function AdminSubscriptionsPage() {
     );
   }
 
-  const openRequests = (openRequestsResult.data ?? []) as RequestRow[];
-  const recentRequests = (recentRequestsResult.data ?? []) as RequestRow[];
+  const openRequests = ((openRequestsResult.data ?? []) as RequestRowDb[]).map(
+    normalizeRequestRow
+  );
+
+  const recentRequests = (
+    (recentRequestsResult.data ?? []) as RequestRowDb[]
+  ).map(normalizeRequestRow);
 
   return (
     <main className="space-y-8">
@@ -156,8 +181,8 @@ export default async function AdminSubscriptionsPage() {
           Admin · Subscription Requests
         </h1>
         <p className="mt-2 text-sm text-gray-600">
-          Interne Venaris-Ansicht für offene Plananfragen. Zugriff nur für{" "}
-          {VENARIS_ADMIN_EMAIL}.
+          Interne Venaris-Ansicht für offene Plananfragen. Zugriff nur für
+          dev@venaris.io.
         </p>
       </section>
 
@@ -169,9 +194,7 @@ export default async function AdminSubscriptionsPage() {
               Diese Anfragen können genehmigt oder abgelehnt werden.
             </p>
           </div>
-          <div className="text-sm text-gray-500">
-            {openRequests.length} offen
-          </div>
+          <div className="text-sm text-gray-500">{openRequests.length} offen</div>
         </div>
 
         <div className="mt-6 space-y-4">
@@ -188,10 +211,10 @@ export default async function AdminSubscriptionsPage() {
                 <div className="flex flex-wrap items-start justify-between gap-4">
                   <div>
                     <div className="text-base font-semibold text-gray-900">
-                      {request.organizations?.name ?? "Unbekannte Organization"}
+                      {request.organization?.name ?? "Unbekannte Organization"}
                     </div>
                     <div className="mt-1 text-sm text-gray-600">
-                      {request.organizations?.slug ?? "—"} ·{" "}
+                      {request.organization?.slug ?? "—"} ·{" "}
                       {planLabel(request.current_plan_key)} →{" "}
                       {planLabel(request.requested_plan_key)} ·{" "}
                       {request.request_type}
@@ -213,12 +236,8 @@ export default async function AdminSubscriptionsPage() {
                       <span className="font-medium">Angelegt:</span>{" "}
                       {formatDateTime(request.created_at)}
                     </div>
-                    <div className="mt-1 break-all">
-                      <span className="font-medium">Request ID:</span>{" "}
-                      {request.id}
-                    </div>
-                    <div className="mt-1 break-all">
-                      <span className="font-medium">Anfragender User:</span>{" "}
+                    <div className="mt-1">
+                      <span className="font-medium">Requested by:</span>{" "}
                       {request.requested_by_user_id}
                     </div>
                   </div>
@@ -226,7 +245,7 @@ export default async function AdminSubscriptionsPage() {
                   <div className="text-sm text-gray-700">
                     <div>
                       <span className="font-medium">Nachricht:</span>{" "}
-                      {request.message || "—"}
+                      {request.message?.trim() || "—"}
                     </div>
                   </div>
                 </div>
@@ -241,10 +260,12 @@ export default async function AdminSubscriptionsPage() {
       </section>
 
       <section className="rounded-2xl border bg-white p-6 shadow-sm">
-        <h2 className="text-lg font-medium">Zuletzt bearbeitet</h2>
-        <p className="mt-1 text-sm text-gray-600">
-          Die letzten genehmigten oder abgelehnten Anfragen.
-        </p>
+        <div>
+          <h2 className="text-lg font-medium">Zuletzt bearbeitet</h2>
+          <p className="mt-1 text-sm text-gray-600">
+            Die letzten genehmigten oder abgelehnten Anfragen.
+          </p>
+        </div>
 
         <div className="mt-6 space-y-4">
           {recentRequests.length === 0 ? (
@@ -260,9 +281,10 @@ export default async function AdminSubscriptionsPage() {
                 <div className="flex flex-wrap items-start justify-between gap-4">
                   <div>
                     <div className="text-base font-semibold text-gray-900">
-                      {request.organizations?.name ?? "Unbekannte Organization"}
+                      {request.organization?.name ?? "Unbekannte Organization"}
                     </div>
                     <div className="mt-1 text-sm text-gray-600">
+                      {request.organization?.slug ?? "—"} ·{" "}
                       {planLabel(request.current_plan_key)} →{" "}
                       {planLabel(request.requested_plan_key)} ·{" "}
                       {request.request_type}
@@ -278,14 +300,27 @@ export default async function AdminSubscriptionsPage() {
                   </span>
                 </div>
 
-                <div className="mt-4 text-sm text-gray-700">
+                <div className="mt-4 grid gap-3 md:grid-cols-2 text-sm text-gray-700">
                   <div>
-                    <span className="font-medium">Bearbeitet:</span>{" "}
-                    {formatDateTime(request.processed_at)}
+                    <div>
+                      <span className="font-medium">Angelegt:</span>{" "}
+                      {formatDateTime(request.created_at)}
+                    </div>
+                    <div className="mt-1">
+                      <span className="font-medium">Bearbeitet:</span>{" "}
+                      {formatDateTime(request.processed_at)}
+                    </div>
                   </div>
-                  <div className="mt-1">
-                    <span className="font-medium">Notiz:</span>{" "}
-                    {request.resolution_note || "—"}
+
+                  <div>
+                    <div>
+                      <span className="font-medium">Nachricht:</span>{" "}
+                      {request.message?.trim() || "—"}
+                    </div>
+                    <div className="mt-1">
+                      <span className="font-medium">Resolution:</span>{" "}
+                      {request.resolution_note?.trim() || "—"}
+                    </div>
                   </div>
                 </div>
               </div>

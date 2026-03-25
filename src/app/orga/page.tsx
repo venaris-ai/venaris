@@ -1,6 +1,6 @@
-// src/app/orga/page.tsx #1
+// src/app/orga/page.tsx #2
 import Link from "next/link";
-import { requireActiveOrganization } from "@/lib/auth";
+import { requirePathAccess, canAccessPath } from "@/lib/authz";
 import { supabaseServer } from "@/lib/supabaseServer";
 import { getBillingPlan } from "@/lib/billing/plans";
 import {
@@ -148,12 +148,16 @@ function ActionLink({
 }
 
 export default async function OrgaPage() {
-  const ctx = await requireActiveOrganization();
+  const ctx = await requirePathAccess("/orga");
   const supabase = supabaseServer();
+
+  if (!ctx.activeMembership) {
+    throw new Error("Active organization context required");
+  }
 
   const organization = ctx.activeMembership.organizations;
   const role = ctx.activeMembership.role;
-  const userEmail = ctx.user.email ?? "—";
+  const userEmail = ctx.user.email ?? null;
   const nowIso = new Date().toISOString();
 
   if (!organization) {
@@ -255,19 +259,25 @@ export default async function OrgaPage() {
 
   const planPrice = subscription ? formatPlanPrice(subscription) : "—";
 
+  const canSeeSubscription = canAccessPath({
+    pathname: "/orga/subscription",
+    role,
+    email: userEmail,
+  });
+
   return (
     <main className="space-y-8">
       <section className="space-y-3">
         <div>
-          <h1 className="text-3xl font-semibold tracking-tight">Orga</h1>
+          <h1 className="text-3xl font-semibold tracking-tight">Organisation</h1>
           <p className="mt-2 max-w-3xl text-sm text-gray-600">
-            Überblick über Konto, Reviere, Members und Subscription der aktiven
-            Organization.
+            Überblick über Konto, Reviere, Members und – sofern freigegeben –
+            die Subscription der aktiven Organization.
           </p>
         </div>
       </section>
 
-      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <section className={`grid gap-4 md:grid-cols-2 ${canSeeSubscription ? "xl:grid-cols-4" : "xl:grid-cols-3"}`}>
         <StatCard
           title="Reviere"
           value={String(reviersCount)}
@@ -287,18 +297,20 @@ export default async function OrgaPage() {
               : "Keine Subscription gefunden"
           }
         />
-        <StatCard
-          title="Subscription"
-          value={subscription ? planLabel(subscription.plan_key) : "—"}
-          subline={
-            subscription
-              ? `${effectiveStatus?.label ?? "—"} · ${planPrice} inkl. MwSt.`
-              : "Keine Subscription hinterlegt"
-          }
-        />
+        {canSeeSubscription ? (
+          <StatCard
+            title="Subscription"
+            value={subscription ? planLabel(subscription.plan_key) : "—"}
+            subline={
+              subscription
+                ? `${effectiveStatus?.label ?? "—"} · ${planPrice} inkl. MwSt.`
+                : "Keine Subscription hinterlegt"
+            }
+          />
+        ) : null}
       </section>
 
-      <section className="grid gap-4 xl:grid-cols-2">
+      <section className={`grid gap-4 ${canSeeSubscription ? "xl:grid-cols-2" : "xl:grid-cols-3"}`}>
         <div className="rounded-2xl border bg-white p-6 shadow-sm">
           <div className="flex items-center justify-between gap-4">
             <div>
@@ -332,7 +344,7 @@ export default async function OrgaPage() {
             <div className="flex items-center justify-between gap-4">
               <dt className="text-gray-500">E-Mail</dt>
               <dd className="text-right font-medium text-gray-900">
-                {userEmail}
+                {userEmail ?? "—"}
               </dd>
             </div>
           </dl>
@@ -407,68 +419,70 @@ export default async function OrgaPage() {
           ) : null}
         </div>
 
-        <div className="rounded-2xl border bg-white p-6 shadow-sm">
-          <div className="flex items-center justify-between gap-4">
-            <div>
-              <h2 className="text-lg font-medium">Subscription</h2>
-              <p className="mt-1 text-sm text-gray-600">
-                Kommerzieller Rahmen, Plan und aktuelle Nutzungsgrenzen.
-              </p>
+        {canSeeSubscription ? (
+          <div className="rounded-2xl border bg-white p-6 shadow-sm">
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <h2 className="text-lg font-medium">Subscription</h2>
+                <p className="mt-1 text-sm text-gray-600">
+                  Kommerzieller Rahmen, Plan und aktuelle Nutzungsgrenzen.
+                </p>
+              </div>
+              <ActionLink href="/orga/subscription" label="Subscription öffnen" />
             </div>
-            <ActionLink href="/orga/subscription" label="Subscription öffnen" />
+
+            {!subscription ? (
+              <div className="mt-6 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+                Für diese Organization wurde noch keine Subscription gefunden.
+              </div>
+            ) : (
+              <>
+                <div className="mt-6 flex flex-wrap items-center gap-3">
+                  <div className="text-2xl font-semibold text-gray-900">
+                    {planLabel(subscription.plan_key)}
+                  </div>
+                  <span
+                    className={`inline-flex rounded-full border px-3 py-1 text-xs font-medium ${effectiveStatus?.badgeClass}`}
+                  >
+                    {effectiveStatus?.label}
+                  </span>
+                </div>
+
+                <div className="mt-4 grid gap-4 md:grid-cols-2">
+                  <div className="rounded-xl border bg-gray-50 p-4">
+                    <div className="text-xs font-medium uppercase tracking-wide text-gray-500">
+                      Preis
+                    </div>
+                    <div className="mt-2 text-xl font-semibold text-gray-900">
+                      {planPrice}
+                    </div>
+                    <p className="mt-1 text-sm text-gray-600">
+                      {billingCycleLabel(subscription.billing_cycle)} · inkl. MwSt.
+                    </p>
+                  </div>
+
+                  <div className="rounded-xl border bg-gray-50 p-4">
+                    <div className="text-xs font-medium uppercase tracking-wide text-gray-500">
+                      Nutzung
+                    </div>
+                    <div className="mt-2 text-sm font-medium text-gray-900">
+                      Kameras: {camerasCount} / {subscription.max_cameras}
+                    </div>
+                    <div className="mt-1 text-sm font-medium text-gray-900">
+                      Members: {resolvedSubscription?.currentMemberUsage ?? 0} /{" "}
+                      {subscription.max_members}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-4 text-sm text-gray-600">
+                  Trial endet: {formatDate(subscription.trial_ends_at)} · Periode bis:{" "}
+                  {formatDate(subscription.current_period_end)}
+                </div>
+              </>
+            )}
           </div>
-
-          {!subscription ? (
-            <div className="mt-6 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-              Für diese Organization wurde noch keine Subscription gefunden.
-            </div>
-          ) : (
-            <>
-              <div className="mt-6 flex flex-wrap items-center gap-3">
-                <div className="text-2xl font-semibold text-gray-900">
-                  {planLabel(subscription.plan_key)}
-                </div>
-                <span
-                  className={`inline-flex rounded-full border px-3 py-1 text-xs font-medium ${effectiveStatus?.badgeClass}`}
-                >
-                  {effectiveStatus?.label}
-                </span>
-              </div>
-
-              <div className="mt-4 grid gap-4 md:grid-cols-2">
-                <div className="rounded-xl border bg-gray-50 p-4">
-                  <div className="text-xs font-medium uppercase tracking-wide text-gray-500">
-                    Preis
-                  </div>
-                  <div className="mt-2 text-xl font-semibold text-gray-900">
-                    {planPrice}
-                  </div>
-                  <p className="mt-1 text-sm text-gray-600">
-                    {billingCycleLabel(subscription.billing_cycle)} · inkl. MwSt.
-                  </p>
-                </div>
-
-                <div className="rounded-xl border bg-gray-50 p-4">
-                  <div className="text-xs font-medium uppercase tracking-wide text-gray-500">
-                    Nutzung
-                  </div>
-                  <div className="mt-2 text-sm font-medium text-gray-900">
-                    Kameras: {camerasCount} / {subscription.max_cameras}
-                  </div>
-                  <div className="mt-1 text-sm font-medium text-gray-900">
-                    Members: {resolvedSubscription?.currentMemberUsage ?? 0} /{" "}
-                    {subscription.max_members}
-                  </div>
-                </div>
-              </div>
-
-              <div className="mt-4 text-sm text-gray-600">
-                Trial endet: {formatDate(subscription.trial_ends_at)} · Periode bis:{" "}
-                {formatDate(subscription.current_period_end)}
-              </div>
-            </>
-          )}
-        </div>
+        ) : null}
       </section>
     </main>
   );

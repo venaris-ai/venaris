@@ -1,8 +1,8 @@
-// src/app/orga/members/page.tsx #5
+// src/app/orga/members/page.tsx #6
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
-import { requireActiveOrganization } from "@/lib/auth";
+import { requirePathAccess } from "@/lib/authz";
 import { supabaseServer } from "@/lib/supabaseServer";
 import { sendInviteEmail } from "@/lib/email/sendInviteEmail";
 
@@ -77,19 +77,21 @@ function formatDeliveryState(invite: InviteRow) {
   return "Not sent";
 }
 
-// src/app/orga/members/page.tsx #6-resend-debug
 async function resendInvite(formData: FormData) {
   "use server";
 
-  const ctx = await requireActiveOrganization();
-  const role = ctx.activeMembership.role;
+  const ctx = await requirePathAccess("/orga/members");
 
-  if (role !== "owner" && role !== "admin") {
-    throw new Error("[resendInvite:permission] Du hast keine Berechtigung, Einladungen erneut zu versenden.");
+  if (!ctx.activeMembership) {
+    throw new Error("Active organization context required");
   }
 
   const organization = ctx.activeMembership.organizations;
   const inviteId = String(formData.get("invite_id") ?? "").trim();
+
+  if (!organization) {
+    throw new Error("Active organization not found");
+  }
 
   if (!inviteId) {
     throw new Error("[resendInvite:input] Missing invite id.");
@@ -195,30 +197,21 @@ async function resendInvite(formData: FormData) {
   redirect("/orga/members?resent=1");
 }
 
-
-
-
-
-
-
-
-
-
-
-
-
 async function revokeInvite(formData: FormData) {
   "use server";
 
-  const ctx = await requireActiveOrganization();
-  const role = ctx.activeMembership.role;
+  const ctx = await requirePathAccess("/orga/members");
 
-  if (role !== "owner" && role !== "admin") {
-    throw new Error("Du hast keine Berechtigung, Einladungen zu widerrufen.");
+  if (!ctx.activeMembership) {
+    throw new Error("Active organization context required");
   }
 
   const organization = ctx.activeMembership.organizations;
   const inviteId = String(formData.get("invite_id") ?? "").trim();
+
+  if (!organization) {
+    throw new Error("Active organization not found");
+  }
 
   if (!inviteId) {
     throw new Error("Missing invite id.");
@@ -253,10 +246,17 @@ export default async function OrgaMembersPage({
   const resent = params.resent === "1";
   const revoked = params.revoked === "1";
 
-  const { activeMembership } = await requireActiveOrganization();
-  const organization = activeMembership.organizations;
-  const canManageMembers =
-    activeMembership.role === "owner" || activeMembership.role === "admin";
+  const ctx = await requirePathAccess("/orga/members");
+
+  if (!ctx.activeMembership) {
+    throw new Error("Active organization context required");
+  }
+
+  const organization = ctx.activeMembership.organizations;
+
+  if (!organization) {
+    throw new Error("Active organization not found");
+  }
 
   const supabase = supabaseServer();
 
@@ -390,14 +390,12 @@ export default async function OrgaMembersPage({
             </p>
           </div>
 
-          {canManageMembers ? (
-            <Link
-              href="/orga/members/invite"
-              className="rounded-md border px-3 py-2 text-sm hover:bg-gray-50"
-            >
-              Mitglied einladen
-            </Link>
-          ) : null}
+          <Link
+            href="/orga/members/invite"
+            className="rounded-md border px-3 py-2 text-sm hover:bg-gray-50"
+          >
+            Mitglied einladen
+          </Link>
         </div>
 
         {members.length === 0 ? (
@@ -488,9 +486,7 @@ export default async function OrgaMembersPage({
                   <th className="px-6 py-3 font-medium">Invited at</th>
                   <th className="px-6 py-3 font-medium">Expires at</th>
                   <th className="px-6 py-3 font-medium">Accepted at</th>
-                  {canManageMembers ? (
-                    <th className="px-6 py-3 font-medium">Aktionen</th>
-                  ) : null}
+                  <th className="px-6 py-3 font-medium">Aktionen</th>
                 </tr>
               </thead>
               <tbody>
@@ -522,37 +518,35 @@ export default async function OrgaMembersPage({
                     <td className="px-6 py-4 text-gray-600">
                       {formatDateTime(invite.accepted_at)}
                     </td>
-                    {canManageMembers ? (
-                      <td className="px-6 py-4">
-                        <div className="flex flex-wrap gap-2">
-                          {invite.status === "pending" ? (
-                            <>
-                              <form action={resendInvite}>
-                                <input type="hidden" name="invite_id" value={invite.id} />
-                                <button
-                                  type="submit"
-                                  className="rounded-md border px-3 py-2 text-sm hover:bg-gray-50"
-                                >
-                                  Resend
-                                </button>
-                              </form>
+                    <td className="px-6 py-4">
+                      <div className="flex flex-wrap gap-2">
+                        {invite.status === "pending" ? (
+                          <>
+                            <form action={resendInvite}>
+                              <input type="hidden" name="invite_id" value={invite.id} />
+                              <button
+                                type="submit"
+                                className="rounded-md border px-3 py-2 text-sm hover:bg-gray-50"
+                              >
+                                Resend
+                              </button>
+                            </form>
 
-                              <form action={revokeInvite}>
-                                <input type="hidden" name="invite_id" value={invite.id} />
-                                <button
-                                  type="submit"
-                                  className="rounded-md border px-3 py-2 text-sm hover:bg-gray-50"
-                                >
-                                  Revoke
-                                </button>
-                              </form>
-                            </>
-                          ) : (
-                            <span className="text-sm text-gray-400">—</span>
-                          )}
-                        </div>
-                      </td>
-                    ) : null}
+                            <form action={revokeInvite}>
+                              <input type="hidden" name="invite_id" value={invite.id} />
+                              <button
+                                type="submit"
+                                className="rounded-md border px-3 py-2 text-sm hover:bg-gray-50"
+                              >
+                                Revoke
+                              </button>
+                            </form>
+                          </>
+                        ) : (
+                          <span className="text-sm text-gray-400">—</span>
+                        )}
+                      </div>
+                    </td>
                   </tr>
                 ))}
               </tbody>

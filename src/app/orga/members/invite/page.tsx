@@ -1,9 +1,9 @@
-// src/app/orga/members/invite/page.tsx #7
+// src/app/orga/members/invite/page.tsx #8
 import Link from "next/link";
 import { randomBytes } from "crypto";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
-import { requireActiveOrganization } from "@/lib/auth";
+import { requirePathAccess } from "@/lib/authz";
 import { supabaseServer } from "@/lib/supabaseServer";
 import { sendInviteEmail } from "@/lib/email/sendInviteEmail";
 import SubmitButton from "@/components/SubmitButton";
@@ -23,15 +23,18 @@ type SubscriptionPolicyRow = {
 async function createInvite(formData: FormData) {
   "use server";
 
-  const ctx = await requireActiveOrganization();
-  const role = ctx.activeMembership.role;
+  const ctx = await requirePathAccess("/orga/members/invite");
 
-  if (role !== "owner" && role !== "admin") {
-    throw new Error("Du hast keine Berechtigung, Mitglieder einzuladen.");
+  if (!ctx.activeMembership) {
+    throw new Error("Active organization context required");
   }
 
   const organization = ctx.activeMembership.organizations;
   const invitedByUserId = ctx.user.id;
+
+  if (!organization) {
+    throw new Error("Active organization not found");
+  }
 
   const email = String(formData.get("email") ?? "").trim().toLowerCase();
   const inviteRole = String(formData.get("role") ?? "member").trim() || "member";
@@ -210,37 +213,10 @@ const roleDescriptions = [
 ];
 
 export default async function InviteMemberPage() {
-  const ctx = await requireActiveOrganization();
-  const role = ctx.activeMembership.role;
+  const ctx = await requirePathAccess("/orga/members/invite");
 
-  if (role !== "owner" && role !== "admin") {
-    return (
-      <main className="space-y-8">
-        <section className="space-y-3">
-          <div>
-            <h1 className="text-3xl font-semibold tracking-tight">Mitglied einladen</h1>
-            <p className="mt-2 max-w-3xl text-sm text-gray-600">
-              Dieser Bereich ist nur für Owner und Admins verfügbar.
-            </p>
-          </div>
-        </section>
-
-        <section className="rounded-2xl border border-red-200 bg-red-50 p-6">
-          <h2 className="text-lg font-medium text-red-900">Kein Zugriff</h2>
-          <p className="mt-2 text-sm leading-6 text-red-800">
-            Du hast nicht die erforderlichen Rechte, um neue Mitglieder einzuladen.
-          </p>
-          <div className="mt-5">
-            <Link
-              href="/orga/members"
-              className="inline-flex rounded-md border px-4 py-2 text-sm hover:bg-white/60"
-            >
-              Zurück zu Members
-            </Link>
-          </div>
-        </section>
-      </main>
-    );
+  if (!ctx.activeMembership) {
+    throw new Error("Active organization context required");
   }
 
   const organization = ctx.activeMembership.organizations;

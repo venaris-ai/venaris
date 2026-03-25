@@ -1,7 +1,8 @@
-// src/components/AppShellGate.tsx #1
+// src/components/AppShellGate.tsx #3
 "use client";
 
 import { usePathname } from "next/navigation";
+import { isPublicPathname } from "@/lib/routeAccess";
 
 type Props = {
   blocked: boolean;
@@ -9,16 +10,6 @@ type Props = {
   header: React.ReactNode;
   children: React.ReactNode;
 };
-
-function isPublicPath(pathname: string) {
-  return (
-    pathname === "/login" ||
-    pathname === "/register" ||
-    pathname === "/reset-password" ||
-    pathname === "/invite/accept" ||
-    pathname.startsWith("/invite/accept/")
-  );
-}
 
 function isAllowedWhenBlocked(pathname: string) {
   return pathname === "/orga/subscription";
@@ -32,7 +23,7 @@ export default function AppShellGate({
 }: Props) {
   const pathname = usePathname();
 
-  if (isPublicPath(pathname)) {
+  if (isPublicPathname(pathname)) {
     return <>{children}</>;
   }
 

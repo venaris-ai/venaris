@@ -1,5 +1,5 @@
-// src/app/orga/subscription/page.tsx #14
-import { requireActiveOrganization } from "@/lib/auth";
+// src/app/orga/subscription/page.tsx #15
+import { requirePathAccess } from "@/lib/authz";
 import { supabaseServer } from "@/lib/supabaseServer";
 import { BILLING_PLANS, type BillingCycle } from "@/lib/billing/plans";
 import {
@@ -134,7 +134,12 @@ function Section({
 }
 
 export default async function SubscriptionPage() {
-  const ctx = await requireActiveOrganization();
+  const ctx = await requirePathAccess("/orga/subscription");
+
+  if (!ctx.activeMembership) {
+    throw new Error("Active organization context required");
+  }
+
   const supabase = supabaseServer();
   const organization = ctx.activeMembership.organizations;
   const nowIso = new Date().toISOString();
@@ -287,9 +292,7 @@ export default async function SubscriptionPage() {
               </div>
               <div>Abrechnung: {billingProviderLabel(subscription.billing_provider)}</div>
               <div>Trial endet: {formatDate(subscription.trial_ends_at)}</div>
-              <div>
-                Periode bis: {formatDate(subscription.current_period_end)}
-              </div>
+              <div>Periode bis: {formatDate(subscription.current_period_end)}</div>
             </div>
           </div>
 

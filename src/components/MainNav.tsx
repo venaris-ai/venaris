@@ -1,41 +1,35 @@
-// src/components/MainNav.tsx
-"use client";
-
+// src/components/MainNav.tsx #2
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import {
+  MAIN_NAV_ITEMS,
+  filterNavItemsByAccess,
+  getOptionalAccessContext,
+} from "@/lib/authz";
 
-const items = [
-  { href: "/", label: "Home" },
-  { href: "/wildlife", label: "Wildlife" },
-  { href: "/cameras", label: "Cameras" },
-  { href: "/orga", label: "Orga" },
-];
+export default async function MainNav() {
+  const { role, email } = await getOptionalAccessContext();
 
-export default function MainNav() {
-  const pathname = usePathname();
+  const items = filterNavItemsByAccess({
+    items: MAIN_NAV_ITEMS,
+    role,
+    email,
+  });
+
+  if (items.length === 0) {
+    return null;
+  }
 
   return (
     <nav className="flex items-center gap-2 text-sm">
-      {items.map((item) => {
-        const active =
-          item.href === "/"
-            ? pathname === "/"
-            : pathname.startsWith(item.href);
-
-        return (
-          <Link
-            key={item.href}
-            href={item.href}
-            className={`rounded-md border px-3 py-1 ${
-              active
-                ? "border-black bg-black text-white"
-                : "bg-white text-black hover:bg-gray-100"
-            }`}
-          >
-            {item.label}
-          </Link>
-        );
-      })}
+      {items.map((item) => (
+        <Link
+          key={item.href}
+          href={item.href}
+          className="rounded-md border px-3 py-1 bg-white text-black hover:bg-gray-100"
+        >
+          {item.label}
+        </Link>
+      ))}
     </nav>
   );
 }

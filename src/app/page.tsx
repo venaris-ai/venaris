@@ -1,6 +1,6 @@
-// src/app/page.tsx #2
+// src/app/page.tsx #5
 import Link from "next/link";
-import { requireActiveOrganization } from "@/lib/auth";
+import { requirePathAccess, canAccessPath } from "@/lib/authz";
 import { supabaseServer } from "@/lib/supabaseServer";
 import { getBillingPlan } from "@/lib/billing/plans";
 import {
@@ -65,6 +65,7 @@ function formatMoney(amountCents: number, currency: string) {
 
 function formatSpecies(value: string | null) {
   if (!value) return "—";
+
   return value
     .split("_")
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
@@ -210,11 +211,60 @@ function ActionLink({
   );
 }
 
+function FocusCard({
+  href,
+  eyebrow,
+  title,
+  text,
+  metric,
+}: {
+  href: string;
+  eyebrow: string;
+  title: string;
+  text: string;
+  metric?: string;
+}) {
+  return (
+    <Link
+      href={href}
+      className="group rounded-2xl border bg-gradient-to-br from-white to-gray-50 p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
+    >
+      <div className="flex items-start justify-between gap-4">
+        <div className="text-xs font-medium uppercase tracking-[0.14em] text-gray-500">
+          {eyebrow}
+        </div>
+        {metric ? (
+          <div className="rounded-full border border-gray-200 bg-white px-3 py-1 text-xs font-medium text-gray-700">
+            {metric}
+          </div>
+        ) : null}
+      </div>
+
+      <div className="mt-4">
+        <div className="text-xl font-semibold tracking-tight text-gray-900">
+          {title}
+        </div>
+        <p className="mt-2 text-sm leading-6 text-gray-600">{text}</p>
+      </div>
+
+      <div className="mt-5 text-sm font-medium text-gray-900 group-hover:underline">
+        Öffnen →
+      </div>
+    </Link>
+  );
+}
+
 export default async function HomePage() {
-  const ctx = await requireActiveOrganization();
+  const ctx = await requirePathAccess("/");
   const supabase = supabaseServer();
 
+  if (!ctx.activeMembership) {
+    throw new Error("Active organization context required");
+  }
+
   const organization = ctx.activeMembership.organizations;
+  const role = ctx.activeMembership.role;
+  const email = ctx.user.email ?? null;
   const recentWindow = new Date();
   recentWindow.setDate(recentWindow.getDate() - 14);
   const recentWindowIso = recentWindow.toISOString();
@@ -361,241 +411,422 @@ export default async function HomePage() {
 
   const subscriptionPrice = subscription ? formatPlanPrice(subscription) : "—";
 
-  const nextActions = [
+  const canSee = (pathname: string) =>
+    canAccessPath({
+      pathname,
+      role,
+      email,
+    });
+
+  const showWildlife = canSee("/wildlife");
+  const showCameras = canSee("/cameras");
+  const showOrga = canSee("/orga");
+  const showSubscription = canSee("/orga/subscription");
+  const showInvite = canSee("/orga/members/invite");
+
+  const focusCards = [
+    showWildlife
+      ? {
+          href: "/wildlife",
+          eyebrow: "Wildlife",
+          title:
+            recentEventsCount > 0 ? "Bewegung im Revier verstehen" : "Wildlife aufbauen",
+          text:
+            recentEventsCount > 0
+              ? `${recentEventsCount} relevante Wildlife-Events in den letzten 14 Tagen. Hier siehst Du sofort, was gerade wirklich los ist.`
+              : "Noch keine aktuellen Wildlife-Events sichtbar. Der beste Startpunkt ist jetzt die Wildlife-Übersicht.",
+          metric:
+            recentEventsCount > 0
+              ? `${recentEventsCount} Events / 14 Tage`
+              : "Noch kein Signal",
+        }
+      : null,
+
+    showCameras
+      ? {
+          href: "/cameras",
+          eyebrow: "Operations",
+          title:
+            cameras.length > 0 ? "Kamera-Lage im Blick behalten" : "Erste Kameras aktivieren",
+          text:
+            cameras.length > 0
+              ? `${cameras.length} Kameras sind im Scope der aktiven Organisation sichtbar. Health, Events und Ingest sind der schnellste operative Einstieg.`
+              : "Sobald Kameras angelegt und verbunden sind, entsteht hier der operative Backbone für Wildlife und Monitoring.",
+          metric: `${cameras.length} Kameras`,
+        }
+      : null,
+
+    showSubscription
+      ? {
+          href: "/orga/subscription",
+          eyebrow: "Commercial",
+          title: "Plan und Limits aktiv steuern",
+          text: subscription
+            ? `${planLabel(subscription.plan_key)} läuft aktuell mit Status ${effectiveStatus?.label ?? "—"}. Hier steuerst Du Wachstum, Limits und Planwechsel.`
+            : "Für diese Organisation ist noch keine Subscription hinterlegt. Das solltest Du als Nächstes klären.",
+          metric: subscription ? planLabel(subscription.plan_key) : "Kein Plan",
+        }
+      : showInvite
+      ? {
+          href: "/orga/members/invite",
+          eyebrow: "Team",
+          title: "Zugang für weitere Nutzer freischalten",
+          text:
+            subscription && resolvedSubscription
+              ? `${resolvedSubscription.currentMemberUsage} von ${subscription.max_members} Member-Slots sind aktuell genutzt.`
+              : "Lade weitere Nutzer ein und erweitere den operativen Zugriff auf die Organisation.",
+          metric:
+            subscription && resolvedSubscription
+              ? `${resolvedSubscription.currentMemberUsage} / ${subscription.max_members}`
+              : "Team erweitern",
+        }
+      : null,
+  ].filter(Boolean) as {
+    href: string;
+    eyebrow: string;
+    title: string;
+    text: string;
+    metric?: string;
+  }[];
+
+  const statCards = [
     {
-      href: "/wildlife",
-      title: "Wildlife prüfen",
-      text:
-        recentEventsCount > 0
-          ? `${recentEventsCount} Wildlife-Events in den letzten 14 Tagen.`
-          : "Noch keine aktuellen Wildlife-Events im Blick.",
+      visible: showWildlife,
+      title: "Wildlife Events (14 Tage)",
+      value: String(recentEventsCount),
+      subline: "Schneller Aktivitätsanker für den aktuellen Zeitraum.",
     },
     {
-      href: "/cameras/new",
-      title: "Kamera anlegen",
-      text: subscription
-        ? `${cameras.length} von ${subscription.max_cameras} Kamera-Slots genutzt.`
-        : "Subscription prüfen, bevor neue Kameras angelegt werden.",
+      visible: showCameras,
+      title: "Kameras",
+      value: String(cameras.length),
+      subline: subscription
+        ? `${cameras.length} / ${subscription.max_cameras} im aktiven Plan`
+        : "Keine Subscription gefunden",
     },
     {
-      href: "/orga/members/invite",
-      title: "Mitglied einladen",
-      text:
-        subscription && resolvedSubscription
-          ? `${resolvedSubscription.currentMemberUsage} von ${subscription.max_members} Member-Slots genutzt.`
-          : "Members und Subscription prüfen.",
+      visible: showOrga,
+      title: "Members",
+      value: String(membersCount),
+      subline: `${openInvitesCount} offene Invites`,
     },
     {
-      href: "/orga/subscription",
-      title: "Subscription prüfen",
-      text: subscription
-        ? `${planLabel(subscription.plan_key)} · ${effectiveStatus?.label ?? "—"}`
-        : "Keine Subscription gefunden.",
+      visible: showSubscription,
+      title: "Subscription",
+      value: subscription ? planLabel(subscription.plan_key) : "—",
+      subline: subscription
+        ? `${subscriptionPrice} inkl. MwSt. · ${effectiveStatus?.label ?? "—"}`
+        : "Keine Subscription hinterlegt",
     },
-  ];
+  ].filter((item) => item.visible);
+
+  const wildlifeActions = [{ href: "/wildlife", label: "Wildlife öffnen" }].filter(
+    (item) => canSee(item.href)
+  );
+
+  const cameraActions = [{ href: "/cameras", label: "Cameras öffnen" }].filter(
+    (item) => canSee(item.href)
+  );
+
+  const orgaActions = [{ href: "/orga", label: "Orga öffnen" }].filter((item) =>
+    canSee(item.href)
+  );
 
   return (
     <main className="space-y-8">
-      <section className="space-y-3">
-        <div>
-          <h1 className="text-3xl font-semibold tracking-tight">Home</h1>
-          <p className="mt-2 max-w-3xl text-sm text-gray-600">
-            Zentrale Übersicht über Wildlife, Cameras und Organization der aktiven
-            Umgebung.
-          </p>
-        </div>
-      </section>
 
-      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <StatCard
-          title="Wildlife Events (14 Tage)"
-          value={String(recentEventsCount)}
-          subline="Schneller Aktivitätsanker für den aktuellen Zeitraum."
-        />
-        <StatCard
-          title="Kameras"
-          value={String(cameras.length)}
-          subline={
-            subscription
-              ? `${cameras.length} / ${subscription.max_cameras} im aktiven Plan`
-              : "Keine Subscription gefunden"
-          }
-        />
-        <StatCard
-          title="Members"
-          value={String(membersCount)}
-          subline={`${openInvitesCount} offene Invites`}
-        />
-        <StatCard
-          title="Subscription"
-          value={subscription ? planLabel(subscription.plan_key) : "—"}
-          subline={
-            subscription
-              ? `${subscriptionPrice} inkl. MwSt. · ${effectiveStatus?.label ?? "—"}`
-              : "Keine Subscription hinterlegt"
-          }
-        />
-      </section>
+<section className="space-y-3">
+  <div>
+    <h1 className="text-3xl font-semibold tracking-tight">Venaris Home</h1>
+    <p className="mt-2 max-w-3xl text-sm text-gray-600">
+      Zentrale Übersicht über Wildlife, Cameras und Organization der aktiven
+      Umgebung.
+    </p>
+  </div>
+</section>
 
-      <section className="grid gap-4 xl:grid-cols-2">
-        <SectionCard
-          title="Wichtigste nächste Schritte"
-          text="Die Home-Seite soll direkt in die nächste sinnvolle Aktion führen."
+
+
+
+      {statCards.length > 0 ? (
+        <section
+          className={`grid gap-4 ${
+            statCards.length >= 4
+              ? "md:grid-cols-2 xl:grid-cols-4"
+              : statCards.length === 3
+              ? "md:grid-cols-3"
+              : statCards.length === 2
+              ? "md:grid-cols-2"
+              : "md:grid-cols-1"
+          }`}
         >
-          <div className="grid gap-4 md:grid-cols-2">
-            {nextActions.map((item) => (
-              <Link
-                key={item.href}
-                href={item.href}
-                className="rounded-2xl border bg-gray-50 p-5 transition hover:bg-gray-100"
-              >
-                <div className="text-base font-medium text-gray-900">
-                  {item.title}
-                </div>
-                <p className="mt-2 text-sm leading-6 text-gray-600">{item.text}</p>
-              </Link>
-            ))}
-          </div>
-        </SectionCard>
+          {statCards.map((item) => (
+            <StatCard
+              key={item.title}
+              title={item.title}
+              value={item.value}
+              subline={item.subline}
+            />
+          ))}
+        </section>
+      ) : null}
 
-        <SectionCard
-          title="Organization & Subscription"
-          text="Kommerzieller Rahmen, Team und Revier-Scope der aktiven Organization."
-          actions={<ActionLink href="/orga" label="Orga öffnen" />}
-        >
-          {!subscription ? (
-            <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-900">
-              Für diese Organization wurde noch keine Subscription gefunden.
-            </div>
-          ) : (
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="rounded-2xl border bg-gray-50 p-5">
-                <div className="flex flex-wrap items-center gap-3">
-                  <div className="text-lg font-semibold text-gray-900">
-                    {planLabel(subscription.plan_key)}
-                  </div>
-                  <span
-                    className={`inline-flex rounded-full border px-3 py-1 text-xs font-medium ${effectiveStatus?.badgeClass}`}
-                  >
-                    {effectiveStatus?.label}
-                  </span>
-                </div>
-                <p className="mt-3 text-sm leading-6 text-gray-600">
-                  {subscriptionPrice} inkl. MwSt. ·{" "}
-                  {billingCycleLabel(subscription.billing_cycle)}
-                </p>
-                <p className="mt-2 text-sm leading-6 text-gray-600">
-                  Trial endet: {formatDate(subscription.trial_ends_at)} · Periode bis:{" "}
-                  {formatDate(subscription.current_period_end)}
-                </p>
+
+      {showOrga ? (
+        <section className="grid gap-4 xl:grid-cols-2">
+          <SectionCard
+            title="Organization & Subscription"
+            text="Kommerzieller Rahmen, Team und Revier-Scope der aktiven Organization."
+            actions={
+              orgaActions.length > 0 ? (
+                <>
+                  {orgaActions.map((item) => (
+                    <ActionLink key={item.href} href={item.href} label={item.label} />
+                  ))}
+                </>
+              ) : undefined
+            }
+          >
+            {!subscription ? (
+              <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-900">
+                Für diese Organization wurde noch keine Subscription gefunden.
               </div>
+            ) : (
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="rounded-2xl border bg-gray-50 p-5">
+                  <div className="flex flex-wrap items-center gap-3">
+                    <div className="text-lg font-semibold text-gray-900">
+                      {planLabel(subscription.plan_key)}
+                    </div>
+                    <span
+                      className={`inline-flex rounded-full border px-3 py-1 text-xs font-medium ${effectiveStatus?.badgeClass}`}
+                    >
+                      {effectiveStatus?.label}
+                    </span>
+                  </div>
+                  <p className="mt-3 text-sm leading-6 text-gray-600">
+                    {subscriptionPrice} inkl. MwSt. ·{" "}
+                    {billingCycleLabel(subscription.billing_cycle)}
+                  </p>
+                  <p className="mt-2 text-sm leading-6 text-gray-600">
+                    Trial endet: {formatDate(subscription.trial_ends_at)} · Periode bis:{" "}
+                    {formatDate(subscription.current_period_end)}
+                  </p>
+                </div>
 
-              <div className="rounded-2xl border bg-gray-50 p-5">
-                <div className="text-sm font-medium text-gray-500">Scope</div>
-                <div className="mt-3 space-y-2 text-sm text-gray-700">
-                  <div>Reviere: {reviersCount}</div>
-                  <div>
-                    Members: {resolvedSubscription?.currentMemberUsage ?? membersCount} /{" "}
-                    {subscription.max_members}
+                <div className="rounded-2xl border bg-gray-50 p-5">
+                  <div className="text-sm font-medium text-gray-500">Scope</div>
+                  <div className="mt-3 space-y-2 text-sm text-gray-700">
+                    <div>Reviere: {reviersCount}</div>
+                    <div>
+                      Members: {resolvedSubscription?.currentMemberUsage ?? membersCount} /{" "}
+                      {subscription.max_members}
+                    </div>
+                    <div>
+                      Kameras: {cameras.length} / {subscription.max_cameras}
+                    </div>
+                    <div>Offene Invites: {openInvitesCount}</div>
                   </div>
-                  <div>
-                    Kameras: {cameras.length} / {subscription.max_cameras}
-                  </div>
-                  <div>Offene Invites: {openInvitesCount}</div>
                 </div>
               </div>
-            </div>
-          )}
-        </SectionCard>
-      </section>
+            )}
+          </SectionCard>
 
-      <section className="grid gap-4 xl:grid-cols-2">
-        <SectionCard
-          title="Wildlife Snapshot"
-          text="Die letzten sichtbaren Ereignisse und der schnellste Einstieg in Wildlife."
-          actions={
-            <>
-              <ActionLink href="/wildlife" label="Wildlife öffnen" />
-              <ActionLink href="/wildlife/species" label="Species" />
-            </>
-          }
-        >
-          {recentEvents.length === 0 ? (
-            <div className="rounded-2xl border bg-gray-50 p-5 text-sm text-gray-600">
-              Noch keine aktuellen Events im Dashboard-Scope sichtbar.
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {recentEvents.map((event) => (
-                <div key={event.id} className="rounded-2xl border bg-gray-50 p-4">
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div>
-                      <div className="text-sm font-medium text-gray-900">
-                        {formatSpecies(event.top_species)}
-                        {event.top_count ? ` · ${event.top_count}` : ""}
+          <SectionCard
+            title="Wildlife Snapshot"
+            text="Die letzten sichtbaren Ereignisse und der schnellste Einstieg in Wildlife."
+            actions={
+              wildlifeActions.length > 0 ? (
+                <>
+                  {wildlifeActions.map((item) => (
+                    <ActionLink key={item.href} href={item.href} label={item.label} />
+                  ))}
+                </>
+              ) : undefined
+            }
+          >
+            {recentEvents.length === 0 ? (
+              <div className="rounded-2xl border bg-gray-50 p-5 text-sm text-gray-600">
+                Noch keine aktuellen Events im Dashboard-Scope sichtbar.
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {recentEvents.map((event) => (
+                  <div key={event.id} className="rounded-2xl border bg-gray-50 p-4">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <div className="text-sm font-medium text-gray-900">
+                          {formatSpecies(event.top_species)}
+                          {event.top_count ? ` · ${event.top_count}` : ""}
+                        </div>
+                        <p className="mt-1 text-sm text-gray-600">
+                          Kamera: {cameraNameById.get(event.camera_id) ?? "—"}
+                        </p>
                       </div>
-                      <p className="mt-1 text-sm text-gray-600">
-                        Kamera: {cameraNameById.get(event.camera_id) ?? "—"}
-                      </p>
-                    </div>
 
-                    <div className="text-right text-xs text-gray-500">
-                      <div>{formatDateTime(event.start_at)}</div>
-                      <div className="mt-1">
-                        Assets: {event.asset_count ?? 0} · Score:{" "}
-                        {event.relevance_score != null
-                          ? Math.round(event.relevance_score)
-                          : "—"}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </SectionCard>
-
-        <SectionCard
-          title="Camera Snapshot"
-          text="Zuletzt angelegte bzw. zuletzt sichtbare Kameras mit schnellem Zugang zur Anlage."
-          actions={
-            <>
-              <ActionLink href="/cameras" label="Cameras öffnen" />
-              <ActionLink href="/cameras/new" label="Create Camera" />
-            </>
-          }
-        >
-          {cameras.length === 0 ? (
-            <div className="rounded-2xl border bg-gray-50 p-5 text-sm text-gray-600">
-              Noch keine Kameras angelegt.
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {cameras.map((camera) => (
-                <div key={camera.id} className="rounded-2xl border bg-gray-50 p-4">
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div>
-                      <div className="text-sm font-medium text-gray-900">
-                        {camera.name}
-                      </div>
-                      <p className="mt-1 text-sm text-gray-600">
-                        {camera.location_name || "Keine Ortsbezeichnung"}
-                      </p>
-                    </div>
-
-                    <div className="text-right text-xs text-gray-500">
-                      <div>Erstellt: {formatDate(camera.created_at)}</div>
-                      <div className="mt-1">
-                        Last seen: {formatDateTime(camera.last_seen_at)}
+                      <div className="text-right text-xs text-gray-500">
+                        <div>{formatDateTime(event.start_at)}</div>
+                        <div className="mt-1">
+                          Assets: {event.asset_count ?? 0} · Score:{" "}
+                          {event.relevance_score != null
+                            ? Math.round(event.relevance_score)
+                            : "—"}
+                        </div>
                       </div>
                     </div>
                   </div>
+                ))}
+              </div>
+            )}
+          </SectionCard>
+        </section>
+      ) : null}
+
+      {!showOrga ? (
+        <section className={`grid gap-4 ${showCameras ? "xl:grid-cols-2" : ""}`}>
+          {showWildlife ? (
+            <SectionCard
+              title="Wildlife Snapshot"
+              text="Die letzten sichtbaren Ereignisse und der schnellste Einstieg in Wildlife."
+              actions={
+                wildlifeActions.length > 0 ? (
+                  <>
+                    {wildlifeActions.map((item) => (
+                      <ActionLink key={item.href} href={item.href} label={item.label} />
+                    ))}
+                  </>
+                ) : undefined
+              }
+            >
+              {recentEvents.length === 0 ? (
+                <div className="rounded-2xl border bg-gray-50 p-5 text-sm text-gray-600">
+                  Noch keine aktuellen Events im Dashboard-Scope sichtbar.
                 </div>
-              ))}
-            </div>
-          )}
-        </SectionCard>
-      </section>
+              ) : (
+                <div className="space-y-3">
+                  {recentEvents.map((event) => (
+                    <div key={event.id} className="rounded-2xl border bg-gray-50 p-4">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                          <div className="text-sm font-medium text-gray-900">
+                            {formatSpecies(event.top_species)}
+                            {event.top_count ? ` · ${event.top_count}` : ""}
+                          </div>
+                          <p className="mt-1 text-sm text-gray-600">
+                            Kamera: {cameraNameById.get(event.camera_id) ?? "—"}
+                          </p>
+                        </div>
+
+                        <div className="text-right text-xs text-gray-500">
+                          <div>{formatDateTime(event.start_at)}</div>
+                          <div className="mt-1">
+                            Assets: {event.asset_count ?? 0} · Score:{" "}
+                            {event.relevance_score != null
+                              ? Math.round(event.relevance_score)
+                              : "—"}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </SectionCard>
+          ) : null}
+
+          {showCameras ? (
+            <SectionCard
+              title="Camera Snapshot"
+              text="Zuletzt angelegte bzw. zuletzt sichtbare Kameras mit schnellem Zugang zur Anlage."
+              actions={
+                cameraActions.length > 0 ? (
+                  <>
+                    {cameraActions.map((item) => (
+                      <ActionLink key={item.href} href={item.href} label={item.label} />
+                    ))}
+                  </>
+                ) : undefined
+              }
+            >
+              {cameras.length === 0 ? (
+                <div className="rounded-2xl border bg-gray-50 p-5 text-sm text-gray-600">
+                  Noch keine Kameras angelegt.
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {cameras.map((camera) => (
+                    <div key={camera.id} className="rounded-2xl border bg-gray-50 p-4">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                          <div className="text-sm font-medium text-gray-900">
+                            {camera.name}
+                          </div>
+                          <p className="mt-1 text-sm text-gray-600">
+                            {camera.location_name || "Keine Ortsbezeichnung"}
+                          </p>
+                        </div>
+
+                        <div className="text-right text-xs text-gray-500">
+                          <div>Erstellt: {formatDate(camera.created_at)}</div>
+                          <div className="mt-1">
+                            Last seen: {formatDateTime(camera.last_seen_at)}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </SectionCard>
+          ) : null}
+        </section>
+      ) : showCameras ? (
+        <section>
+          <SectionCard
+            title="Camera Snapshot"
+            text="Zuletzt angelegte bzw. zuletzt sichtbare Kameras mit schnellem Zugang zur Anlage."
+            actions={
+              cameraActions.length > 0 ? (
+                <>
+                  {cameraActions.map((item) => (
+                    <ActionLink key={item.href} href={item.href} label={item.label} />
+                  ))}
+                </>
+              ) : undefined
+            }
+          >
+            {cameras.length === 0 ? (
+              <div className="rounded-2xl border bg-gray-50 p-5 text-sm text-gray-600">
+                Noch keine Kameras angelegt.
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {cameras.map((camera) => (
+                  <div key={camera.id} className="rounded-2xl border bg-gray-50 p-4">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <div className="text-sm font-medium text-gray-900">
+                          {camera.name}
+                        </div>
+                        <p className="mt-1 text-sm text-gray-600">
+                          {camera.location_name || "Keine Ortsbezeichnung"}
+                        </p>
+                      </div>
+
+                      <div className="text-right text-xs text-gray-500">
+                        <div>Erstellt: {formatDate(camera.created_at)}</div>
+                        <div className="mt-1">
+                          Last seen: {formatDateTime(camera.last_seen_at)}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </SectionCard>
+        </section>
+      ) : null}
     </main>
   );
 }
