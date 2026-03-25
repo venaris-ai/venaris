@@ -1,3 +1,4 @@
+// src/app/api/auth/active-organization/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { requireUser, getMembershipsForUser } from "@/lib/auth";
 

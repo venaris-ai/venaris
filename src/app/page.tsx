@@ -89,7 +89,9 @@ function formatPlanPrice(subscription: SubscriptionRow) {
     return formatMoney(price, subscription.price_currency);
   }
 
-  return subscription.plan_key === "enterprise" ? "Individuell" : "Noch nicht festgelegt";
+  return subscription.plan_key === "enterprise"
+    ? "Individuell"
+    : "Noch nicht festgelegt";
 }
 
 function billingCycleLabel(cycle: "monthly" | "yearly") {
@@ -159,7 +161,9 @@ function StatCard({
       <div className="mt-2 text-3xl font-semibold tracking-tight text-gray-900">
         {value}
       </div>
-      {subline ? <p className="mt-2 text-sm leading-6 text-gray-600">{subline}</p> : null}
+      {subline ? (
+        <p className="mt-2 text-sm leading-6 text-gray-600">{subline}</p>
+      ) : null}
     </div>
   );
 }
@@ -287,7 +291,9 @@ export default async function HomePage() {
   }
 
   if (subscriptionResult.error) {
-    throw new Error(`Failed to load subscription: ${subscriptionResult.error.message}`);
+    throw new Error(
+      `Failed to load subscription: ${subscriptionResult.error.message}`
+    );
   }
 
   const cameras = (camerasResult.data ?? []) as CameraRow[];
@@ -304,7 +310,9 @@ export default async function HomePage() {
     const [eventsListResult, eventsCountResult] = await Promise.all([
       supabase
         .from("event_feed")
-        .select("id,camera_id,start_at,end_at,top_species,top_count,relevance_score,asset_count")
+        .select(
+          "id,camera_id,start_at,end_at,top_species,top_count,relevance_score,asset_count"
+        )
         .in("camera_id", cameraIds)
         .order("start_at", { ascending: false })
         .limit(5),
@@ -317,11 +325,15 @@ export default async function HomePage() {
     ]);
 
     if (eventsListResult.error) {
-      throw new Error(`Failed to load recent events: ${eventsListResult.error.message}`);
+      throw new Error(
+        `Failed to load recent events: ${eventsListResult.error.message}`
+      );
     }
 
     if (eventsCountResult.error) {
-      throw new Error(`Failed to load event count: ${eventsCountResult.error.message}`);
+      throw new Error(
+        `Failed to load event count: ${eventsCountResult.error.message}`
+      );
     }
 
     recentEvents = (eventsListResult.data ?? []) as EventFeedRow[];
@@ -368,9 +380,10 @@ export default async function HomePage() {
     {
       href: "/orga/members/invite",
       title: "Mitglied einladen",
-      text: subscription && resolvedSubscription
-        ? `${resolvedSubscription.currentMemberUsage} von ${subscription.max_members} Member-Slots genutzt.`
-        : "Members und Subscription prüfen.",
+      text:
+        subscription && resolvedSubscription
+          ? `${resolvedSubscription.currentMemberUsage} von ${subscription.max_members} Member-Slots genutzt.`
+          : "Members und Subscription prüfen.",
     },
     {
       href: "/orga/subscription",
@@ -436,7 +449,9 @@ export default async function HomePage() {
                 href={item.href}
                 className="rounded-2xl border bg-gray-50 p-5 transition hover:bg-gray-100"
               >
-                <div className="text-base font-medium text-gray-900">{item.title}</div>
+                <div className="text-base font-medium text-gray-900">
+                  {item.title}
+                </div>
                 <p className="mt-2 text-sm leading-6 text-gray-600">{item.text}</p>
               </Link>
             ))}
