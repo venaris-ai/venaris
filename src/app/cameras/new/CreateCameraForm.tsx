@@ -538,12 +538,18 @@ export default function CreateCameraForm({
                 </div>
                 <button
                   type="button"
-                  onClick={() =>
-                    handleCopy(
-                      "SMTP setup",
-                      buildSmtpProvisioningCopy(camera.routing.smtpAlias)
-                    )
-                  }
+onClick={() =>
+  camera.routing.smtpAlias
+    ? handleCopy(
+        "SMTP setup",
+        buildSmtpProvisioningCopy(camera.routing.smtpAlias)
+      )
+    : undefined
+}
+
+
+
+
                   className="rounded-md border px-3 py-2 text-xs hover:bg-white"
                 >
                   Copy block
@@ -569,12 +575,22 @@ export default function CreateCameraForm({
                 </div>
                 <button
                   type="button"
-                  onClick={() =>
-                    handleCopy(
-                      "Manual import setup",
-                      buildManualProvisioningCopy(camera.routing.manualLabel)
-                    )
-                  }
+
+
+onClick={() =>
+  camera.routing.manualLabel
+    ? handleCopy(
+        "Manual import setup",
+        buildManualProvisioningCopy(camera.routing.manualLabel)
+      )
+    : undefined
+}
+
+
+
+
+
+
                   className="rounded-md border px-3 py-2 text-xs hover:bg-white"
                 >
                   Copy block
