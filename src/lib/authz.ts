@@ -1,5 +1,5 @@
-// src/lib/authz.ts #4
-import { notFound } from "next/navigation";
+// src/lib/authz.ts #5
+import { redirect } from "next/navigation";
 import {
   getOptionalActiveOrganization,
   requireActiveOrganization,
@@ -54,7 +54,7 @@ export async function requirePathAccess(pathname: string) {
   const rule = getRouteAccessRule(pathname);
 
   if (!rule) {
-    notFound();
+    redirect("/access-denied");
   }
 
   if (rule.public) {
@@ -66,7 +66,7 @@ export async function requirePathAccess(pathname: string) {
     const email = (user.email ?? "").toLowerCase().trim();
 
     if (!rule.allowedEmails.includes(email)) {
-      notFound();
+      redirect("/access-denied");
     }
 
     return { user, activeMembership: null };
@@ -81,7 +81,7 @@ export async function requirePathAccess(pathname: string) {
       email: ctx.user.email ?? null,
     })
   ) {
-    notFound();
+    redirect("/access-denied");
   }
 
   return ctx;

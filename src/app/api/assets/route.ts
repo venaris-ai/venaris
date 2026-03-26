@@ -3,11 +3,11 @@ export const runtime = "nodejs";
 
 import { NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabaseServer";
-import { requireActiveOrganization } from "@/lib/auth";
+import { requireOrganizationRole } from "@/lib/auth";
 
 export async function GET(req: Request) {
   try {
-    const { activeMembership } = await requireActiveOrganization();
+    const { activeMembership } = await requireOrganizationRole(["owner", "admin", "member"]);
     const activeOrganization = activeMembership.organizations;
 
     if (!activeOrganization) {

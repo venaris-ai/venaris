@@ -1,10 +1,15 @@
-// src/app/admin/subscriptions/page.tsx #2
+// src/app/admin/subscriptions/page.tsx #3
 import { requirePathAccess } from "@/lib/authz";
 import { supabaseServer } from "@/lib/supabaseServer";
 import AdminSubscriptionRequestActions from "./AdminSubscriptionRequestActions";
 
 type RequestStatus = "open" | "approved" | "rejected" | "canceled";
 type PlanKey = "starter" | "pro" | "enterprise";
+
+type OrganizationRef = {
+  name: string;
+  slug: string;
+};
 
 type RequestRowDb = {
   id: string;
@@ -18,12 +23,7 @@ type RequestRowDb = {
   created_at: string;
   processed_at: string | null;
   resolution_note: string | null;
-  organizations:
-    | {
-        name: string;
-        slug: string;
-      }[]
-    | null;
+  organizations: OrganizationRef | OrganizationRef[] | null;
 };
 
 type RequestRow = {
@@ -38,11 +38,18 @@ type RequestRow = {
   created_at: string;
   processed_at: string | null;
   resolution_note: string | null;
-  organization: {
-    name: string;
-    slug: string;
-  } | null;
+  organization: OrganizationRef | null;
 };
+
+const VENARIS_ADMIN_EMAIL = "dev@venaris.io";
+
+function normalizeOrganization(
+  organizations: RequestRowDb["organizations"]
+): OrganizationRef | null {
+  if (!organizations) return null;
+  if (Array.isArray(organizations)) return organizations[0] ?? null;
+  return organizations;
+}
 
 function normalizeRequestRow(row: RequestRowDb): RequestRow {
   return {
@@ -57,7 +64,7 @@ function normalizeRequestRow(row: RequestRowDb): RequestRow {
     created_at: row.created_at,
     processed_at: row.processed_at,
     resolution_note: row.resolution_note,
-    organization: row.organizations?.[0] ?? null,
+    organization: normalizeOrganization(row.organizations),
   };
 }
 
@@ -181,8 +188,8 @@ export default async function AdminSubscriptionsPage() {
           Admin · Subscription Requests
         </h1>
         <p className="mt-2 text-sm text-gray-600">
-          Interne Venaris-Ansicht für offene Plananfragen. Zugriff nur für
-          dev@venaris.io.
+          Interne Venaris-Ansicht für offene Plananfragen. Zugriff nur für{" "}
+          {VENARIS_ADMIN_EMAIL}.
         </p>
       </section>
 
@@ -236,8 +243,12 @@ export default async function AdminSubscriptionsPage() {
                       <span className="font-medium">Angelegt:</span>{" "}
                       {formatDateTime(request.created_at)}
                     </div>
-                    <div className="mt-1">
-                      <span className="font-medium">Requested by:</span>{" "}
+                    <div className="mt-1 break-all">
+                      <span className="font-medium">Request ID:</span>{" "}
+                      {request.id}
+                    </div>
+                    <div className="mt-1 break-all">
+                      <span className="font-medium">Anfragender User:</span>{" "}
                       {request.requested_by_user_id}
                     </div>
                   </div>
@@ -300,7 +311,7 @@ export default async function AdminSubscriptionsPage() {
                   </span>
                 </div>
 
-                <div className="mt-4 grid gap-3 md:grid-cols-2 text-sm text-gray-700">
+                <div className="mt-4 grid gap-3 text-sm text-gray-700 md:grid-cols-2">
                   <div>
                     <div>
                       <span className="font-medium">Angelegt:</span>{" "}
@@ -318,7 +329,7 @@ export default async function AdminSubscriptionsPage() {
                       {request.message?.trim() || "—"}
                     </div>
                     <div className="mt-1">
-                      <span className="font-medium">Resolution:</span>{" "}
+                      <span className="font-medium">Notiz:</span>{" "}
                       {request.resolution_note?.trim() || "—"}
                     </div>
                   </div>

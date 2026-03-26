@@ -1,9 +1,9 @@
 # Venaris – Current State
 
-Last updated: 2026-03-19 (Nightly Population Refresh + Global Revier Scope + Wildlife UI Navigation Refactor)
+Last updated: 2026-03-26 (Orga/Product Expansion + Subscription Flow + Central Role Access Hardening)
 
-This document describes the **current implementation state** of Venaris.
-It is written as the operational truth source for ongoing product, UI, architecture, and MVP work.
+This document describes the current implementation state of Venaris.
+It is the operational truth source for ongoing product, UI, architecture, and MVP work.
 
 It is not a roadmap.
 It is the best current description of what already exists, what is partially implemented, and what has been structurally decided.
@@ -12,32 +12,39 @@ It is the best current description of what already exists, what is partially imp
 
 ## 1. Product State Summary
 
-Venaris is currently a protected multi-tenant SaaS foundation for wildlife intelligence.
+Venaris is currently a protected multi-tenant SaaS foundation for wildlife intelligence with a materially expanded product surface.
 
 The product already contains:
 - authenticated product access
 - organization-based access model
-- wildlife event visibility
+- role-aware memberships
+- active organization context
+- revier-aware wildlife analysis
 - camera-centric operations
 - early wildlife intelligence views
 - persisted population estimates
-- a nightly refresh mechanism for population modelling
+- nightly population refresh for active reviers
 - a unified app shell with main navigation, section navigation, and active context display
+- a real Orga area with account, reviers, members, invites, and subscription
+- self-sign-up with first-organization creation
+- manual subscription request / approval flow for the MVP
+- central page-level role access control with an explicit access-denied page
 
 The system is no longer only a camera ingest prototype.
 It is now structurally a first SaaS application with:
-- login
-- active organization context
-- organization-bound data access
-- role-aware memberships
-- revier-aware wildlife analysis
+- login and public auth flows
+- tenant-scoped product areas
+- organization-bound billing state
+- membership and role enforcement
+- revier-aware wildlife intelligence
+- operational camera provisioning and ingest monitoring
 
 ---
 
 ## 2. Core Functional Product Areas
 
 ### 2.1 Wildlife
-The Wildlife area now exists as a structured product section with these pages:
+The Wildlife area exists as a structured product section with these pages:
 
 - `/wildlife`
 - `/wildlife/species`
@@ -45,8 +52,7 @@ The Wildlife area now exists as a structured product section with these pages:
 - `/wildlife/activity`
 - `/wildlife/popsim`
 
-The Wildlife section is no longer a single dashboard page with local ad hoc navigation.
-It now sits under a central section navigation in the app shell.
+The Wildlife section sits under the central section navigation in the app shell.
 
 Current functional split:
 
@@ -65,7 +71,7 @@ Current functional split:
 - **PopSim**  
   model-based population estimate view based on persisted population snapshots
 
----
+Wildlife pages other than PopSim support the global revier scope including `revier=all`. PopSim intentionally requires a single revier and shows an explicit information state when `all` is selected.
 
 ### 2.2 Cameras
 The Cameras area currently contains:
@@ -80,39 +86,88 @@ The Cameras area currently contains:
 
 The Cameras cluster is currently the most operational product area and serves as reference quality for further UI work.
 
-The Cameras area is already structurally aligned with MVP thinking:
+The Cameras area is structurally aligned with MVP thinking:
 - overview / entry page
 - new camera creation
 - health visibility
 - event access
-- ingest/import operations
+- ingest / import operations
 
-`/cameras/events/[id]` is intentionally not treated as a separate section-nav item.
-It lives under `Events`.
-
----
+`/cameras/events/[id]` is intentionally not treated as a separate section-nav item and lives under `Events`.
 
 ### 2.3 Orga
-The Orga area currently exists as:
+The Orga area is now a real operational product area and no longer just conceptual.
 
+Current pages:
 - `/orga`
+- `/orga/account`
+- `/orga/reviere`
+- `/orga/reviere/new`
+- `/orga/reviere/[id]/edit`
+- `/orga/members`
+- `/orga/members/invite`
+- `/orga/subscription`
 
-It is not yet expanded into multiple subpages, but the organization / membership / revier logic is now materially relevant to the full product architecture and no longer only conceptual.
+Current functional split:
+
+- **Overview**  
+  Orga dashboard with tenant and commercial summary
+
+- **Mein Konto / Account**  
+  editable organization master data
+
+- **Reviere**  
+  list, create, edit, and status management for reviers
+
+- **Members**  
+  membership visibility, invite visibility, resend / revoke invite actions, and ongoing member-management work
+
+- **Subscription**  
+  current plan, limits, plan choices, and manual change-request entry point
+
+### 2.4 Home
+`/` is now a real product home page and central aggregation layer across Wildlife, Cameras, and Orga / Subscription.
+
+Home is no longer just a placeholder or a pure navigation page.
+It reflects current product state and is filtered by role-based visibility.
 
 ---
 
-## 3. Authentication, Membership, and Multi-Tenant State
+## 3. Authentication, Public Flows, Membership, and Multi-Tenant State
 
 ### 3.1 Authentication
-Venaris uses protected product access via login.
+Venaris uses protected product access via email / password login.
 
 Authentication foundation:
-- email/password login
-- protected app routes
+- email / password login
 - server-side user resolution
+- protected app routes
+- public auth pages outside the product shell where appropriate
 
-### 3.2 Membership Model
-The MVP membership and role model is active and relevant.
+Current public / auth-related pages:
+- `/login`
+- `/register`
+- `/invite/accept`
+- `/reset-password`
+
+Password-reset is productively implemented:
+- login page links to password reset
+- `/reset-password` renders without the normal app shell
+- password can be reset directly
+- the redirect / login continuation flow is consistent
+
+### 3.2 Self-Sign-up
+New users can now self-register and directly create their first organization.
+
+Current behavior:
+- `/register` is public
+- authenticated registration flow creates the first `organization`
+- an owner membership is created automatically
+- the active organization is set immediately after registration
+- a default Starter trial is created automatically for the new organization
+
+### 3.3 Membership Model
+The membership and role model is active and product-relevant.
 
 Current roles:
 - `owner`
@@ -122,30 +177,116 @@ Current roles:
 
 The active organization is resolved server-side and is the source of truth for tenant scoping.
 
-### 3.3 Organization Context
-The system already has an active organization concept.
-All protected product data should be interpreted relative to the active organization.
+### 3.4 Organization Context
+The app has an active organization concept.
+All protected product data is interpreted relative to the active organization.
 
 Existing architectural rule:
 - tenant = organization
 - user access is mediated via membership
 - active organization context is server-side truth
 
-This existing multi-tenant foundation remains the only tenant structure.
+This remains the only tenant structure.
 No second tenant mechanism has been introduced.
+
+### 3.5 Invite Model and Onboarding
+A dedicated invite model is now active.
+
+Current domain truth:
+- `organization_invites` = truth for open invites and invite lifecycle
+- `organization_members` = truth for real memberships
+
+Implemented invite flow:
+- invite is created inside active organization
+- mail is sent via Resend
+- user opens invite link
+- password is set
+- invite is accepted
+- membership is created
+- invite is marked accepted
+
+Invite operations currently available:
+- create invite
+- resend invite
+- revoke invite
+
+Confirm email is intentionally disabled in the invite onboarding flow so that the process remains one-step and operational for MVP.
 
 ---
 
-## 4. Revier Model and Scope Logic
+## 4. Role Access and Authorization State
 
-### 4.1 Revier Role in the Product
-Revier is now a first-class functional scope inside the organization context.
+### 4.1 Central Access Model
+Page-level access is now centrally defined and enforced.
 
-It is no longer only a data field in the database.
-It is now part of the UI and query architecture.
+A dedicated route access layer exists and is used to decide:
+- whether a route is public
+- which roles may access it
+- whether a route is restricted to specific emails
+- which main-nav and section-nav items should be rendered for the current user
 
-### 4.2 Current Revier Table
-`public.reviers` currently contains:
+This central layer now drives:
+- page access
+- main navigation visibility
+- section navigation visibility
+- access-denied routing
+
+### 4.2 Access-Denied UX
+Forbidden page access no longer falls back to an implicit not-found behavior.
+
+Current behavior:
+- denied page access redirects to `/access-denied`
+- APIs keep returning explicit 403-style JSON responses where appropriate
+
+This makes denied page access visible and understandable for users.
+
+### 4.3 Current Page-Level Role Intent
+Current effective role split is:
+
+- **owner**  
+  full product access except Venaris-internal admin-only routes
+
+- **admin**  
+  broad operational access, but not owner-only or Venaris-internal functions
+
+- **member**  
+  operational access mainly in Wildlife and Cameras, but no organization-sensitive management areas
+
+- **viewer**  
+  highly restricted visibility and explicitly blocked from Camera- and Orga-sensitive areas
+
+### 4.4 Venaris Internal Admin
+`dev@venaris.io` is currently the Venaris-internal admin identity for manual subscription approval / rejection.
+
+This applies to:
+- `/admin/subscriptions`
+- approve / reject subscription routes
+
+This is a deliberate MVP exception and not part of the regular customer role model.
+
+### 4.5 API Hardening State
+Relevant product APIs have been reviewed and role-hardening has been applied.
+
+Key outcome:
+- viewer is no longer implicitly allowed through Camera APIs where the product matrix says no
+- camera / asset / ingest routes are limited to `owner | admin | member` where appropriate
+- token / provisioning routes remain `owner | admin`
+- Venaris-internal subscription admin routes remain restricted to `dev@venaris.io`
+
+This means page access and API access are now much more aligned than before.
+
+---
+
+## 5. Revier Model and Scope Logic
+
+### 5.1 Revier Role in the Product
+Revier is now a first-class operational scope inside the organization context.
+
+It is no longer just a data field in the database.
+It is part of the UI and query architecture.
+
+### 5.2 Current Revier Table
+`public.reviers` currently contains at least:
 - `id`
 - `name`
 - `area_ha`
@@ -157,34 +298,62 @@ It is now part of the UI and query architecture.
 - `organization_id`
 - `status`
 
-### 4.3 Revier Status
-A status marker has been introduced on `public.reviers`.
+### 5.3 Revier Status
+A status marker exists on `public.reviers`.
 
 Current allowed values:
 - `active`
 - `paused`
 - `archived`
 
-This was added specifically to avoid long-term wasteful processing across non-operative reviers.
-
-Current intent:
-- only `active` reviers participate in population refresh jobs
+Intent:
+- only `active` reviers participate in active operational flows where that matters
 - `paused` and `archived` remain in the system but are operationally excluded where appropriate
 
-### 4.4 Current Real Revier Status Example
-Current known working setup:
-- `Seed Revier Intelligence` → `active`
-- `Testrevier` → `paused`
-- `Heubachwiesen` → `paused`
+### 5.4 Operational Revier Management
+Reviere are now productively manageable in the Orga area.
 
-This means the nightly population refresh currently runs only on the meaningful seeded revier.
+Implemented:
+- list
+- create
+- edit
+- status changes
+- `area_ha` enforced operationally as required input because PopSim depends on it
+
+### 5.5 Global Revier Scope
+The app supports a global revier scope in the shell.
+
+Contract:
+- `revier=all`
+- `revier=<uuid>`
+
+The value is transparent and bookmarkable, but remains untrusted input.
+Every page using it must validate it against active reviers of the active organization.
+
+A shared helper exists in:
+- `src/lib/intelligence/revierScope.ts`
+
+Logical outcome:
+- missing `revier` → treated as `all`
+- invalid `revier` → fallback to `all`
+- valid UUID within allowed reviers → single-revier scope
+
+### 5.6 Header / Context Behavior
+The global revier dropdown in the shell now:
+- lists only active reviers
+- supports `all`
+- writes back to the current URL
+- preserves local page parameters such as `period`
+- triggers server re-render
+
+Revier status now correctly influences what appears in that dropdown.
 
 ---
 
-## 5. App Shell, Navigation, and Context UX
+## 6. App Shell, Navigation, and Context UX
 
-### 5.1 Main Navigation
-Main navigation is centralized in `MainNav`.
+### 6.1 Main Navigation
+Main navigation is centralized.
 
 Current top-level items:
 - Home
@@ -192,12 +361,13 @@ Current top-level items:
 - Cameras
 - Orga
 
-Logout has been removed from `MainNav` and separated into its own component.
+Navigation visibility is now filtered by the central access model.
 
-### 5.2 Section Navigation
-A central `SectionNav` has been introduced and is rendered from the layout.
+Logout has been separated from main navigation into its own component.
 
-It is context-sensitive based on pathname.
+### 6.2 Section Navigation
+A central section navigation exists and is rendered from the layout.
+It is pathname-sensitive and role-filtered.
 
 Current section-nav behavior:
 
@@ -218,78 +388,174 @@ Current section-nav behavior:
 
 #### Orga
 - Overview
+- Account
+- Reviere
+- Members
+- Subscription
 
-This removed the need for duplicated local subnavigation blocks on the Wildlife pages.
-
-### 5.3 Context Bar
-A global `ContextBar` has been introduced in the layout.
+### 6.3 Context Bar
+A global `ContextBar` exists in the layout.
 
 Current displayed context:
 - active organization
 - active role
 - revier selector
 
-This is the top-level context layer for the app shell.
+Header refinements completed:
+- logged-in email shown next to Venaris
+- label shortened from `Organization:` to `Orga:` to reduce line pressure
 
-### 5.4 Revier Selector
-The revier selector is now part of the global context bar.
+### 6.4 Public / Blocked Shell States
+Public auth routes use a stripped-down shell behavior instead of the normal product shell.
 
-It:
-- lists only active reviers of the active organization
-- supports `all`
-- writes `?revier=...` into the current URL
-- preserves existing page parameters such as `period`
-- triggers server re-render of the current page
+Additionally, blocked subscription states are now handled centrally in the app shell.
 
-This means the UI-level global revier scope now exists and is active.
-
----
-
-## 6. Scope Resolution Contract
-
-### 6.1 Global Context Rules
-The app now follows this conceptual hierarchy after login:
-
-1. authenticated user
-2. active organization
-3. membership / role
-4. revier scope
-
-### 6.2 Revier URL Contract
-Revier scope is expressed in the URL via:
-
-- `revier=all`
-- `revier=<uuid>`
-
-This is intentionally transparent and bookmarkable.
-
-### 6.3 Validation Rule
-The URL remains untrusted input.
-Therefore every page that uses revier scope must validate the incoming value against the set of active reviers of the active organization.
-
-### 6.4 Shared Revier Scope Helper
-A shared helper now exists in:
-
-- `src/lib/intelligence/revierScope.ts`
-
-It provides the shared scope resolution logic and avoids page-by-page reinvention.
-
-Current logical outcome:
-- missing `revier` → treated as `all`
-- invalid `revier` → fallback to `all`
-- valid UUID within allowed reviers → single revier scope
+This means the shell itself can decide whether the user should see:
+- normal product content
+- a blocked / reactivation state
+- public auth pages without the normal app chrome
 
 ---
 
-## 7. Wildlife Query Scope State
+## 7. Subscription and Billing State
+
+### 7.1 Subscription Domain
+`organization_subscriptions` is now the central subscription table.
+
+The billing domain for MVP is defined as:
+- paying unit = `organization`
+- plans = `starter | pro | enterprise`
+- statuses = `trialing | active | past_due | canceled | expired`
+- billing providers = `none | manual | stripe`
+
+### 7.2 Default Subscription Creation
+New organizations now automatically receive a default subscription.
+
+Current default:
+- Starter
+- trialing
+- 30-day trial
+
+A backfill for existing organizations has been executed.
+A separate repair also fixed historical trial rows missing `trial_ends_at`.
+
+### 7.3 Subscription Policy Layer
+A centralized policy layer exists in `subscriptionPolicy.ts`.
+
+It governs at least:
+- trial expiry logic
+- effective status resolution
+- `canCreateCamera`
+- `canInviteMember`
+
+This policy is now product-relevant and server-side enforced.
+
+### 7.4 Usage / Limit Enforcement
+Current usage logic:
+- camera creation is blocked when `max_cameras` is reached
+- member expansion is blocked when `max_members` is reached
+- member usage counts active members plus open invites
+
+This enforcement is active both in UI and server logic for the relevant flows.
+
+### 7.5 Subscription UI State
+The subscription page is no longer a placeholder.
+
+It now shows:
+- current plan
+- current status
+- billing cycle
+- prices incl. VAT
+- usage against plan limits
+- direct plan selection / change-request entry points
+
+Manual billing is now productively usable for MVP.
+The UI is prepared for manual and later stripe-based provider handling.
+
+### 7.6 Request / Approval Flow
+A manual subscription change-request flow is operational.
+
+Implemented:
+- user can select a plan in the app
+- request is created in `organization_subscription_change_requests`
+- only one open request per organization is allowed at a time
+- internal admin page exists for request processing
+- approve route exists
+- reject route exists
+- approve flow has been tested end-to-end
+
+Current tested outcome:
+- request → approved
+- subscription → active
+- billing provider → manual
+
+### 7.7 Blocked Subscription State
+Expired or otherwise blocked subscription states are now handled centrally by the app shell.
+
+Current behavior:
+- blocked users do not simply see a hint on home
+- instead they see a central blocked / reactivation state
+- reactivation UX points directly to plan choice
+- logout remains available and consistent in blocked state
+
+### 7.8 Current Commercial Reality
+Billing is operational for MVP, but still manual.
+
+Known current limitations:
+- Stripe / automated payment is not yet implemented
+- `current_period_end` is not yet always meaningfully maintained in the manual approval flow
+- Enterprise is intentionally a manual path and is expected to remain special-cased even after Starter / Pro automation
+
+---
+
+## 8. Organization, Account, Members, and Invite State
+
+### 8.1 Organization Account
+`/orga/account` is no longer a placeholder.
+It reads and writes real organization data.
+
+### 8.2 Members Area
+`/orga/members` is now tenant-sharp and operational.
+
+Implemented visibility:
+- existing memberships
+- email from auth.users
+- last login
+- invite list
+
+Current invite actions on the page:
+- resend
+- revoke
+
+### 8.3 Member Management
+Member management has been extended beyond read-only visibility.
+
+Implemented / in-progress behavior in current work:
+- existing members can be seen in a management table
+- role changes are supported with owner/admin safeguards
+- member removal is supported with owner/admin safeguards
+- self-mutation is blocked
+- the last active owner is protected
+- admins cannot mutate or remove owners
+
+This area has seen active UX iteration and may still require final polish, but the functional membership-management logic is now materially present.
+
+### 8.4 Invite Creation Rights
+Membership rights now visibly affect the UI:
+- member cannot see the invite button
+- direct access to `/orga/members/invite` without permission shows access denied
+
+This means membership rights are enforced both server-side and visibly in the product.
+
+---
+
+## 9. Wildlife Query Scope State
 
 The Wildlife area now differentiates correctly between:
 - **global scope** = active organization + revier URL scope
 - **local page filters** = e.g. `period`, `species`
 
-This separation was not present before and is now a major architectural improvement.
-
-### 7.1 Species
+### 9.1 Species
 `/wildlife/species` now:
 - resolves active organization
 - resolves active reviers
@@ -298,72 +564,51 @@ This separation was not present before and is now a major architectural improvem
 - filters event queries indirectly through camera scope
 - preserves `period` as local page filter
 
-Result:
-- `species` now responds to global revier selection
-
-### 7.2 Where & When
+### 9.2 Where & When
 `/wildlife/wherewhen` now:
 - uses the same revier scope pattern as `species`
 - preserves local `period`
 - preserves local `species`
 - filters cameras and therefore wildlife event data by revier scope
 
-Result:
-- `wherewhen` now responds to global revier selection
-
-### 7.3 Activity
+### 9.3 Activity
 `/wildlife/activity` now:
 - uses the same revier scope pattern
 - preserves local `period`
 - filters activity data by camera scope based on revier
 
-Result:
-- `activity` now responds to global revier selection
-
-### 7.4 Wildlife Overview
-`/wildlife` has also been lifted to the global revier scope.
+### 9.4 Wildlife Overview
+`/wildlife` reacts to the active global revier scope.
 It no longer ignores the header revier selection.
 
-Result:
-- the overview dashboard now reacts to the active revier scope as well
-
-### 7.5 PopSim
-PopSim is intentionally **not** treated the same way as the event-based Wildlife pages.
-
-Current product decision:
-- `species`, `wherewhen`, `activity`, and `overview` support `all`
-- `popsim` requires a **single revier**
+### 9.5 PopSim
+PopSim remains intentionally different:
+- overview / species / wherewhen / activity support `all`
+- PopSim requires a single revier
 
 Reason:
-PopSim is a model-based revier snapshot, not a simple aggregate event view.
-
-Current behavior:
-- valid single revier → PopSim snapshot loads
-- `revier=all` → PopSim shows an explicit information state instead of silently choosing a revier
-- invalid revier → resolves via shared scope logic and effectively behaves as `all`, therefore shows the single-revier-required message
-
-This is intentional to avoid false precision and misleading cross-revier aggregation.
+PopSim is a model-based revier snapshot, not a simple cross-revier event aggregate.
 
 ---
 
-## 8. Population Modelling State
+## 10. Population Modelling State
 
-### 8.1 Population Layer Status
-The population modelling layer is no longer just conceptual.
-It now has:
+### 10.1 Population Layer Status
+The population-modelling layer is no longer just conceptual.
+It has:
 - formal modelling framework
 - persisted results table
 - revier-level refresh orchestration
 - nightly scheduled refresh
 
-### 8.2 Persisted Table
+### 10.2 Persisted Table
 Current output table:
 - `public.population_estimates`
 
 This is the persisted source used by PopSim and future wildlife population views.
 
-### 8.3 Population Functions
-Confirmed public functions include:
+### 10.3 Population Functions
+Confirmed functions include at least:
 - `compute_population_diurnal_surface_activity`
 - `compute_population_for_revier`
 - `compute_population_group_density`
@@ -374,246 +619,108 @@ Confirmed public functions include:
 - `refresh_population_estimate_roe_deer`
 - `refresh_population_estimates_for_revier`
 
-### 8.4 Master Refresh Function
-`public.refresh_population_estimates_for_revier(p_revier_id uuid)` is the current orchestration function that iterates over `species_population_model_mapping` and dispatches to the configured model family.
+### 10.4 Master Refresh Function
+`public.refresh_population_estimates_for_revier(p_revier_id uuid)` is the orchestration function that iterates over the configured species/model mapping and dispatches to the chosen model family.
 
-### 8.5 Wrapper Function
-A wrapper function now exists to refresh all active reviers:
-
+### 10.5 Wrapper Function
+A wrapper exists for all active reviers:
 - `public.refresh_population_estimates_for_all_active_reviers()`
 
-This function:
+It:
 - iterates active reviers
-- calls `refresh_population_estimates_for_revier(...)`
+- calls the per-revier refresh
 - isolates per-revier errors
-- returns processed/success/error counters
+- returns processed / success / error counters
 
-### 8.6 Current Operational Job State
-Current verified manual result:
+### 10.6 Current Operational Job State
+Current verified manual result from the earlier setup:
 - processed: 1
 - success: 1
 - error: 0
 
-This matches the current revier status setup with only one active revier.
+This matched the current status setup with only one active seeded revier.
 
 ---
 
-## 9. Nightly Population Refresh
+## 11. Nightly Population Refresh
 
-### 9.1 Architectural Decision
-The nightly population refresh is now implemented via:
+### 11.1 Architectural Decision
+Nightly population refresh is implemented via:
+- Supabase Cron / pg_cron
 
-- **Supabase Cron / pg_cron**
+This was chosen over Vercel cron or Hetzner cron because the modelling logic already lives in SQL.
 
-This was chosen over:
-- Vercel cron + API route
-- Hetzner cron script
-
-Reasoning:
-- the actual modelling logic already lives in SQL
-- direct DB-level scheduling is simpler and cleaner for MVP
-- less orchestration overhead
-- native run history exists via cron tables
-
-### 9.2 Implemented Pieces
+### 11.2 Implemented Pieces
 Completed:
 - `pg_cron` enabled
 - `reviers.status` introduced
 - wrapper function for active reviers created
 - cron job scheduled
 
-### 9.3 Current Cron Job
-Current job:
-- `nightly-population-refresh-active-reviers`
-- schedule: `10 2 * * *`
-- command: `select public.refresh_population_estimates_for_all_active_reviers();`
-
-This means:
-- daily population refresh
-- 02:10
-- only active reviers
-
-### 9.4 Monitoring State
-`cron.job` confirms the job is active.
-`cron.job_run_details` had no rows immediately after creation, which was expected prior to the first scheduled execution.
-
-### 9.5 MVP Interpretation
-For MVP, this is considered a good stable solution:
-- simple
-- DB-native
-- aligned with the data model
-- easy to evolve later toward richer cadence logic
+### 11.3 Current Operational Principle
+Only active reviers are refreshed.
+This prevents wasteful long-term computation over non-operative reviers.
 
 ---
 
-## 10. PopSim Product Naming State
+## 12. Camera Provisioning, Ingest, and Monitoring State
 
-The page/module is now named:
+### 12.1 Camera Creation
+Camera creation is now plan-aware and subscription-limited.
 
-- **PopSim**
+Implemented:
+- camera provisioning page
+- plan-limit enforcement via subscription policy
+- manual / smtp / ftp routing support
+- technical provisioning result handling
 
-This replaced the earlier placeholder concept `wilddruck`.
+### 12.2 Ingest Monitoring
+Ingest monitoring exists as a product page and a scoped API.
+It is now role-hardened in line with the Cameras area.
 
-Reason:
-- `wilddruck` was considered too narrow, ambiguous, and too domain-loaded as a page title
-- PopSim better communicates a model-based estimate rather than objective truth
-- the name is intentionally product-like and softer than a hard scientific claim
+### 12.3 Camera Health
+Camera health exists both as page and API and is role-restricted to camera-allowed roles.
 
-Current product meaning:
-- qualified population approximation
-- model-based, not census-based
-- management-support signal, not absolute truth
-
----
-
-## 11. Camera / Revier Data Relationship
-
-Current database evidence:
-- `cameras.revier_id` exists
-- `cameras.revier_id` is `NOT NULL`
-
-This means camera-to-revier assignment is currently mandatory in the schema.
-
-That fact was critical for the revier-scope refactor of the Wildlife pages.
+### 12.4 Assets / Signed URLs / Relevance
+Asset listing, signed URLs, and relevance toggling are organization-scoped and have been brought into closer alignment with the intended role model.
 
 ---
 
-## 12. Current Known Data Reality
+## 13. Known Current Risks and Incompletenesses
 
-The current system does not yet contain rich, production-grade data everywhere.
-
-Known state:
-- `Seed Revier Intelligence` has the strongest meaningful seeded data
-- `Heubachwiesen` is effectively empty
-- `Testrevier` only contains limited/random test animals
-- some species such as `mouflon` currently produce no rows due to insufficient seeded basis
-
-This means:
-- the UI architecture can be validated
-- the nightly job can be validated
-- but not every model output is yet semantically rich
-
-That is acceptable at current MVP stage.
+Current relevant risks / incomplete areas:
+- Stripe / automated billing is still missing
+- manual billing is operational but not the final commercial architecture
+- `current_period_end` is not yet consistently meaningful in the manual approval flow
+- Enterprise remains intentionally manual
+- membership-management UX still needs polish even though the core logic is materially present
+- parts of the role system may still need continued review when new routes/pages are introduced
 
 ---
 
-## 13. UI / UX State After Today
+## 14. Current Working Architectural Truths
 
-### 13.1 Solved
-Today’s work materially improved:
-- app shell consistency
-- navigation hierarchy
-- organization/revier awareness
-- wildlife page consistency
-- removal of duplicated local subnav
-- global scope handling
+The following truths should be treated as current working rules:
 
-### 13.2 Current UX Structure
-The shell now has:
-- top-level navigation
-- section navigation
-- context bar
-- global revier selection
-- page-local filters kept within pages
-
-This is the correct structural direction for the product.
-
-### 13.3 Remaining UX Imperfections
-Some visual spacing/alignment in the header is not perfect yet, but currently acceptable.
-The structure is now functionally correct and can be polished later without reopening the architecture.
+- tenant = organization
+- organization is the paying unit
+- membership mediates all customer-user access
+- active organization is resolved server-side and remains the tenant truth
+- revier is a functional operational scope inside the active organization
+- open invites count against member usage
+- new organizations auto-receive a default Starter trial
+- blocked subscription states are handled centrally by the app shell
+- `dev@venaris.io` is the Venaris-internal admin for manual subscription approval/rejection
+- page-level route access is centrally defined and rendered into navigation visibility
+- denied page access redirects to `/access-denied`
 
 ---
 
-## 14. Known Open Topics
+## 15. Immediate Next Logical Focus
 
-### 14.1 Context Persistence
-Current revier scope is URL-based and not yet stored as user preference.
-This is acceptable for MVP.
+From the current implementation state, the next major logical focus areas are:
+- finish Stripe / automated billing for Starter and Pro
+- leave Enterprise on a manual internal process
+- continue product polish on membership management UX
+- continue to keep role access centralized as new pages / APIs are added
 
-### 14.2 Orga Section Expansion
-The Orga area is not yet expanded into the same level of structured subpages as Wildlife/Cameras.
-
-### 14.3 Camera and Orga Scope Consistency
-The Wildlife area is now materially refactored toward consistent organization/revier scoping.
-Other product areas may still need the same systematic scope alignment.
-
-### 14.4 PopSim and All-Reviers Mode
-Deliberately not implemented.
-Current product stance:
-- no fake organization-wide PopSim aggregation without explicit modelling definition
-
-### 14.5 Richer Population Refresh Cadence
-Future options may include:
-- weekly refresh
-- batched refresh windows
-- `next_population_refresh_at`
-- `last_population_refresh_at`
-- frequency controls per revier
-
-Not needed for the MVP yet.
-
----
-
-## 15. Current Architectural Position
-
-Venaris is currently best described as:
-
-- a protected multi-tenant wildlife intelligence application
-- with camera ingest and event visibility already established
-- with a materially improving wildlife analytics UI
-- with revier-aware scope now introduced into the shell and key wildlife pages
-- with a first real persisted population modelling layer
-- with nightly automated refresh of population estimates
-- with a clearer separation between:
-  - tenant context
-  - revier scope
-  - section navigation
-  - page-local filters
-
-This is a major step from prototype toward MVP product structure.
-
----
-
-## 16. Practical Source-of-Truth Summary
-
-### Stable enough to build on
-- authentication and active organization context
-- membership roles
-- cameras cluster
-- wildlife section structure
-- central shell navigation
-- global revier selector
-- nightly population refresh
-- persisted population estimates
-- PopSim single-revier principle
-
-### Still evolving
-- orga section depth
-- some shell/header polish
-- broader cross-product revier consistency
-- richer seeded data quality
-- later user preference persistence
-- later population scheduling sophistication
-
----
-
-## 17. Immediate Next-Step Candidates
-
-Most likely sensible next work packages are:
-
-1. **Orga area tighten-up**  
-   make organization / member / revier management more explicit in UI and structure
-
-2. **Cross-product revier scope rollout**  
-   carry the same discipline into additional pages beyond Wildlife
-
-3. **Population/PopSim refinement**  
-   improve seeded data quality, missing species coverage, and interpretation states
-
-4. **UI cleanup and polish**  
-   spacing, shell refinement, cleaner interactions, lower visual friction
-
-5. **Camera / operational workflow quality**  
-   continue improving operational product depth in Cameras and Orga
-
----
