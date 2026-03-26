@@ -1,4 +1,4 @@
-// src/app/api/cameras/create/route.ts #3
+// src/app/api/cameras/create/route.ts #4
 import { NextRequest, NextResponse } from "next/server";
 import crypto from "node:crypto";
 import { supabaseServer } from "@/lib/supabaseServer";
@@ -214,7 +214,8 @@ export async function POST(req: NextRequest) {
       supabase
         .from("cameras")
         .select("id", { count: "exact", head: true })
-        .eq("organization_id", activeOrganization.id),
+        .eq("organization_id", activeOrganization.id)
+        .eq("is_active", true),
     ]);
 
     if (subscriptionResult.error) {

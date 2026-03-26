@@ -1,4 +1,4 @@
-// src/app/cameras/new/page.tsx #4
+// src/app/cameras/new/page.tsx #5
 import { requirePathAccess } from "@/lib/authz";
 import { supabaseServer } from "@/lib/supabaseServer";
 import { canCreateCamera, resolveSubscriptionState } from "@/lib/billing/subscriptionPolicy";
@@ -54,7 +54,8 @@ export default async function NewCameraPage() {
     supabase
       .from("cameras")
       .select("id", { count: "exact", head: true })
-      .eq("organization_id", activeOrganization.id),
+      .eq("organization_id", activeOrganization.id)
+      .eq("is_active", true),
   ]);
 
   if (reviersResult.error) {
