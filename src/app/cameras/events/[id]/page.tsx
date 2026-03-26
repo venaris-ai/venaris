@@ -1,10 +1,23 @@
-// src/app/cameras/events/[id]/page.tsx #2
+// src/app/cameras/events/[id]/page.tsx #3
 export const runtime = "nodejs";
 
 import Link from "next/link";
 import { supabaseServer } from "@/lib/supabaseServer";
 import AssetGrid from "./AssetGrid";
 import { requirePathAccess } from "@/lib/authz";
+import {
+  resolveRevierScope,
+  type RevierOption,
+} from "@/lib/intelligence/revierScope";
+
+type SearchParams = {
+  revier?: string;
+};
+
+type RevierRow = {
+  id: string;
+  name: string;
+};
 
 function fmt(ts: string | null) {
   if (!ts) return "—";
@@ -24,10 +37,25 @@ function scoreBadge(score: number | null) {
   return "low";
 }
 
-export default async function CameraEventDetailPage(props: any) {
+function buildEventsBackHref(revier?: string) {
+  if (!revier) return "/cameras/events";
+  const params = new URLSearchParams({ revier });
+  return `/cameras/events?${params.toString()}`;
+}
+
+export default async function CameraEventDetailPage(props: {
+  params?: Promise<{ id?: string }> | { id?: string };
+  searchParams?: Promise<SearchParams> | SearchParams;
+}) {
   const supabase = supabaseServer();
-  const params = await Promise.resolve(props?.params);
+  const params = props?.params ? await Promise.resolve(props.params) : undefined;
+  const searchParams = props?.searchParams
+    ? await Promise.resolve(props.searchParams)
+    : undefined;
+
   const eventId: string | undefined = params?.id;
+  const rawRevier = searchParams?.revier;
+  const backHref = buildEventsBackHref(rawRevier);
 
   if (!eventId) {
     return (
@@ -38,7 +66,7 @@ export default async function CameraEventDetailPage(props: any) {
             <p className="text-sm text-gray-600">Details & Assets</p>
           </div>
           <Link
-            href="/cameras/events"
+            href={backHref}
             className="rounded-md border px-3 py-2 text-sm"
           >
             ← Zurück
@@ -72,7 +100,7 @@ export default async function CameraEventDetailPage(props: any) {
             <p className="text-sm text-gray-600">Details & Assets</p>
           </div>
           <Link
-            href="/cameras/events"
+            href={backHref}
             className="rounded-md border px-3 py-2 text-sm"
           >
             ← Zurück
@@ -88,7 +116,7 @@ export default async function CameraEventDetailPage(props: any) {
 
   const { data: camera } = await supabase
     .from("cameras")
-    .select("id,name,location_name,organization_id")
+    .select("id,name,location_name,organization_id,revier_id")
     .eq("id", event.camera_id)
     .single();
 
@@ -101,7 +129,74 @@ export default async function CameraEventDetailPage(props: any) {
             <p className="text-sm text-gray-600">Details & Assets</p>
           </div>
           <Link
-            href="/cameras/events"
+            href={backHref}
+            className="rounded-md border px-3 py-2 text-sm"
+          >
+            ← Zurück
+          </Link>
+        </div>
+
+        <div className="rounded-xl border p-4 text-sm text-red-600">
+          Event nicht gefunden oder nicht erlaubt.
+        </div>
+      </main>
+    );
+  }
+
+  const { data: reviersData, error: reviersError } = await supabase
+    .from("reviers")
+    .select("id,name")
+    .eq("organization_id", activeOrganization.id)
+    .eq("status", "active")
+    .order("name", { ascending: true });
+
+  if (reviersError) {
+    return (
+      <main className="space-y-6">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h1 className="text-3xl font-semibold">Event</h1>
+            <p className="text-sm text-gray-600">Details & Assets</p>
+          </div>
+          <Link
+            href={backHref}
+            className="rounded-md border px-3 py-2 text-sm"
+          >
+            ← Zurück
+          </Link>
+        </div>
+
+        <div className="rounded-xl border p-4 text-sm text-red-600">
+          Fehler: {reviersError.message}
+        </div>
+      </main>
+    );
+  }
+
+  const reviers = (reviersData ?? []) as RevierRow[];
+  const allowedReviers: RevierOption[] = reviers.map((revier) => ({
+    id: revier.id,
+    name: revier.name,
+  }));
+  const revierScope = resolveRevierScope(rawRevier, allowedReviers);
+  const allowedRevierIds = allowedReviers.map((revier) => revier.id);
+
+  const cameraAllowedInScope =
+    allowedRevierIds.length > 0 &&
+    (revierScope.type === "single"
+      ? camera.revier_id === revierScope.revierId
+      : allowedRevierIds.includes(camera.revier_id));
+
+  if (!cameraAllowedInScope) {
+    return (
+      <main className="space-y-6">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h1 className="text-3xl font-semibold">Event</h1>
+            <p className="text-sm text-gray-600">Details & Assets</p>
+          </div>
+          <Link
+            href={backHref}
             className="rounded-md border px-3 py-2 text-sm"
           >
             ← Zurück
@@ -178,7 +273,7 @@ export default async function CameraEventDetailPage(props: any) {
         </div>
 
         <Link
-          href="/cameras/events"
+          href={backHref}
           className="rounded-md border px-3 py-2 text-sm"
         >
           ← Zurück

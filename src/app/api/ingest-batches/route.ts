@@ -1,4 +1,4 @@
-// src/app/api/ingest-batches/route.ts
+// src/app/api/ingest-batches/route.ts #2
 import { NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabaseServer";
 import { requireOrganizationRole } from "@/lib/auth";
@@ -7,12 +7,11 @@ export const dynamic = "force-dynamic";
 
 export async function GET(req: Request) {
   try {
-
-const { activeMembership } = await requireOrganizationRole([
-  "owner",
-  "admin",
-  "member",
-]);
+    const { activeMembership } = await requireOrganizationRole([
+      "owner",
+      "admin",
+      "member",
+    ]);
 
     const activeOrganization = activeMembership.organizations;
 
@@ -34,11 +33,18 @@ const { activeMembership } = await requireOrganizationRole([
     const source = searchParams.get("source");
     const status = searchParams.get("status");
     const cameraId = searchParams.get("cameraId");
+    const revier = searchParams.get("revier");
 
-    const { data: cameras, error: camerasError } = await supabase
+    let camerasQuery = supabase
       .from("cameras")
       .select("id")
       .eq("organization_id", activeOrganization.id);
+
+    if (revier && revier !== "all") {
+      camerasQuery = camerasQuery.eq("revier_id", revier);
+    }
+
+    const { data: cameras, error: camerasError } = await camerasQuery;
 
     if (camerasError) {
       return NextResponse.json(

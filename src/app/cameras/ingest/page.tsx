@@ -1,8 +1,21 @@
-// src/app/cameras/ingest/page.tsx #2
+// src/app/cameras/ingest/page.tsx #3
 export const dynamic = "force-dynamic";
 
 import { requirePathAccess } from "@/lib/authz";
 import { supabaseServer } from "@/lib/supabaseServer";
+import {
+  resolveRevierScope,
+  type RevierOption,
+} from "@/lib/intelligence/revierScope";
+
+type SearchParams = {
+  revier?: string;
+};
+
+type RevierRow = {
+  id: string;
+  name: string;
+};
 
 type BatchDb = {
   id: string;
@@ -127,7 +140,9 @@ function formatUtcTimestamp(value?: string | null) {
   return d.toISOString().replace("T", " ").slice(0, 19) + " UTC";
 }
 
-export default async function CamerasIngestPage() {
+export default async function CamerasIngestPage(props: {
+  searchParams?: Promise<SearchParams> | SearchParams;
+}) {
   const ctx = await requirePathAccess("/cameras/ingest");
 
   if (!ctx.activeMembership) {
@@ -135,6 +150,10 @@ export default async function CamerasIngestPage() {
   }
 
   const activeOrganization = ctx.activeMembership.organizations;
+  const searchParams = props?.searchParams
+    ? await Promise.resolve(props.searchParams)
+    : undefined;
+  const rawRevier = searchParams?.revier;
 
   if (!activeOrganization) {
     throw new Error("Active organization not found");
@@ -145,40 +164,68 @@ export default async function CamerasIngestPage() {
   let items: Batch[] = [];
   let apiError: string | null = null;
 
-  const { data: cameras, error: camerasError } = await supabase
-    .from("cameras")
-    .select("id")
-    .eq("organization_id", activeOrganization.id);
+  const { data: reviersData, error: reviersError } = await supabase
+    .from("reviers")
+    .select("id,name")
+    .eq("organization_id", activeOrganization.id)
+    .eq("status", "active")
+    .order("name", { ascending: true });
 
-  if (camerasError) {
-    apiError = camerasError.message;
+  if (reviersError) {
+    apiError = reviersError.message;
   } else {
-    const allowedCameraIds = (cameras ?? []).map((camera) => camera.id);
+    const reviers = (reviersData ?? []) as RevierRow[];
+    const allowedReviers: RevierOption[] = reviers.map((revier) => ({
+      id: revier.id,
+      name: revier.name,
+    }));
+    const revierScope = resolveRevierScope(rawRevier, allowedReviers);
+    const allowedRevierIds = allowedReviers.map((revier) => revier.id);
 
-    if (allowedCameraIds.length > 0) {
-      const { data, error } = await supabase
-        .from("ingest_batches")
-        .select(
-          `
-          id,
-          camera_id,
-          received_at,
-          source,
-          file_count,
-          status,
-          error_summary,
-          meta,
-          cameras ( id, name )
-          `
-        )
-        .in("camera_id", allowedCameraIds)
-        .order("received_at", { ascending: false })
-        .limit(50);
+    if (allowedRevierIds.length > 0) {
+      let camerasQuery = supabase
+        .from("cameras")
+        .select("id")
+        .eq("organization_id", activeOrganization.id);
 
-      if (error) {
-        apiError = error.message;
+      camerasQuery =
+        revierScope.type === "single"
+          ? camerasQuery.eq("revier_id", revierScope.revierId)
+          : camerasQuery.in("revier_id", allowedRevierIds);
+
+      const { data: cameras, error: camerasError } = await camerasQuery;
+
+      if (camerasError) {
+        apiError = camerasError.message;
       } else {
-        items = ((data ?? []) as BatchDb[]).map(normalizeBatch);
+        const allowedCameraIds = (cameras ?? []).map((camera) => camera.id);
+
+        if (allowedCameraIds.length > 0) {
+          const { data, error } = await supabase
+            .from("ingest_batches")
+            .select(
+              `
+              id,
+              camera_id,
+              received_at,
+              source,
+              file_count,
+              status,
+              error_summary,
+              meta,
+              cameras ( id, name )
+              `
+            )
+            .in("camera_id", allowedCameraIds)
+            .order("received_at", { ascending: false })
+            .limit(50);
+
+          if (error) {
+            apiError = error.message;
+          } else {
+            items = ((data ?? []) as BatchDb[]).map(normalizeBatch);
+          }
+        }
       }
     }
   }

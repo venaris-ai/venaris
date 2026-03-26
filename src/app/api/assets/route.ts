@@ -1,4 +1,4 @@
-// src/app/api/assets/route.ts
+// src/app/api/assets/route.ts #2
 export const runtime = "nodejs";
 
 import { NextResponse } from "next/server";
@@ -22,16 +22,23 @@ export async function GET(req: Request) {
 
     const onlyRelevant = url.searchParams.get("onlyRelevant") === "true";
     const cameraId = url.searchParams.get("cameraId");
+    const revier = url.searchParams.get("revier");
 
     const limitRaw = Number(url.searchParams.get("limit") || 30);
     const limit = Number.isFinite(limitRaw)
       ? Math.min(Math.max(limitRaw, 1), 200)
       : 30;
 
-    const { data: cameras, error: camerasError } = await supabase
+    let camerasQuery = supabase
       .from("cameras")
       .select("id")
       .eq("organization_id", activeOrganization.id);
+
+    if (revier && revier !== "all") {
+      camerasQuery = camerasQuery.eq("revier_id", revier);
+    }
+
+    const { data: cameras, error: camerasError } = await camerasQuery;
 
     if (camerasError) {
       return NextResponse.json({ error: camerasError.message }, { status: 500 });

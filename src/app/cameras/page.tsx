@@ -1,7 +1,8 @@
-// src/app/cameras/page.tsx #3
+// src/app/cameras/page.tsx #4
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 
 type AssetRow = {
   id: string;
@@ -108,6 +109,9 @@ function StatCard({
 }
 
 export default function CamerasPage() {
+  const searchParams = useSearchParams();
+  const revierParam = searchParams.get("revier");
+
   const [cameraId, setCameraId] = useState<string>("");
   const [file, setFile] = useState<File | null>(null);
 
@@ -144,7 +148,14 @@ export default function CamerasPage() {
   }
 
   async function loadCameras() {
-    const res = await fetch("/api/camera-health", { cache: "no-store" });
+    const params = new URLSearchParams();
+    if (revierParam) params.set("revier", revierParam);
+
+    const url = params.toString()
+      ? `/api/camera-health?${params.toString()}`
+      : "/api/camera-health";
+
+    const res = await fetch(url, { cache: "no-store" });
     const json = await res.json();
 
     if (!res.ok) {
@@ -155,9 +166,12 @@ export default function CamerasPage() {
     const list = (json.items ?? []) as CameraRow[];
     setCameras(list);
 
-    if (!cameraId && list.length > 0) {
-      setCameraId(list[0].id);
-    }
+    setCameraId((current) => {
+      if (list.length === 0) return "";
+      if (!current) return list[0].id;
+      if (!list.some((camera) => camera.id === current)) return list[0].id;
+      return current;
+    });
   }
 
   async function loadAssets() {
@@ -167,6 +181,7 @@ export default function CamerasPage() {
       params.set("limit", String(assetLimit));
       if (cameraId) params.set("cameraId", cameraId);
       if (onlyRelevant) params.set("onlyRelevant", "true");
+      if (revierParam) params.set("revier", revierParam);
 
       const res = await fetch(`/api/assets?${params.toString()}`, {
         cache: "no-store",
@@ -194,6 +209,7 @@ export default function CamerasPage() {
       const params = new URLSearchParams();
       params.set("limit", String(batchLimit));
       if (cameraId) params.set("cameraId", cameraId);
+      if (revierParam) params.set("revier", revierParam);
 
       const res = await fetch(`/api/ingest-batches?${params.toString()}`, {
         cache: "no-store",
@@ -226,13 +242,13 @@ export default function CamerasPage() {
   useEffect(() => {
     loadOverview();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [revierParam]);
 
   useEffect(() => {
     loadAssets();
     loadBatches();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cameraId, onlyRelevant]);
+  }, [cameraId, onlyRelevant, revierParam]);
 
   async function upload() {
     setMsg("");

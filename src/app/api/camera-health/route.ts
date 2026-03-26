@@ -1,10 +1,11 @@
+// src/app/api/camera-health/route.ts #2
 export const runtime = "nodejs";
 
 import { NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabaseServer";
 import { requireOrganizationRole } from "@/lib/auth";
 
-export async function GET() {
+export async function GET(req: Request) {
   try {
     const { activeMembership } = await requireOrganizationRole(["owner", "admin", "member"]);
     const activeOrganization = activeMembership.organizations;
@@ -17,11 +18,19 @@ export async function GET() {
     }
 
     const supabase = supabaseServer();
+    const { searchParams } = new URL(req.url);
+    const revier = searchParams.get("revier");
 
-    const { data: cameras, error: camerasError } = await supabase
+    let camerasQuery = supabase
       .from("cameras")
       .select("id")
       .eq("organization_id", activeOrganization.id);
+
+    if (revier && revier !== "all") {
+      camerasQuery = camerasQuery.eq("revier_id", revier);
+    }
+
+    const { data: cameras, error: camerasError } = await camerasQuery;
 
     if (camerasError) {
       return NextResponse.json(
@@ -41,10 +50,6 @@ export async function GET() {
       .select("*")
       .in("id", allowedCameraIds)
       .order("name", { ascending: true });
-
-
-
-
 
     if (error) {
       return NextResponse.json(

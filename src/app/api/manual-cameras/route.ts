@@ -1,11 +1,11 @@
-// src/app/api/manual-cameras/route.ts
+// src/app/api/manual-cameras/route.ts #2
 export const runtime = "nodejs";
 
 import { NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabaseServer";
 import { requireOrganizationRole } from "@/lib/auth";
 
-export async function GET() {
+export async function GET(req: Request) {
   try {
     const { activeMembership } = await requireOrganizationRole(["owner", "admin", "member"]);
     const activeOrganization = activeMembership.organizations;
@@ -18,8 +18,10 @@ export async function GET() {
     }
 
     const supabase = supabaseServer();
+    const { searchParams } = new URL(req.url);
+    const revier = searchParams.get("revier");
 
-    const { data, error } = await supabase
+    let query = supabase
       .from("cameras")
       .select(`
         id,
@@ -38,6 +40,12 @@ export async function GET() {
       .eq("camera_ingest_configs.provisioning_status", "ready")
       .eq("is_active", true)
       .order("name", { ascending: true });
+
+    if (revier && revier !== "all") {
+      query = query.eq("revier_id", revier);
+    }
+
+    const { data, error } = await query;
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });

@@ -1,9 +1,22 @@
-// src/app/cameras/events/page.tsx #2
+// src/app/cameras/events/page.tsx #3
 export const runtime = "nodejs";
 
 import Link from "next/link";
 import { supabaseServer } from "@/lib/supabaseServer";
 import { requirePathAccess } from "@/lib/authz";
+import {
+  resolveRevierScope,
+  type RevierOption,
+} from "@/lib/intelligence/revierScope";
+
+type SearchParams = {
+  revier?: string;
+};
+
+type RevierRow = {
+  id: string;
+  name: string;
+};
 
 function fmt(ts: string | null) {
   if (!ts) return "—";
@@ -23,9 +36,15 @@ function scoreBadge(score: number | null) {
   return "low";
 }
 
-export default async function CameraEventsPage() {
+export default async function CameraEventsPage(props: {
+  searchParams?: Promise<SearchParams> | SearchParams;
+}) {
   const ctx = await requirePathAccess("/cameras/events");
   const activeOrganization = ctx.activeMembership?.organizations;
+  const searchParams = props?.searchParams
+    ? await Promise.resolve(props.searchParams)
+    : undefined;
+  const rawRevier = searchParams?.revier;
 
   if (!activeOrganization) {
     return (
@@ -46,10 +65,66 @@ export default async function CameraEventsPage() {
 
   const supabase = supabaseServer();
 
-  const { data: cameras, error: camerasError } = await supabase
+  const { data: reviersData, error: reviersError } = await supabase
+    .from("reviers")
+    .select("id,name")
+    .eq("organization_id", activeOrganization.id)
+    .eq("status", "active")
+    .order("name", { ascending: true });
+
+  if (reviersError) {
+    return (
+      <main className="space-y-6">
+        <div>
+          <h1 className="text-3xl font-semibold">Events</h1>
+          <p className="text-sm text-gray-600">
+            Priorisierte Event-Zusammenfassungen
+          </p>
+        </div>
+
+        <div className="rounded-xl border p-4 text-sm text-red-600">
+          Fehler: {reviersError.message}
+        </div>
+      </main>
+    );
+  }
+
+  const reviers = (reviersData ?? []) as RevierRow[];
+  const allowedReviers: RevierOption[] = reviers.map((revier) => ({
+    id: revier.id,
+    name: revier.name,
+  }));
+  const revierScope = resolveRevierScope(rawRevier, allowedReviers);
+  const allowedRevierIds = allowedReviers.map((revier) => revier.id);
+
+  if (allowedRevierIds.length === 0) {
+    return (
+      <main className="space-y-6">
+        <div>
+          <h1 className="text-3xl font-semibold">Events</h1>
+          <p className="text-sm text-gray-600">
+            Priorisierte Event-Zusammenfassungen nach Relevanz
+          </p>
+        </div>
+
+        <div className="rounded-xl border p-4 text-sm text-gray-600">
+          Noch keine Events vorhanden.
+        </div>
+      </main>
+    );
+  }
+
+  let camerasQuery = supabase
     .from("cameras")
     .select("id,name,location_name")
     .eq("organization_id", activeOrganization.id);
+
+  camerasQuery =
+    revierScope.type === "single"
+      ? camerasQuery.eq("revier_id", revierScope.revierId)
+      : camerasQuery.in("revier_id", allowedRevierIds);
+
+  const { data: cameras, error: camerasError } = await camerasQuery;
 
   if (camerasError) {
     return (

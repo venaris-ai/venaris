@@ -1,7 +1,8 @@
-// src/app/cameras/import/page.tsx
+// src/app/cameras/import/page.tsx #2
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 
 type CameraRow = {
   id: string;
@@ -11,6 +12,9 @@ type CameraRow = {
 };
 
 export default function CamerasImportPage() {
+  const searchParams = useSearchParams();
+  const revierParam = searchParams.get("revier");
+
   const [cameras, setCameras] = useState<CameraRow[]>([]);
   const [cameraId, setCameraId] = useState("");
   const [files, setFiles] = useState<File[]>([]);
@@ -21,7 +25,14 @@ export default function CamerasImportPage() {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   async function loadCameras() {
-    const res = await fetch("/api/manual-cameras", { cache: "no-store" });
+    const params = new URLSearchParams();
+    if (revierParam) params.set("revier", revierParam);
+
+    const url = params.toString()
+      ? `/api/manual-cameras?${params.toString()}`
+      : "/api/manual-cameras";
+
+    const res = await fetch(url, { cache: "no-store" });
     const json = await res.json();
 
     if (!res.ok) {
@@ -32,15 +43,18 @@ export default function CamerasImportPage() {
     const list = (json.items ?? []) as CameraRow[];
     setCameras(list);
 
-    if (!cameraId && list.length > 0) {
-      setCameraId(list[0].id);
-    }
+    setCameraId((current) => {
+      if (list.length === 0) return "";
+      if (!current) return list[0].id;
+      if (!list.some((camera) => camera.id === current)) return list[0].id;
+      return current;
+    });
   }
 
   useEffect(() => {
     loadCameras();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [revierParam]);
 
   function addFiles(newFiles: File[]) {
     const merged = [...files, ...newFiles];
