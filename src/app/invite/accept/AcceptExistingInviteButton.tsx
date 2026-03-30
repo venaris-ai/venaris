@@ -1,4 +1,4 @@
-// src/app/invite/accept/AcceptExistingInviteButton.tsx #1
+// src/app/invite/accept/AcceptExistingInviteButton.tsx #2
 "use client";
 
 import { useState } from "react";
@@ -41,7 +41,7 @@ export default function AcceptExistingInviteButton({ token }: Props) {
   return (
     <div className="mt-5 space-y-3">
       {error ? (
-        <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+        <div className="rounded-[14px] border border-rose-300/20 bg-rose-300/10 px-3 py-2 text-sm text-rose-100">
           {error}
         </div>
       ) : null}
@@ -50,7 +50,7 @@ export default function AcceptExistingInviteButton({ token }: Props) {
         type="button"
         onClick={onAccept}
         disabled={loading}
-        className="rounded-md border border-black bg-black px-4 py-2 text-sm text-white disabled:opacity-50"
+        className="rounded-[10px] bg-[#c9952e] px-4 py-2 text-sm text-[#102018] disabled:opacity-50"
       >
         {loading ? "Nimmt an..." : "Einladung annehmen"}
       </button>

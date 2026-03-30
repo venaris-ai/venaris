@@ -1,4 +1,4 @@
-// src/app/cameras/import/page.tsx #2
+// src/app/cameras/import/page.tsx #3
 "use client";
 
 import { useEffect, useRef, useState } from "react";
@@ -127,41 +127,50 @@ export default function CamerasImportPage() {
   const canImport = !!cameraId && files.length > 0 && !busy;
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6">
-      <div>
-        <h1 className="text-3xl font-semibold">Import</h1>
-        <p className="text-sm text-gray-600">
-          Dateien oder ZIP auswählen – oder einfach per Drag & Drop hier reinziehen.
-        </p>
-      </div>
+    <main className="space-y-8">
+      <section className="rounded-[32px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(201,149,46,0.16),transparent_24%),linear-gradient(135deg,rgba(255,255,255,0.06),rgba(255,255,255,0.03))] p-6 backdrop-blur-sm">
+        <div>
+          <div className="text-xs font-medium uppercase tracking-[0.22em] text-amber-200/80">
+            Import
+          </div>
+          <h1 className="mt-3 text-3xl font-semibold text-white">Import</h1>
+          <p className="mt-2 text-sm text-white/68">
+            Dateien oder ZIP auswählen – oder einfach per Drag & Drop hier reinziehen.
+          </p>
+        </div>
+      </section>
 
-      <div className="rounded-xl border bg-white p-5 space-y-5">
+      <section className="rounded-[28px] border border-white/10 bg-white/5 p-5 backdrop-blur-sm space-y-5">
         <div className="space-y-2">
-          <label className="text-sm font-medium">Ziel-Kamera</label>
+          <label className="text-sm font-medium text-white">Ziel-Kamera</label>
           <select
-            className="w-full rounded-md border p-2"
+            className="w-full rounded-[10px] border border-white/10 bg-white/5 p-2 text-white outline-none"
             value={cameraId}
             onChange={(e) => setCameraId(e.target.value)}
           >
             {cameras.length === 0 && (
-              <option value="">(keine manuellen Kameras verfügbar)</option>
+              <option value="" className="bg-[#102018] text-white">
+                (keine manuellen Kameras verfügbar)
+              </option>
             )}
             {cameras.map((c) => (
-              <option key={c.id} value={c.id}>
+              <option key={c.id} value={c.id} className="bg-[#102018] text-white">
                 {c.name}
                 {c.technicalName ? ` · ${c.technicalName}` : ""}
               </option>
             ))}
           </select>
-          <p className="text-xs text-gray-500">
+          <p className="text-xs text-white/45">
             Der Import wird einer als „manual“ provisionierten Kamera zugeordnet.
           </p>
         </div>
 
         <div
           className={[
-            "rounded-xl border-2 border-dashed p-5 transition",
-            dragOver ? "border-black bg-gray-50" : "border-gray-300",
+            "rounded-[24px] border-2 border-dashed p-5 transition",
+            dragOver
+              ? "border-amber-300/30 bg-white/8"
+              : "border-white/10 bg-white/5",
           ].join(" ")}
           onDragEnter={(e) => {
             e.preventDefault();
@@ -176,15 +185,15 @@ export default function CamerasImportPage() {
         >
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <div className="text-sm font-medium">Dateien hinzufügen</div>
-              <div className="text-xs text-gray-500">
+              <div className="text-sm font-medium text-white">Dateien hinzufügen</div>
+              <div className="text-xs text-white/45">
                 Unterstützt: JPG/PNG/WEBP oder ZIP mit Bildern.
               </div>
             </div>
 
             <button
               type="button"
-              className="rounded-md border px-4 py-2 text-sm hover:bg-gray-50"
+              className="rounded-[10px] border border-white/10 bg-white/5 px-4 py-2 text-sm text-white/78 hover:border-amber-300/20 hover:bg-white/8 hover:text-white"
               onClick={() => fileInputRef.current?.click()}
             >
               Bilder oder ZIP auswählen…
@@ -200,26 +209,26 @@ export default function CamerasImportPage() {
             onChange={onPickFiles}
           />
 
-          <div className="mt-4 text-xs text-gray-500">
+          <div className="mt-4 text-xs text-white/45">
             Tipp: Du kannst auch einfach Dateien oder ZIP hier reinziehen.
           </div>
         </div>
 
         <div className="flex items-center justify-between gap-3">
-          <div className="text-sm text-gray-700">
+          <div className="text-sm text-white/72">
             {files.length > 0 ? (
               <>
-                Ausgewählt: <span className="font-medium">{files.length}</span> Datei(en)
+                Ausgewählt: <span className="font-medium text-white">{files.length}</span> Datei(en)
               </>
             ) : (
-              <span className="text-gray-500">Noch keine Dateien ausgewählt.</span>
+              <span className="text-white/45">Noch keine Dateien ausgewählt.</span>
             )}
           </div>
 
           <div className="flex items-center gap-2">
             <button
               type="button"
-              className="rounded-md border px-3 py-2 text-sm hover:bg-gray-50 disabled:opacity-60"
+              className="rounded-[10px] border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/78 hover:border-white/15 hover:bg-white/8 hover:text-white disabled:opacity-60"
               onClick={() => setFiles([])}
               disabled={busy || files.length === 0}
             >
@@ -230,15 +239,19 @@ export default function CamerasImportPage() {
               type="button"
               onClick={startImport}
               disabled={!canImport}
-              className="rounded-md bg-black px-4 py-2 text-sm text-white disabled:opacity-60"
+              className="rounded-[10px] bg-[#c9952e] px-4 py-2 text-sm text-[#102018] disabled:opacity-60"
             >
               {busy ? "Import läuft…" : "Import starten"}
             </button>
           </div>
         </div>
 
-        {msg && <div className="text-sm">{msg}</div>}
-      </div>
-    </div>
+        {msg ? (
+          <div className="rounded-[14px] border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/78">
+            {msg}
+          </div>
+        ) : null}
+      </section>
+    </main>
   );
 }

@@ -1,4 +1,4 @@
-// src/app/wildlife/wherewhen/page.tsx
+// src/app/wildlife/wherewhen/page.tsx #2
 export const runtime = "nodejs";
 
 import Link from "next/link";
@@ -128,25 +128,30 @@ function WhereWhenPageHeader({
   selectedSpecies?: string | null;
 }) {
   return (
-    <section className="space-y-3">
+    <section className="rounded-[32px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(201,149,46,0.16),transparent_24%),linear-gradient(135deg,rgba(255,255,255,0.06),rgba(255,255,255,0.03))] p-6 backdrop-blur-sm">
       <div>
-        <h1 className="text-3xl font-semibold">Where &amp; When</h1>
-        <p className="text-sm text-gray-600">
+        <div className="text-xs font-medium uppercase tracking-[0.22em] text-amber-200/80">
+          Where &amp; When
+        </div>
+        <h1 className="mt-3 text-3xl font-semibold text-white">
+          Where &amp; When
+        </h1>
+        <p className="mt-2 text-sm text-white/68">
           Wo und wann ausgewählte Arten im aktuellen Revier-Scope sichtbar werden.
         </p>
       </div>
 
-      <div className="flex flex-wrap items-center gap-1.5">
+      <div className="mt-5 flex flex-wrap items-center gap-1.5">
         {(["30d", "90d", "365d"] as PeriodKey[]).map((p) => {
           const active = p === period;
           return (
             <Link
               key={p}
               href={buildHref(p, revierValue, selectedSpecies)}
-              className={`rounded-md border px-2.5 py-1 text-xs ${
+              className={`rounded-full border px-3 py-1.5 text-xs ${
                 active
-                  ? "border-black bg-black text-white"
-                  : "border-gray-300 bg-white text-black hover:bg-gray-100"
+                  ? "border-amber-300/30 bg-amber-300/15 text-amber-100"
+                  : "border-white/10 bg-white/5 text-white/72 hover:bg-white/8"
               }`}
             >
               {p}
@@ -155,6 +160,24 @@ function WhereWhenPageHeader({
         })}
       </div>
     </section>
+  );
+}
+
+function StatCard({
+  title,
+  value,
+  subline,
+}: {
+  title: string;
+  value: string | number;
+  subline: string;
+}) {
+  return (
+    <div className="rounded-[28px] border border-white/10 bg-white/5 p-4 backdrop-blur-sm">
+      <div className="text-xs uppercase tracking-wide text-white/45">{title}</div>
+      <div className="mt-2 text-3xl font-semibold text-white">{value}</div>
+      <div className="mt-1 text-sm text-white/60">{subline}</div>
+    </div>
   );
 }
 
@@ -181,7 +204,7 @@ export default async function WildlifeWhereWhenPage(props: {
       <main className="space-y-8">
         <WhereWhenPageHeader period={period} revierValue="all" />
 
-        <div className="rounded-xl border bg-white p-4 text-sm text-red-600">
+        <div className="rounded-[24px] border border-rose-300/20 bg-rose-300/10 p-4 text-sm text-rose-100">
           Active organization not found.
         </div>
       </main>
@@ -203,7 +226,7 @@ export default async function WildlifeWhereWhenPage(props: {
       <main className="space-y-8">
         <WhereWhenPageHeader period={period} revierValue="all" />
 
-        <div className="rounded-xl border bg-white p-4 text-sm text-red-600">
+        <div className="rounded-[24px] border border-rose-300/20 bg-rose-300/10 p-4 text-sm text-rose-100">
           Fehler beim Laden der Reviere: {reviersError.message}
         </div>
       </main>
@@ -227,7 +250,7 @@ export default async function WildlifeWhereWhenPage(props: {
       <main className="space-y-8">
         <WhereWhenPageHeader period={period} revierValue="all" />
 
-        <div className="rounded-xl border bg-white p-4 text-sm text-gray-600">
+        <div className="rounded-[24px] border border-white/10 bg-white/5 p-4 text-sm text-white/68">
           Für die aktive Organisation sind derzeit keine aktiven Reviere vorhanden.
         </div>
       </main>
@@ -255,7 +278,7 @@ export default async function WildlifeWhereWhenPage(props: {
           revierValue={currentRevierValue}
         />
 
-        <div className="rounded-xl border bg-white p-4 text-sm text-red-600">
+        <div className="rounded-[24px] border border-rose-300/20 bg-rose-300/10 p-4 text-sm text-rose-100">
           Fehler beim Laden der Kameras: {camerasError.message}
         </div>
       </main>
@@ -279,7 +302,7 @@ export default async function WildlifeWhereWhenPage(props: {
           revierValue={currentRevierValue}
         />
 
-        <div className="rounded-xl border bg-white p-4 text-sm text-gray-600">
+        <div className="rounded-[24px] border border-white/10 bg-white/5 p-4 text-sm text-white/68">
           Für den aktuellen Revier-Scope sind keine Kameras vorhanden.
         </div>
       </main>
@@ -302,7 +325,7 @@ export default async function WildlifeWhereWhenPage(props: {
           revierValue={currentRevierValue}
         />
 
-        <div className="rounded-xl border bg-white p-4 text-sm text-red-600">
+        <div className="rounded-[24px] border border-rose-300/20 bg-rose-300/10 p-4 text-sm text-rose-100">
           Fehler beim Laden der Events: {eventsError.message}
         </div>
       </main>
@@ -324,7 +347,7 @@ export default async function WildlifeWhereWhenPage(props: {
             revierValue={currentRevierValue}
           />
 
-          <div className="rounded-xl border bg-white p-4 text-sm text-red-600">
+          <div className="rounded-[24px] border border-rose-300/20 bg-rose-300/10 p-4 text-sm text-rose-100">
             Fehler beim Laden der Species-Zusammenfassung:{" "}
             {err instanceof Error ? err.message : "unknown error"}
           </div>
@@ -437,11 +460,11 @@ export default async function WildlifeWhereWhenPage(props: {
         selectedSpecies={selectedSpecies}
       />
 
-      <section className="rounded-xl border bg-white p-5">
+      <section className="rounded-[28px] border border-white/10 bg-white/5 p-5 backdrop-blur-sm">
         <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
           <div>
-            <h2 className="text-lg font-medium">Species Selection</h2>
-            <p className="text-sm text-gray-600">
+            <h2 className="text-lg font-medium text-white">Species Selection</h2>
+            <p className="text-sm text-white/65">
               Analyse von Kamera- und Zeitfenstern für eine ausgewählte Art.
             </p>
           </div>
@@ -455,24 +478,28 @@ export default async function WildlifeWhereWhenPage(props: {
             <input type="hidden" name="revier" value={currentRevierValue} />
 
             <div className="flex flex-col gap-1">
-              <label htmlFor="species" className="text-sm font-medium">
+              <label htmlFor="species" className="text-sm font-medium text-white">
                 Species
               </label>
               <select
                 id="species"
                 name="species"
                 defaultValue={selectedSpecies ?? ""}
-                className="rounded-md border px-3 py-2 text-sm"
+                className="rounded-[10px] border border-white/10 bg-white/5 px-3 py-2 text-sm text-white"
               >
                 {speciesOptions.map((row) => (
-                  <option key={row.species} value={row.species}>
+                  <option
+                    key={row.species}
+                    value={row.species}
+                    className="bg-[#102018] text-white"
+                  >
                     {titleCase(row.species)} ({row.count})
                   </option>
                 ))}
               </select>
             </div>
 
-            <button className="rounded-md border px-3 py-2 text-sm hover:bg-gray-50">
+            <button className="rounded-[10px] border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/78 hover:border-amber-300/20 hover:bg-white/8 hover:text-white">
               Update
             </button>
           </form>
@@ -480,89 +507,76 @@ export default async function WildlifeWhereWhenPage(props: {
       </section>
 
       {!selectedSpecies || totalSelectedSpeciesEvents === 0 ? (
-        <div className="rounded-xl border bg-white p-4 text-sm text-gray-600">
+        <div className="rounded-[24px] border border-white/10 bg-white/5 p-4 text-sm text-white/68">
           Keine belastbaren Where-&amp;-When-Daten für den gewählten Zeitraum verfügbar.
         </div>
       ) : (
         <>
           <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-            <div className="rounded-xl border bg-white p-4">
-              <div className="text-xs uppercase tracking-wide text-gray-500">Species</div>
-              <div className="mt-2 text-3xl font-semibold">
-                {titleCase(selectedSpecies)}
-              </div>
-              <div className="mt-1 text-sm text-gray-600">aktuelle Auswahl</div>
-            </div>
-
-            <div className="rounded-xl border bg-white p-4">
-              <div className="text-xs uppercase tracking-wide text-gray-500">
-                Species Events
-              </div>
-              <div className="mt-2 text-3xl font-semibold">{totalSelectedSpeciesEvents}</div>
-              <div className="mt-1 text-sm text-gray-600">im Zeitraum</div>
-            </div>
-
-            <div className="rounded-xl border bg-white p-4">
-              <div className="text-xs uppercase tracking-wide text-gray-500">
-                Top Camera
-              </div>
-              <div className="mt-2 text-xl font-semibold">
-                {topCameraEntries[0]
+            <StatCard
+              title="Species"
+              value={titleCase(selectedSpecies)}
+              subline="aktuelle Auswahl"
+            />
+            <StatCard
+              title="Species Events"
+              value={totalSelectedSpeciesEvents}
+              subline="im Zeitraum"
+            />
+            <StatCard
+              title="Top Camera"
+              value={
+                topCameraEntries[0]
                   ? cameraLabelById[topCameraEntries[0].cameraId] ?? topCameraEntries[0].cameraId
-                  : "—"}
-              </div>
-              <div className="mt-1 text-sm text-gray-600">
-                {topCameraEntries[0] ? fmtPct(topCameraEntries[0].probability) : "—"}
-              </div>
-            </div>
-
-            <div className="rounded-xl border bg-white p-4">
-              <div className="text-xs uppercase tracking-wide text-gray-500">
-                Top Time Window
-              </div>
-              <div className="mt-2 text-3xl font-semibold">
-                {topWindowEntries[0] ? fmtWindow(topWindowEntries[0].window2h) : "—"}
-              </div>
-              <div className="mt-1 text-sm text-gray-600">
-                {topWindowEntries[0] ? fmtPct(topWindowEntries[0].probability) : "—"}
-              </div>
-            </div>
+                  : "—"
+              }
+              subline={
+                topCameraEntries[0] ? fmtPct(topCameraEntries[0].probability) : "—"
+              }
+            />
+            <StatCard
+              title="Top Time Window"
+              value={topWindowEntries[0] ? fmtWindow(topWindowEntries[0].window2h) : "—"}
+              subline={
+                topWindowEntries[0] ? fmtPct(topWindowEntries[0].probability) : "—"
+              }
+            />
           </section>
 
-          <section className="rounded-xl border bg-white p-5">
+          <section className="rounded-[28px] border border-white/10 bg-white/5 p-5 backdrop-blur-sm">
             <div className="mb-4">
-              <h2 className="text-lg font-medium">Primary Hint</h2>
-              <p className="text-sm text-gray-600">
+              <h2 className="text-lg font-medium text-white">Primary Hint</h2>
+              <p className="text-sm text-white/65">
                 Verdichteter Hinweis aus Kamera und 2h-Zeitfenster.
               </p>
             </div>
 
-            <div className="rounded-lg border bg-gray-50 p-4">
-              <div className="text-sm text-gray-600">Stärkster Hinweis</div>
-              <div className="mt-2 text-xl font-semibold">
+            <div className="rounded-[20px] border border-white/10 bg-white/5 p-4">
+              <div className="text-sm text-white/55">Stärkster Hinweis</div>
+              <div className="mt-2 text-xl font-semibold text-white">
                 Nähe{" "}
                 {primaryHint
                   ? cameraLabelById[primaryHint.cameraId] ?? primaryHint.cameraId
                   : "—"}
               </div>
-              <div className="mt-2 text-sm text-gray-700">
-                Species: <span className="font-medium">{titleCase(selectedSpecies)}</span>
+              <div className="mt-2 text-sm text-white/72">
+                Species: <span className="font-medium text-white">{titleCase(selectedSpecies)}</span>
               </div>
-              <div className="text-sm text-gray-700">
+              <div className="text-sm text-white/72">
                 Zeitfenster:{" "}
-                <span className="font-medium">
+                <span className="font-medium text-white">
                   {primaryHint ? fmtWindow(primaryHint.window2h) : "—"}
                 </span>
               </div>
-              <div className="text-sm text-gray-700">
+              <div className="text-sm text-white/72">
                 Wahrscheinlichkeit:{" "}
-                <span className="font-medium">
+                <span className="font-medium text-white">
                   {primaryHint ? fmtPct(primaryHint.probability) : "—"}
                 </span>
               </div>
-              <div className="text-sm text-gray-700">
+              <div className="text-sm text-white/72">
                 Basis:{" "}
-                <span className="font-medium">
+                <span className="font-medium text-white">
                   {primaryHint ? primaryHint.count : "—"}
                 </span>{" "}
                 Events
@@ -571,12 +585,12 @@ export default async function WildlifeWhereWhenPage(props: {
           </section>
 
           <section className="grid gap-4 lg:grid-cols-2">
-            <div className="rounded-xl border bg-white p-5">
+            <div className="rounded-[28px] border border-white/10 bg-white/5 p-5 backdrop-blur-sm">
               <div className="mb-4">
-                <h2 className="text-lg font-medium">
+                <h2 className="text-lg font-medium text-white">
                   Top Cameras for {titleCase(selectedSpecies)}
                 </h2>
-                <p className="text-sm text-gray-600">
+                <p className="text-sm text-white/65">
                   Wahrscheinlichkeitsorientierte Verteilung nach Kamera.
                 </p>
               </div>
@@ -585,29 +599,31 @@ export default async function WildlifeWhereWhenPage(props: {
                 {topCameraEntries.map((row) => (
                   <div
                     key={row.cameraId}
-                    className="flex items-center justify-between rounded-lg border p-3 text-sm"
+                    className="flex items-center justify-between rounded-[20px] border border-white/10 bg-white/5 p-3 text-sm"
                   >
-                    <span>{cameraLabelById[row.cameraId] ?? row.cameraId}</span>
-                    <span>
+                    <span className="text-white/78">
+                      {cameraLabelById[row.cameraId] ?? row.cameraId}
+                    </span>
+                    <span className="text-white/78">
                       {row.count} Events · {fmtPct(row.probability)}
                     </span>
                   </div>
                 ))}
 
                 {topCameraEntries.length === 0 && (
-                  <div className="text-sm text-gray-600">
+                  <div className="text-sm text-white/68">
                     Keine Kamera-Hinweise verfügbar.
                   </div>
                 )}
               </div>
             </div>
 
-            <div className="rounded-xl border bg-white p-5">
+            <div className="rounded-[28px] border border-white/10 bg-white/5 p-5 backdrop-blur-sm">
               <div className="mb-4">
-                <h2 className="text-lg font-medium">
+                <h2 className="text-lg font-medium text-white">
                   Top Time Windows for {titleCase(selectedSpecies)}
                 </h2>
-                <p className="text-sm text-gray-600">
+                <p className="text-sm text-white/65">
                   Verdichtung nach 2h-Fenstern.
                 </p>
               </div>
@@ -616,17 +632,17 @@ export default async function WildlifeWhereWhenPage(props: {
                 {topWindowEntries.map((row) => (
                   <div
                     key={row.window2h}
-                    className="flex items-center justify-between rounded-lg border p-3 text-sm"
+                    className="flex items-center justify-between rounded-[20px] border border-white/10 bg-white/5 p-3 text-sm"
                   >
-                    <span>{fmtWindow(row.window2h)}</span>
-                    <span>
+                    <span className="text-white/78">{fmtWindow(row.window2h)}</span>
+                    <span className="text-white/78">
                       {row.count} Events · {fmtPct(row.probability)}
                     </span>
                   </div>
                 ))}
 
                 {topWindowEntries.length === 0 && (
-                  <div className="text-sm text-gray-600">
+                  <div className="text-sm text-white/68">
                     Keine Zeitfenster-Hinweise verfügbar.
                   </div>
                 )}
@@ -634,10 +650,10 @@ export default async function WildlifeWhereWhenPage(props: {
             </div>
           </section>
 
-          <section className="rounded-xl border bg-white p-5">
+          <section className="rounded-[28px] border border-white/10 bg-white/5 p-5 backdrop-blur-sm">
             <div className="mb-4">
-              <h2 className="text-lg font-medium">Camera × Time Window Matrix</h2>
-              <p className="text-sm text-gray-600">
+              <h2 className="text-lg font-medium text-white">Camera × Time Window Matrix</h2>
+              <p className="text-sm text-white/65">
                 Die stärksten Kombinationen aus Ort und Zeit.
               </p>
             </div>
@@ -646,28 +662,28 @@ export default async function WildlifeWhereWhenPage(props: {
               {topComboEntries.map((row, idx) => (
                 <div
                   key={`${row.cameraId}-${row.window2h}`}
-                  className="rounded-lg border p-3 text-sm"
+                  className="rounded-[20px] border border-white/10 bg-white/5 p-3 text-sm"
                 >
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
-                      <div className="font-medium">
+                      <div className="font-medium text-white">
                         #{idx + 1} · {cameraLabelById[row.cameraId] ?? row.cameraId}
                       </div>
-                      <div className="mt-1 text-xs text-gray-500">
+                      <div className="mt-1 text-xs text-white/45">
                         Zeitfenster {fmtWindow(row.window2h)}
                       </div>
                     </div>
 
                     <div className="text-right">
-                      <div className="font-medium">{fmtPct(row.probability)}</div>
-                      <div className="text-xs text-gray-500">{row.count} Events</div>
+                      <div className="font-medium text-white">{fmtPct(row.probability)}</div>
+                      <div className="text-xs text-white/45">{row.count} Events</div>
                     </div>
                   </div>
                 </div>
               ))}
 
               {topComboEntries.length === 0 && (
-                <div className="text-sm text-gray-600">
+                <div className="text-sm text-white/68">
                   Keine belastbaren Kombinationen verfügbar.
                 </div>
               )}

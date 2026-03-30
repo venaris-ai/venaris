@@ -1,4 +1,4 @@
-// src/app/cameras/new/page.tsx #7
+// src/app/cameras/new/page.tsx #8
 import { requirePathAccess } from "@/lib/authz";
 import { supabaseServer } from "@/lib/supabaseServer";
 import {
@@ -99,13 +99,20 @@ export default async function NewCameraPage() {
   const cameraPolicy = canCreateCamera(policyInput);
 
   return (
-    <main className="mx-auto max-w-3xl px-6 py-8">
-      <div className="mb-8">
-        <h1 className="text-2xl font-semibold tracking-tight">Create Camera</h1>
-        <p className="mt-2 text-sm text-neutral-600">
-          Add a new camera and generate its provisioning data.
-        </p>
-      </div>
+    <main className="space-y-8">
+      <section className="rounded-[32px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(201,149,46,0.16),transparent_24%),linear-gradient(135deg,rgba(255,255,255,0.06),rgba(255,255,255,0.03))] p-6 backdrop-blur-sm">
+        <div>
+          <div className="text-xs font-medium uppercase tracking-[0.22em] text-amber-200/80">
+            Create Camera
+          </div>
+          <h1 className="mt-3 text-3xl font-semibold tracking-tight text-white">
+            Create Camera
+          </h1>
+          <p className="mt-2 max-w-3xl text-sm text-white/68">
+            Add a new camera and generate its provisioning data.
+          </p>
+        </div>
+      </section>
 
       <CreateCameraForm
         organization={activeOrganization as Organization}

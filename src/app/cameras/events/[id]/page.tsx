@@ -1,4 +1,4 @@
-// src/app/cameras/events/[id]/page.tsx #3
+// src/app/cameras/events/[id]/page.tsx #4
 export const runtime = "nodejs";
 
 import Link from "next/link";
@@ -59,21 +59,26 @@ export default async function CameraEventDetailPage(props: {
 
   if (!eventId) {
     return (
-      <main className="space-y-6">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <h1 className="text-3xl font-semibold">Event</h1>
-            <p className="text-sm text-gray-600">Details & Assets</p>
+      <main className="space-y-8">
+        <section className="rounded-[32px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(201,149,46,0.16),transparent_24%),linear-gradient(135deg,rgba(255,255,255,0.06),rgba(255,255,255,0.03))] p-6 backdrop-blur-sm">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <div className="text-xs font-medium uppercase tracking-[0.22em] text-amber-200/80">
+                Event
+              </div>
+              <h1 className="mt-3 text-3xl font-semibold text-white">Event</h1>
+              <p className="mt-2 text-sm text-white/68">Details & Assets</p>
+            </div>
+            <Link
+              href={backHref}
+              className="rounded-full border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/78 hover:border-amber-300/20 hover:bg-white/8 hover:text-white"
+            >
+              ← Zurück
+            </Link>
           </div>
-          <Link
-            href={backHref}
-            className="rounded-md border px-3 py-2 text-sm"
-          >
-            ← Zurück
-          </Link>
-        </div>
+        </section>
 
-        <div className="rounded-xl border p-4 text-sm text-red-600">
+        <div className="rounded-[24px] border border-rose-300/20 bg-rose-300/10 p-4 text-sm text-rose-100">
           Event-ID fehlt (params.id ist undefined). Bitte Seite neu laden.
         </div>
       </main>
@@ -93,21 +98,26 @@ export default async function CameraEventDetailPage(props: {
 
   if (eventErr || !event) {
     return (
-      <main className="space-y-6">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <h1 className="text-3xl font-semibold">Event</h1>
-            <p className="text-sm text-gray-600">Details & Assets</p>
+      <main className="space-y-8">
+        <section className="rounded-[32px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(201,149,46,0.16),transparent_24%),linear-gradient(135deg,rgba(255,255,255,0.06),rgba(255,255,255,0.03))] p-6 backdrop-blur-sm">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <div className="text-xs font-medium uppercase tracking-[0.22em] text-amber-200/80">
+                Event
+              </div>
+              <h1 className="mt-3 text-3xl font-semibold text-white">Event</h1>
+              <p className="mt-2 text-sm text-white/68">Details & Assets</p>
+            </div>
+            <Link
+              href={backHref}
+              className="rounded-full border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/78 hover:border-amber-300/20 hover:bg-white/8 hover:text-white"
+            >
+              ← Zurück
+            </Link>
           </div>
-          <Link
-            href={backHref}
-            className="rounded-md border px-3 py-2 text-sm"
-          >
-            ← Zurück
-          </Link>
-        </div>
+        </section>
 
-        <div className="rounded-xl border p-4 text-sm text-red-600">
+        <div className="rounded-[24px] border border-rose-300/20 bg-rose-300/10 p-4 text-sm text-rose-100">
           Event nicht gefunden: {eventErr?.message ?? "unknown error"}
         </div>
       </main>
@@ -122,21 +132,26 @@ export default async function CameraEventDetailPage(props: {
 
   if (!activeOrganization || !camera || camera.organization_id !== activeOrganization.id) {
     return (
-      <main className="space-y-6">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <h1 className="text-3xl font-semibold">Event</h1>
-            <p className="text-sm text-gray-600">Details & Assets</p>
+      <main className="space-y-8">
+        <section className="rounded-[32px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(201,149,46,0.16),transparent_24%),linear-gradient(135deg,rgba(255,255,255,0.06),rgba(255,255,255,0.03))] p-6 backdrop-blur-sm">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <div className="text-xs font-medium uppercase tracking-[0.22em] text-amber-200/80">
+                Event
+              </div>
+              <h1 className="mt-3 text-3xl font-semibold text-white">Event</h1>
+              <p className="mt-2 text-sm text-white/68">Details & Assets</p>
+            </div>
+            <Link
+              href={backHref}
+              className="rounded-full border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/78 hover:border-amber-300/20 hover:bg-white/8 hover:text-white"
+            >
+              ← Zurück
+            </Link>
           </div>
-          <Link
-            href={backHref}
-            className="rounded-md border px-3 py-2 text-sm"
-          >
-            ← Zurück
-          </Link>
-        </div>
+        </section>
 
-        <div className="rounded-xl border p-4 text-sm text-red-600">
+        <div className="rounded-[24px] border border-rose-300/20 bg-rose-300/10 p-4 text-sm text-rose-100">
           Event nicht gefunden oder nicht erlaubt.
         </div>
       </main>
@@ -152,21 +167,26 @@ export default async function CameraEventDetailPage(props: {
 
   if (reviersError) {
     return (
-      <main className="space-y-6">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <h1 className="text-3xl font-semibold">Event</h1>
-            <p className="text-sm text-gray-600">Details & Assets</p>
+      <main className="space-y-8">
+        <section className="rounded-[32px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(201,149,46,0.16),transparent_24%),linear-gradient(135deg,rgba(255,255,255,0.06),rgba(255,255,255,0.03))] p-6 backdrop-blur-sm">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <div className="text-xs font-medium uppercase tracking-[0.22em] text-amber-200/80">
+                Event
+              </div>
+              <h1 className="mt-3 text-3xl font-semibold text-white">Event</h1>
+              <p className="mt-2 text-sm text-white/68">Details & Assets</p>
+            </div>
+            <Link
+              href={backHref}
+              className="rounded-full border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/78 hover:border-amber-300/20 hover:bg-white/8 hover:text-white"
+            >
+              ← Zurück
+            </Link>
           </div>
-          <Link
-            href={backHref}
-            className="rounded-md border px-3 py-2 text-sm"
-          >
-            ← Zurück
-          </Link>
-        </div>
+        </section>
 
-        <div className="rounded-xl border p-4 text-sm text-red-600">
+        <div className="rounded-[24px] border border-rose-300/20 bg-rose-300/10 p-4 text-sm text-rose-100">
           Fehler: {reviersError.message}
         </div>
       </main>
@@ -189,21 +209,26 @@ export default async function CameraEventDetailPage(props: {
 
   if (!cameraAllowedInScope) {
     return (
-      <main className="space-y-6">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <h1 className="text-3xl font-semibold">Event</h1>
-            <p className="text-sm text-gray-600">Details & Assets</p>
+      <main className="space-y-8">
+        <section className="rounded-[32px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(201,149,46,0.16),transparent_24%),linear-gradient(135deg,rgba(255,255,255,0.06),rgba(255,255,255,0.03))] p-6 backdrop-blur-sm">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <div className="text-xs font-medium uppercase tracking-[0.22em] text-amber-200/80">
+                Event
+              </div>
+              <h1 className="mt-3 text-3xl font-semibold text-white">Event</h1>
+              <p className="mt-2 text-sm text-white/68">Details & Assets</p>
+            </div>
+            <Link
+              href={backHref}
+              className="rounded-full border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/78 hover:border-amber-300/20 hover:bg-white/8 hover:text-white"
+            >
+              ← Zurück
+            </Link>
           </div>
-          <Link
-            href={backHref}
-            className="rounded-md border px-3 py-2 text-sm"
-          >
-            ← Zurück
-          </Link>
-        </div>
+        </section>
 
-        <div className="rounded-xl border p-4 text-sm text-red-600">
+        <div className="rounded-[24px] border border-rose-300/20 bg-rose-300/10 p-4 text-sm text-rose-100">
           Event nicht gefunden oder nicht erlaubt.
         </div>
       </main>
@@ -263,39 +288,44 @@ export default async function CameraEventDetailPage(props: {
     : "—";
 
   return (
-    <main className="space-y-6">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-semibold">Event</h1>
-          <p className="text-sm text-gray-600">
-            Zeitraum: {fmt(event.start_at)} – {fmt(event.end_at)}
-          </p>
+    <main className="space-y-8">
+      <section className="rounded-[32px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(201,149,46,0.16),transparent_24%),linear-gradient(135deg,rgba(255,255,255,0.06),rgba(255,255,255,0.03))] p-6 backdrop-blur-sm">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <div className="text-xs font-medium uppercase tracking-[0.22em] text-amber-200/80">
+              Event
+            </div>
+            <h1 className="mt-3 text-3xl font-semibold text-white">Event</h1>
+            <p className="mt-2 text-sm text-white/68">
+              Zeitraum: {fmt(event.start_at)} – {fmt(event.end_at)}
+            </p>
+          </div>
+
+          <Link
+            href={backHref}
+            className="rounded-full border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/78 hover:border-amber-300/20 hover:bg-white/8 hover:text-white"
+          >
+            ← Zurück
+          </Link>
         </div>
+      </section>
 
-        <Link
-          href={backHref}
-          className="rounded-md border px-3 py-2 text-sm"
-        >
-          ← Zurück
-        </Link>
-      </div>
-
-      <div className="rounded-xl border bg-white p-4">
+      <div className="rounded-[28px] border border-white/10 bg-white/5 p-5 backdrop-blur-sm">
         <div className="grid gap-3 md:grid-cols-2">
-          <div className="text-sm text-gray-700">
-            <span className="font-medium">Kamera:</span> {cameraLabel}
+          <div className="text-sm text-white/72">
+            <span className="font-medium text-white">Kamera:</span> {cameraLabel}
           </div>
 
-          <div className="text-sm text-gray-700">
-            <span className="font-medium">Assets im Event:</span> {assets.length}
+          <div className="text-sm text-white/72">
+            <span className="font-medium text-white">Assets im Event:</span> {assets.length}
           </div>
 
-          <div className="text-sm text-gray-700">
-            <span className="font-medium">Top Species:</span> {topLabel}
+          <div className="text-sm text-white/72">
+            <span className="font-medium text-white">Top Species:</span> {topLabel}
           </div>
 
-          <div className="text-sm text-gray-700">
-            <span className="font-medium">Relevance Score:</span>{" "}
+          <div className="text-sm text-white/72">
+            <span className="font-medium text-white">Relevance Score:</span>{" "}
             {typeof event.relevance_score === "number"
               ? `${event.relevance_score.toFixed(3)} · ${scoreBadge(event.relevance_score)}`
               : "—"}
@@ -304,10 +334,10 @@ export default async function CameraEventDetailPage(props: {
       </div>
 
       <div>
-        <h2 className="text-xl font-medium">Assets</h2>
+        <h2 className="text-xl font-medium text-white">Assets</h2>
 
         {assets.length === 0 ? (
-          <div className="mt-3 rounded-xl border p-4 text-sm text-gray-600">
+          <div className="mt-3 rounded-[24px] border border-white/10 bg-white/5 p-4 text-sm text-white/68">
             Keine Assets gefunden (event_assets leer oder Asset-IDs fehlen).
           </div>
         ) : (

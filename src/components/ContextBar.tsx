@@ -1,4 +1,4 @@
-// src/components/ContextBar.tsx #3
+// src/components/ContextBar.tsx #4
 import { getOptionalActiveOrganization } from "@/lib/auth";
 import { supabaseServer } from "@/lib/supabaseServer";
 import ClientRevierScopeField from "@/components/ClientRevierScopeField";
@@ -34,15 +34,15 @@ export default async function ContextBar() {
   const reviers: RevierRow[] = error ? [] : ((data ?? []) as RevierRow[]);
 
   return (
-    <div className="flex flex-wrap items-center gap-2 text-xs text-gray-600">
-      <div className="rounded-md border bg-white px-2.5 py-1">
-        <span className="text-gray-500">Orga:</span>{" "}
-        <span className="font-medium text-black">{activeOrganization.name}</span>
+    <div className="flex flex-wrap items-center gap-2 text-xs text-white/68">
+      <div className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 backdrop-blur-sm">
+        <span className="text-white/45">Orga:</span>{" "}
+        <span className="font-medium text-white">{activeOrganization.name}</span>
       </div>
 
-      <div className="rounded-md border bg-white px-2.5 py-1">
-        <span className="text-gray-500">Role:</span>{" "}
-        <span className="font-medium text-black">{activeMembership.role}</span>
+      <div className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 backdrop-blur-sm">
+        <span className="text-white/45">Role:</span>{" "}
+        <span className="font-medium text-white">{activeMembership.role}</span>
       </div>
 
       <ClientRevierScopeField reviers={reviers} />

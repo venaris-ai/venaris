@@ -1,4 +1,4 @@
-// src/app/reset-password/page.tsx #6
+// src/app/reset-password/page.tsx #7
 "use client";
 
 import { useEffect, useState } from "react";
@@ -130,28 +130,31 @@ export default function ResetPasswordPage() {
 
   return (
     <main className="mx-auto flex min-h-screen max-w-md items-center px-6 py-12">
-      <div className="w-full rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
-        <h1 className="text-2xl font-semibold tracking-tight">
+      <div className="w-full rounded-[28px] border border-white/10 bg-white/5 p-6 backdrop-blur-sm">
+        <div className="text-xs font-medium uppercase tracking-[0.22em] text-amber-200/80">
+          Reset Password
+        </div>
+        <h1 className="mt-3 text-2xl font-semibold tracking-tight text-white">
           Passwort zurücksetzen
         </h1>
-        <p className="mt-2 text-sm text-neutral-600">
+        <p className="mt-2 text-sm text-white/68">
           Lege hier Dein neues Passwort fest.
         </p>
 
         {!ready && !error ? (
-          <div className="mt-6 rounded-xl border border-neutral-200 bg-neutral-50 px-3 py-2 text-sm text-neutral-700">
+          <div className="mt-6 rounded-[14px] border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/72">
             Lade Reset-Link...
           </div>
         ) : null}
 
         {error ? (
-          <div className="mt-6 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+          <div className="mt-6 rounded-[14px] border border-rose-300/20 bg-rose-300/10 px-3 py-2 text-sm text-rose-100">
             {error}
           </div>
         ) : null}
 
         {success ? (
-          <div className="mt-6 rounded-xl border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-800">
+          <div className="mt-6 rounded-[14px] border border-emerald-300/20 bg-emerald-300/10 px-3 py-2 text-sm text-emerald-100">
             {success}
           </div>
         ) : null}
@@ -159,30 +162,30 @@ export default function ResetPasswordPage() {
         {ready ? (
           <form onSubmit={onSubmit} className="mt-6 space-y-4">
             <div>
-              <label className="mb-1 block text-sm font-medium">
+              <label className="mb-1 block text-sm font-medium text-white">
                 Neues Passwort
               </label>
               <input
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full rounded-xl border border-neutral-300 px-3 py-2"
+                className="w-full rounded-[14px] border border-white/10 bg-white/5 px-3 py-2 text-white outline-none placeholder:text-white/35"
                 required
               />
-              <p className="mt-2 text-xs text-neutral-500">
+              <p className="mt-2 text-xs text-white/45">
                 Bitte ein Passwort mit mindestens 8 Zeichen festlegen.
               </p>
             </div>
 
             <div>
-              <label className="mb-1 block text-sm font-medium">
+              <label className="mb-1 block text-sm font-medium text-white">
                 Passwort wiederholen
               </label>
               <input
                 type="password"
                 value={passwordRepeat}
                 onChange={(e) => setPasswordRepeat(e.target.value)}
-                className="w-full rounded-xl border border-neutral-300 px-3 py-2"
+                className="w-full rounded-[14px] border border-white/10 bg-white/5 px-3 py-2 text-white outline-none placeholder:text-white/35"
                 required
               />
             </div>
@@ -190,7 +193,7 @@ export default function ResetPasswordPage() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full rounded-xl bg-black px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+              className="w-full rounded-[14px] bg-[#c9952e] px-4 py-2 text-sm font-medium text-[#102018] disabled:opacity-50"
             >
               {loading ? "Saving..." : "Passwort speichern"}
             </button>

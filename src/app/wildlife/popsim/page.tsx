@@ -1,4 +1,4 @@
-// src/app/wildlife/popsim/page.tsx
+// src/app/wildlife/popsim/page.tsx #2
 export const runtime = "nodejs";
 
 import { supabaseServer } from "@/lib/supabaseServer";
@@ -52,6 +52,39 @@ function fmtDate(value: string | null | undefined) {
   return new Date(value).toLocaleDateString("de-DE");
 }
 
+function PageHeader() {
+  return (
+    <section className="rounded-[32px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(201,149,46,0.16),transparent_24%),linear-gradient(135deg,rgba(255,255,255,0.06),rgba(255,255,255,0.03))] p-6 backdrop-blur-sm">
+      <div className="text-xs font-medium uppercase tracking-[0.22em] text-amber-200/80">
+        PopSim
+      </div>
+      <h1 className="mt-3 text-3xl font-semibold text-white">PopSim</h1>
+      <p className="mt-2 text-sm text-white/68">
+        Modellgestützte Populationsschätzung für Bestand, Zielwerte und potenziellen
+        Entnahmeüberschuss.
+      </p>
+    </section>
+  );
+}
+
+function StatCard({
+  title,
+  value,
+  subline,
+}: {
+  title: string;
+  value: string | number;
+  subline: string;
+}) {
+  return (
+    <div className="rounded-[28px] border border-white/10 bg-white/5 p-4 backdrop-blur-sm">
+      <div className="text-xs uppercase tracking-wide text-white/45">{title}</div>
+      <div className="mt-2 text-2xl font-semibold text-white">{value}</div>
+      <div className="mt-1 text-sm text-white/60">{subline}</div>
+    </div>
+  );
+}
+
 export default async function PopSimPage({
   searchParams,
 }: {
@@ -64,14 +97,9 @@ export default async function PopSimPage({
   if (!activeOrganization) {
     return (
       <main className="space-y-8">
-        <section>
-          <h1 className="text-3xl font-semibold">PopSim</h1>
-          <p className="text-sm text-gray-600">
-            Modellgestützte Populationsschätzung für die aktive Organisation.
-          </p>
-        </section>
+        <PageHeader />
 
-        <div className="rounded-xl border bg-white p-4 text-sm text-red-600">
+        <div className="rounded-[24px] border border-rose-300/20 bg-rose-300/10 p-4 text-sm text-rose-100">
           Active organization not found.
         </div>
       </main>
@@ -90,14 +118,9 @@ export default async function PopSimPage({
   if (reviersError) {
     return (
       <main className="space-y-8">
-        <section>
-          <h1 className="text-3xl font-semibold">PopSim</h1>
-          <p className="text-sm text-gray-600">
-            Modellgestützte Populationsschätzung für die aktive Organisation.
-          </p>
-        </section>
+        <PageHeader />
 
-        <div className="rounded-xl border bg-white p-4 text-sm text-red-600">
+        <div className="rounded-[24px] border border-rose-300/20 bg-rose-300/10 p-4 text-sm text-rose-100">
           Fehler beim Laden der Reviere: {reviersError.message}
         </div>
       </main>
@@ -113,15 +136,9 @@ export default async function PopSimPage({
   if (reviers.length === 0) {
     return (
       <main className="space-y-8">
-        <section>
-          <h1 className="text-3xl font-semibold">PopSim</h1>
-          <p className="text-sm text-gray-600">
-            Modellgestützte Populationsschätzung für Bestand, Zielwerte und potenziellen
-            Entnahmeüberschuss.
-          </p>
-        </section>
+        <PageHeader />
 
-        <div className="rounded-xl border bg-white p-5 text-sm text-gray-600">
+        <div className="rounded-[24px] border border-white/10 bg-white/5 p-5 text-sm text-white/68">
           Für die aktive Organisation ist derzeit kein aktives Revier für PopSim
           freigeschaltet.
         </div>
@@ -137,29 +154,26 @@ export default async function PopSimPage({
   if (revierScope.type === "all") {
     return (
       <main className="space-y-8">
-        <section>
-          <h1 className="text-3xl font-semibold">PopSim</h1>
-          <p className="text-sm text-gray-600">
-            Modellgestützte Populationsschätzung für Bestand, Zielwerte und potenziellen
-            Entnahmeüberschuss.
-          </p>
-        </section>
+        <PageHeader />
 
-        <section className="rounded-xl border bg-white p-5">
-          <h2 className="text-lg font-medium">Einzelrevier erforderlich</h2>
-          <p className="mt-2 text-sm text-gray-600">
+        <section className="rounded-[28px] border border-white/10 bg-white/5 p-5 backdrop-blur-sm">
+          <h2 className="text-lg font-medium text-white">Einzelrevier erforderlich</h2>
+          <p className="mt-2 text-sm text-white/65">
             PopSim ist als modellierter Revier-Snapshot definiert. Bitte im globalen
             Revier-Dropdown ein einzelnes Revier auswählen.
           </p>
         </section>
 
-        <section className="rounded-xl border bg-white p-5">
-          <h2 className="text-lg font-medium">Verfügbare aktive Reviere</h2>
-          <div className="mt-3 space-y-2 text-sm text-gray-700">
+        <section className="rounded-[28px] border border-white/10 bg-white/5 p-5 backdrop-blur-sm">
+          <h2 className="text-lg font-medium text-white">Verfügbare aktive Reviere</h2>
+          <div className="mt-3 space-y-2 text-sm text-white/78">
             {reviers.map((revier) => (
-              <div key={revier.id} className="rounded-lg border p-3">
-                <div className="font-medium">{revier.name}</div>
-                <div className="mt-1 text-xs text-gray-500">
+              <div
+                key={revier.id}
+                className="rounded-[20px] border border-white/10 bg-white/5 p-3"
+              >
+                <div className="font-medium text-white">{revier.name}</div>
+                <div className="mt-1 text-xs text-white/45">
                   {revier.area_ha ? `${fmtInt(revier.area_ha)} ha` : "Fläche offen"}
                 </div>
               </div>
@@ -175,14 +189,9 @@ export default async function PopSimPage({
   if (!selectedRevier) {
     return (
       <main className="space-y-8">
-        <section>
-          <h1 className="text-3xl font-semibold">PopSim</h1>
-          <p className="text-sm text-gray-600">
-            Modellgestützte Populationsschätzung für die aktive Organisation.
-          </p>
-        </section>
+        <PageHeader />
 
-        <div className="rounded-xl border bg-white p-4 text-sm text-red-600">
+        <div className="rounded-[24px] border border-rose-300/20 bg-rose-300/10 p-4 text-sm text-rose-100">
           Revier konnte nicht aufgelöst werden.
         </div>
       </main>
@@ -201,14 +210,9 @@ export default async function PopSimPage({
   if (latestEstimateError) {
     return (
       <main className="space-y-8">
-        <section>
-          <h1 className="text-3xl font-semibold">PopSim</h1>
-          <p className="text-sm text-gray-600">
-            Modellgestützte Populationsschätzung für die aktive Organisation.
-          </p>
-        </section>
+        <PageHeader />
 
-        <div className="rounded-xl border bg-white p-4 text-sm text-red-600">
+        <div className="rounded-[24px] border border-rose-300/20 bg-rose-300/10 p-4 text-sm text-rose-100">
           Fehler beim Laden des letzten PopSim-Snapshots:{" "}
           {latestEstimateError.message}
         </div>
@@ -244,14 +248,9 @@ export default async function PopSimPage({
     if (snapshotError) {
       return (
         <main className="space-y-8">
-          <section>
-            <h1 className="text-3xl font-semibold">PopSim</h1>
-            <p className="text-sm text-gray-600">
-              Modellgestützte Populationsschätzung für die aktive Organisation.
-            </p>
-          </section>
+          <PageHeader />
 
-          <div className="rounded-xl border bg-white p-4 text-sm text-red-600">
+          <div className="rounded-[24px] border border-rose-300/20 bg-rose-300/10 p-4 text-sm text-rose-100">
             Fehler beim Laden der PopSim-Daten: {snapshotError.message}
           </div>
         </main>
@@ -276,18 +275,12 @@ export default async function PopSimPage({
 
   return (
     <main className="space-y-8">
-      <section>
-        <h1 className="text-3xl font-semibold">PopSim</h1>
-        <p className="text-sm text-gray-600">
-          Modellgestützte Populationsschätzung für Bestand, Zielwerte und potenziellen
-          Entnahmeüberschuss.
-        </p>
-      </section>
+      <PageHeader />
 
-      <section className="rounded-xl border bg-white p-5">
+      <section className="rounded-[28px] border border-white/10 bg-white/5 p-5 backdrop-blur-sm">
         <div>
-          <h2 className="text-lg font-medium">Revier-Snapshot</h2>
-          <p className="text-sm text-gray-600">
+          <h2 className="text-lg font-medium text-white">Revier-Snapshot</h2>
+          <p className="text-sm text-white/65">
             Es wird immer der zuletzt berechnete PopSim-Stand des aktuell gewählten
             aktiven Reviers angezeigt.
           </p>
@@ -295,63 +288,43 @@ export default async function PopSimPage({
       </section>
 
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
-        <div className="rounded-xl border bg-white p-4">
-          <div className="text-xs uppercase tracking-wide text-gray-500">
-            Selected Revier
-          </div>
-          <div className="mt-2 text-2xl font-semibold">{selectedRevier.name}</div>
-          <div className="mt-1 text-sm text-gray-600">
-            {selectedRevier.area_ha ? `${fmtInt(selectedRevier.area_ha)} ha` : "Fläche offen"}
-          </div>
-        </div>
-
-        <div className="rounded-xl border bg-white p-4">
-          <div className="text-xs uppercase tracking-wide text-gray-500">
-            Snapshot Date
-          </div>
-          <div className="mt-2 text-2xl font-semibold">
-            {fmtDate(latestEstimateDate)}
-          </div>
-          <div className="mt-1 text-sm text-gray-600">letzte Berechnung</div>
-        </div>
-
-        <div className="rounded-xl border bg-white p-4">
-          <div className="text-xs uppercase tracking-wide text-gray-500">
-            Species in Model
-          </div>
-          <div className="mt-2 text-2xl font-semibold">{fmtInt(speciesCount)}</div>
-          <div className="mt-1 text-sm text-gray-600">mit aktuellem Snapshot</div>
-        </div>
-
-        <div className="rounded-xl border bg-white p-4">
-          <div className="text-xs uppercase tracking-wide text-gray-500">
-            Estimated Total
-          </div>
-          <div className="mt-2 text-2xl font-semibold">
-            {fmtInt(totalEstimatedPopulation)}
-          </div>
-          <div className="mt-1 text-sm text-gray-600">über alle Species</div>
-        </div>
-
-        <div className="rounded-xl border bg-white p-4">
-          <div className="text-xs uppercase tracking-wide text-gray-500">
-            Harvest Surplus
-          </div>
-          <div className="mt-2 text-2xl font-semibold">
-            {fmtInt(totalHarvestSurplus)}
-          </div>
-          <div className="mt-1 text-sm text-gray-600">
-            {fmtInt(speciesWithSurplus)} Species &gt; 0
-          </div>
-        </div>
+        <StatCard
+          title="Selected Revier"
+          value={selectedRevier.name}
+          subline={
+            selectedRevier.area_ha
+              ? `${fmtInt(selectedRevier.area_ha)} ha`
+              : "Fläche offen"
+          }
+        />
+        <StatCard
+          title="Snapshot Date"
+          value={fmtDate(latestEstimateDate)}
+          subline="letzte Berechnung"
+        />
+        <StatCard
+          title="Species in Model"
+          value={fmtInt(speciesCount)}
+          subline="mit aktuellem Snapshot"
+        />
+        <StatCard
+          title="Estimated Total"
+          value={fmtInt(totalEstimatedPopulation)}
+          subline="über alle Species"
+        />
+        <StatCard
+          title="Harvest Surplus"
+          value={fmtInt(totalHarvestSurplus)}
+          subline={`${fmtInt(speciesWithSurplus)} Species > 0`}
+        />
       </section>
 
       {!latestEstimateDate ? (
-        <section className="rounded-xl border bg-white p-5">
-          <h2 className="text-lg font-medium">Kein PopSim-Snapshot vorhanden</h2>
-          <p className="mt-2 text-sm text-gray-600">
+        <section className="rounded-[28px] border border-white/10 bg-white/5 p-5 backdrop-blur-sm">
+          <h2 className="text-lg font-medium text-white">Kein PopSim-Snapshot vorhanden</h2>
+          <p className="mt-2 text-sm text-white/65">
             Für das ausgewählte Revier wurden noch keine PopSim-Ergebnisse in
-            <code className="mx-1 rounded bg-gray-100 px-1 py-0.5 text-xs">
+            <code className="mx-1 rounded bg-white/8 px-1 py-0.5 text-xs text-white">
               population_estimates
             </code>
             gefunden.
@@ -359,11 +332,11 @@ export default async function PopSimPage({
         </section>
       ) : (
         <>
-          <section className="rounded-xl border bg-white p-5">
+          <section className="rounded-[28px] border border-white/10 bg-white/5 p-5 backdrop-blur-sm">
             <div className="mb-4 flex items-center justify-between">
               <div>
-                <h2 className="text-lg font-medium">Species Estimates</h2>
-                <p className="text-sm text-gray-600">
+                <h2 className="text-lg font-medium text-white">Species Estimates</h2>
+                <p className="text-sm text-white/65">
                   Gerundete UI-Sicht auf den neuesten modellierten Snapshot des
                   ausgewählten Reviers.
                 </p>
@@ -373,7 +346,7 @@ export default async function PopSimPage({
             <div className="overflow-x-auto">
               <table className="min-w-full border-collapse text-sm">
                 <thead>
-                  <tr className="border-b text-left text-gray-500">
+                  <tr className="border-b border-white/8 text-left text-white/55">
                     <th className="px-3 py-2 font-medium">Species</th>
                     <th className="px-3 py-2 font-medium">Estimated Total</th>
                     <th className="px-3 py-2 font-medium">Per 100 ha</th>
@@ -384,21 +357,26 @@ export default async function PopSimPage({
                 </thead>
                 <tbody>
                   {snapshotRows.map((row) => (
-                    <tr key={row.species} className="border-b last:border-0">
-                      <td className="px-3 py-3 font-medium">
+                    <tr
+                      key={row.species}
+                      className="border-b border-white/8 last:border-0"
+                    >
+                      <td className="px-3 py-3 font-medium text-white">
                         {titleCase(row.species)}
                       </td>
-                      <td className="px-3 py-3">
+                      <td className="px-3 py-3 text-white/72">
                         {fmtInt(row.estimated_population_total)}
                       </td>
-                      <td className="px-3 py-3">
+                      <td className="px-3 py-3 text-white/72">
                         {fmtInt(row.estimated_population_per_100ha)}
                       </td>
-                      <td className="px-3 py-3">{fmtInt(row.target_total)}</td>
-                      <td className="px-3 py-3">
+                      <td className="px-3 py-3 text-white/72">
+                        {fmtInt(row.target_total)}
+                      </td>
+                      <td className="px-3 py-3 text-white/72">
                         {fmtInt(row.target_per_100ha)}
                       </td>
-                      <td className="px-3 py-3">
+                      <td className="px-3 py-3 text-white/72">
                         {fmtInt(row.harvest_surplus_v0)}
                       </td>
                     </tr>
@@ -406,7 +384,7 @@ export default async function PopSimPage({
 
                   {snapshotRows.length === 0 && (
                     <tr>
-                      <td colSpan={6} className="px-3 py-6 text-sm text-gray-600">
+                      <td colSpan={6} className="px-3 py-6 text-sm text-white/68">
                         Für den neuesten Snapshot sind keine Species-Zeilen vorhanden.
                       </td>
                     </tr>
@@ -416,15 +394,15 @@ export default async function PopSimPage({
             </div>
           </section>
 
-          <section className="rounded-xl border bg-white p-5">
-            <h2 className="text-lg font-medium">Einordnung</h2>
-            <div className="mt-3 space-y-3 text-sm text-gray-700">
+          <section className="rounded-[28px] border border-white/10 bg-white/5 p-5 backdrop-blur-sm">
+            <h2 className="text-lg font-medium text-white">Einordnung</h2>
+            <div className="mt-3 space-y-3 text-sm text-white/72">
               <div>
                 PopSim ist kein exakter Zensus, sondern eine modellgestützte
                 Näherung auf Basis der verfügbaren Revier-, Kamera- und
                 Species-Signale.
               </div>
-              <div className="rounded-lg border bg-gray-50 p-3 text-gray-600">
+              <div className="rounded-[20px] border border-white/10 bg-white/5 p-3 text-white/65">
                 Fehlende Arten bedeuten im aktuellen Stand in der Regel:
                 kein belastbarer Output für den neuesten Snapshot, nicht
                 zwingend Abwesenheit im Revier.

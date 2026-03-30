@@ -1,4 +1,4 @@
-// src/app/invite/accept/InviteAcceptForm.tsx #4
+// src/app/invite/accept/InviteAcceptForm.tsx #5
 "use client";
 
 import { useState } from "react";
@@ -116,7 +116,7 @@ export default function InviteAcceptForm({
       <div>
         <label
           htmlFor="invite-email"
-          className="mb-2 block text-sm font-medium text-gray-900"
+          className="mb-2 block text-sm font-medium text-white"
         >
           Eingeladene E-Mail
         </label>
@@ -125,14 +125,14 @@ export default function InviteAcceptForm({
           type="email"
           value={inviteEmail}
           readOnly
-          className="w-full rounded-md border bg-gray-50 px-3 py-2 text-sm text-gray-600 outline-none"
+          className="w-full rounded-[10px] border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/60 outline-none"
         />
       </div>
 
       <div>
         <label
           htmlFor="password"
-          className="mb-2 block text-sm font-medium text-gray-900"
+          className="mb-2 block text-sm font-medium text-white"
         >
           Passwort *
         </label>
@@ -141,10 +141,10 @@ export default function InviteAcceptForm({
           type="password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
-          className="w-full rounded-md border px-3 py-2 text-sm outline-none"
+          className="w-full rounded-[10px] border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none placeholder:text-white/35"
           required
         />
-        <p className="mt-2 text-xs text-gray-500">
+        <p className="mt-2 text-xs text-white/45">
           Bitte ein Passwort mit mindestens 8 Zeichen festlegen.
         </p>
       </div>
@@ -152,7 +152,7 @@ export default function InviteAcceptForm({
       <div>
         <label
           htmlFor="password-repeat"
-          className="mb-2 block text-sm font-medium text-gray-900"
+          className="mb-2 block text-sm font-medium text-white"
         >
           Passwort wiederholen *
         </label>
@@ -161,13 +161,13 @@ export default function InviteAcceptForm({
           type="password"
           value={passwordRepeat}
           onChange={(e) => setPasswordRepeat(e.target.value)}
-          className="w-full rounded-md border px-3 py-2 text-sm outline-none"
+          className="w-full rounded-[10px] border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none placeholder:text-white/35"
           required
         />
       </div>
 
       {error ? (
-        <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+        <div className="rounded-[14px] border border-rose-300/20 bg-rose-300/10 px-3 py-2 text-sm text-rose-100">
           {error}
         </div>
       ) : null}
@@ -175,7 +175,7 @@ export default function InviteAcceptForm({
       <button
         type="submit"
         disabled={loading}
-        className="rounded-md border border-black bg-black px-4 py-2 text-sm text-white disabled:opacity-50"
+        className="rounded-[10px] bg-[#c9952e] px-4 py-2 text-sm text-[#102018] disabled:opacity-50"
       >
         {loading ? "Nimmt an..." : "Annehmen & einloggen"}
       </button>

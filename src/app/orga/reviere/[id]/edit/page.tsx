@@ -1,4 +1,4 @@
-// src/app/orga/reviere/[id]/edit/page.tsx #3
+// src/app/orga/reviere/[id]/edit/page.tsx #4
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
@@ -115,22 +115,27 @@ export default async function EditRevierPage({
 
   return (
     <main className="space-y-8">
-      <section className="space-y-3">
+      <section className="rounded-[32px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(201,149,46,0.16),transparent_24%),linear-gradient(135deg,rgba(255,255,255,0.06),rgba(255,255,255,0.03))] p-6 backdrop-blur-sm">
         <div>
-          <h1 className="text-3xl font-semibold tracking-tight">Revier bearbeiten</h1>
-          <p className="mt-2 max-w-3xl text-sm text-gray-600">
+          <div className="text-xs font-medium uppercase tracking-[0.22em] text-amber-200/80">
+            Revier bearbeiten
+          </div>
+          <h1 className="mt-3 text-3xl font-semibold tracking-tight text-white">
+            Revier bearbeiten
+          </h1>
+          <p className="mt-2 max-w-3xl text-sm text-white/68">
             Bearbeite hier die Stammdaten und den Status des ausgewählten Reviers.
           </p>
         </div>
       </section>
 
-      <section className="rounded-2xl border bg-white p-6 shadow-sm">
+      <section className="rounded-[28px] border border-white/10 bg-white/5 p-6 backdrop-blur-sm">
         <form action={updateRevier.bind(null, revier.id)} className="space-y-6">
           <div className="grid gap-4 md:grid-cols-2">
             <div>
               <label
                 htmlFor="name"
-                className="mb-2 block text-sm font-medium text-gray-900"
+                className="mb-2 block text-sm font-medium text-white"
               >
                 Reviername *
               </label>
@@ -140,14 +145,14 @@ export default async function EditRevierPage({
                 type="text"
                 required
                 defaultValue={revier.name}
-                className="w-full rounded-md border px-3 py-2 text-sm outline-none ring-0"
+                className="w-full rounded-[10px] border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none ring-0 placeholder:text-white/35"
               />
             </div>
 
             <div>
               <label
                 htmlFor="area_ha"
-                className="mb-2 block text-sm font-medium text-gray-900"
+                className="mb-2 block text-sm font-medium text-white"
               >
                 Fläche in ha *
               </label>
@@ -159,14 +164,14 @@ export default async function EditRevierPage({
                 step="1"
                 required
                 defaultValue={revier.area_ha}
-                className="w-full rounded-md border px-3 py-2 text-sm outline-none ring-0"
+                className="w-full rounded-[10px] border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none ring-0"
               />
             </div>
 
             <div>
               <label
                 htmlFor="region"
-                className="mb-2 block text-sm font-medium text-gray-900"
+                className="mb-2 block text-sm font-medium text-white"
               >
                 Region
               </label>
@@ -175,14 +180,14 @@ export default async function EditRevierPage({
                 name="region"
                 type="text"
                 defaultValue={revier.region ?? ""}
-                className="w-full rounded-md border px-3 py-2 text-sm outline-none ring-0"
+                className="w-full rounded-[10px] border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none ring-0 placeholder:text-white/35"
               />
             </div>
 
             <div>
               <label
                 htmlFor="country"
-                className="mb-2 block text-sm font-medium text-gray-900"
+                className="mb-2 block text-sm font-medium text-white"
               >
                 Land
               </label>
@@ -191,14 +196,14 @@ export default async function EditRevierPage({
                 name="country"
                 type="text"
                 defaultValue={revier.country ?? "DE"}
-                className="w-full rounded-md border px-3 py-2 text-sm uppercase outline-none ring-0"
+                className="w-full rounded-[10px] border border-white/10 bg-white/5 px-3 py-2 text-sm uppercase text-white outline-none ring-0 placeholder:text-white/35"
               />
             </div>
 
             <div>
               <label
                 htmlFor="status"
-                className="mb-2 block text-sm font-medium text-gray-900"
+                className="mb-2 block text-sm font-medium text-white"
               >
                 Status
               </label>
@@ -206,11 +211,17 @@ export default async function EditRevierPage({
                 id="status"
                 name="status"
                 defaultValue={revier.status}
-                className="w-full rounded-md border px-3 py-2 text-sm outline-none ring-0"
+                className="w-full rounded-[10px] border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none ring-0"
               >
-                <option value="active">Active</option>
-                <option value="paused">Paused</option>
-                <option value="archived">Archived</option>
+                <option value="active" className="bg-[#102018] text-white">
+                  Active
+                </option>
+                <option value="paused" className="bg-[#102018] text-white">
+                  Paused
+                </option>
+                <option value="archived" className="bg-[#102018] text-white">
+                  Archived
+                </option>
               </select>
             </div>
           </div>
@@ -218,7 +229,7 @@ export default async function EditRevierPage({
           <div>
             <label
               htmlFor="notes"
-              className="mb-2 block text-sm font-medium text-gray-900"
+              className="mb-2 block text-sm font-medium text-white"
             >
               Notizen
             </label>
@@ -227,7 +238,7 @@ export default async function EditRevierPage({
               name="notes"
               rows={5}
               defaultValue={revier.notes ?? ""}
-              className="w-full rounded-md border px-3 py-2 text-sm outline-none ring-0"
+              className="w-full rounded-[10px] border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none ring-0 placeholder:text-white/35"
             />
           </div>
 
@@ -239,7 +250,7 @@ export default async function EditRevierPage({
 
             <Link
               href="/orga/reviere"
-              className="rounded-md border px-4 py-2 text-sm hover:bg-gray-50"
+              className="rounded-[10px] border border-white/10 bg-white/5 px-4 py-2 text-sm text-white/78 hover:border-amber-300/20 hover:bg-white/8 hover:text-white"
             >
               Abbrechen
             </Link>

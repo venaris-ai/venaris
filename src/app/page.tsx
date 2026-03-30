@@ -1,4 +1,4 @@
-// src/app/page.tsx #5
+// src/app/page.tsx #6
 import Link from "next/link";
 import { requirePathAccess, canAccessPath } from "@/lib/authz";
 import { supabaseServer } from "@/lib/supabaseServer";
@@ -117,32 +117,38 @@ function statusUi(status: SubscriptionStatus) {
     case "trialing":
       return {
         label: "Trialing",
-        badgeClass: "border-blue-200 bg-blue-50 text-blue-700",
+        badgeClass:
+          "border-sky-300/25 bg-sky-300/10 text-sky-200",
       };
     case "active":
       return {
         label: "Active",
-        badgeClass: "border-emerald-200 bg-emerald-50 text-emerald-700",
+        badgeClass:
+          "border-emerald-300/25 bg-emerald-300/10 text-emerald-200",
       };
     case "past_due":
       return {
         label: "Past Due",
-        badgeClass: "border-amber-200 bg-amber-50 text-amber-700",
+        badgeClass:
+          "border-amber-300/25 bg-amber-300/10 text-amber-200",
       };
     case "canceled":
       return {
         label: "Canceled",
-        badgeClass: "border-orange-200 bg-orange-50 text-orange-700",
+        badgeClass:
+          "border-orange-300/25 bg-orange-300/10 text-orange-200",
       };
     case "expired":
       return {
         label: "Expired",
-        badgeClass: "border-rose-200 bg-rose-50 text-rose-700",
+        badgeClass:
+          "border-rose-300/25 bg-rose-300/10 text-rose-200",
       };
     default:
       return {
         label: status,
-        badgeClass: "border-gray-200 bg-gray-50 text-gray-700",
+        badgeClass:
+          "border-white/10 bg-white/5 text-white/72",
       };
   }
 }
@@ -157,13 +163,13 @@ function StatCard({
   subline?: string;
 }) {
   return (
-    <div className="rounded-2xl border bg-white p-6 shadow-sm">
-      <div className="text-sm text-gray-500">{title}</div>
-      <div className="mt-2 text-3xl font-semibold tracking-tight text-gray-900">
+    <div className="rounded-[28px] border border-white/10 bg-white/5 p-6 backdrop-blur-sm">
+      <div className="text-sm text-white/50">{title}</div>
+      <div className="mt-2 text-3xl font-semibold tracking-tight text-white">
         {value}
       </div>
       {subline ? (
-        <p className="mt-2 text-sm leading-6 text-gray-600">{subline}</p>
+        <p className="mt-2 text-sm leading-6 text-white/68">{subline}</p>
       ) : null}
     </div>
   );
@@ -181,11 +187,11 @@ function SectionCard({
   children: React.ReactNode;
 }) {
   return (
-    <section className="rounded-2xl border bg-white p-6 shadow-sm">
+    <section className="rounded-[28px] border border-white/10 bg-white/5 p-6 backdrop-blur-sm">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h2 className="text-lg font-medium">{title}</h2>
-          <p className="mt-1 text-sm text-gray-600">{text}</p>
+          <h2 className="text-lg font-medium text-white">{title}</h2>
+          <p className="mt-1 text-sm text-white/65">{text}</p>
         </div>
         {actions ? <div className="flex flex-wrap gap-2">{actions}</div> : null}
       </div>
@@ -204,7 +210,7 @@ function ActionLink({
   return (
     <Link
       href={href}
-      className="inline-flex rounded-md border px-3 py-2 text-sm hover:bg-gray-50"
+      className="inline-flex rounded-full border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/78 backdrop-blur-sm hover:border-amber-300/20 hover:bg-white/8 hover:text-white"
     >
       {label}
     </Link>
@@ -227,27 +233,27 @@ function FocusCard({
   return (
     <Link
       href={href}
-      className="group rounded-2xl border bg-gradient-to-br from-white to-gray-50 p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
+      className="group rounded-[28px] border border-white/10 bg-[linear-gradient(135deg,rgba(255,255,255,0.07),rgba(255,255,255,0.03))] p-5 backdrop-blur-sm transition hover:border-amber-300/20 hover:bg-[linear-gradient(135deg,rgba(255,255,255,0.08),rgba(255,255,255,0.04))]"
     >
       <div className="flex items-start justify-between gap-4">
-        <div className="text-xs font-medium uppercase tracking-[0.14em] text-gray-500">
+        <div className="text-xs font-medium uppercase tracking-[0.14em] text-white/45">
           {eyebrow}
         </div>
         {metric ? (
-          <div className="rounded-full border border-gray-200 bg-white px-3 py-1 text-xs font-medium text-gray-700">
+          <div className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-medium text-white/72">
             {metric}
           </div>
         ) : null}
       </div>
 
       <div className="mt-4">
-        <div className="text-xl font-semibold tracking-tight text-gray-900">
+        <div className="text-xl font-semibold tracking-tight text-white">
           {title}
         </div>
-        <p className="mt-2 text-sm leading-6 text-gray-600">{text}</p>
+        <p className="mt-2 text-sm leading-6 text-white/68">{text}</p>
       </div>
 
-      <div className="mt-5 text-sm font-medium text-gray-900 group-hover:underline">
+      <div className="mt-5 text-sm font-medium text-amber-200 group-hover:text-amber-100">
         Öffnen →
       </div>
     </Link>
@@ -534,19 +540,35 @@ export default async function HomePage() {
 
   return (
     <main className="space-y-8">
+      <section className="rounded-[32px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(201,149,46,0.16),transparent_24%),linear-gradient(135deg,rgba(255,255,255,0.06),rgba(255,255,255,0.03))] p-6 backdrop-blur-sm">
+        <div>
+          <div className="text-xs font-medium uppercase tracking-[0.22em] text-amber-200/80">
+            Home
+          </div>
+          <h1 className="mt-3 text-3xl font-semibold tracking-tight text-white">
+            Venaris Home
+          </h1>
+          <p className="mt-2 max-w-3xl text-sm leading-6 text-white/68">
+            Zentrale Übersicht über Wildlife, Cameras und Organization der aktiven
+            Umgebung.
+          </p>
+        </div>
 
-<section className="space-y-3">
-  <div>
-    <h1 className="text-3xl font-semibold tracking-tight">Venaris Home</h1>
-    <p className="mt-2 max-w-3xl text-sm text-gray-600">
-      Zentrale Übersicht über Wildlife, Cameras und Organization der aktiven
-      Umgebung.
-    </p>
-  </div>
-</section>
-
-
-
+        {focusCards.length > 0 ? (
+          <div className="mt-6 grid gap-4 xl:grid-cols-3">
+            {focusCards.map((card) => (
+              <FocusCard
+                key={card.href}
+                href={card.href}
+                eyebrow={card.eyebrow}
+                title={card.title}
+                text={card.text}
+                metric={card.metric}
+              />
+            ))}
+          </div>
+        ) : null}
+      </section>
 
       {statCards.length > 0 ? (
         <section
@@ -554,10 +576,10 @@ export default async function HomePage() {
             statCards.length >= 4
               ? "md:grid-cols-2 xl:grid-cols-4"
               : statCards.length === 3
-              ? "md:grid-cols-3"
-              : statCards.length === 2
-              ? "md:grid-cols-2"
-              : "md:grid-cols-1"
+                ? "md:grid-cols-3"
+                : statCards.length === 2
+                  ? "md:grid-cols-2"
+                  : "md:grid-cols-1"
           }`}
         >
           {statCards.map((item) => (
@@ -570,7 +592,6 @@ export default async function HomePage() {
           ))}
         </section>
       ) : null}
-
 
       {showOrga ? (
         <section className="grid gap-4 xl:grid-cols-2">
@@ -588,14 +609,14 @@ export default async function HomePage() {
             }
           >
             {!subscription ? (
-              <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-900">
+              <div className="rounded-[24px] border border-amber-300/20 bg-amber-300/10 p-5 text-sm text-amber-100">
                 Für diese Organization wurde noch keine Subscription gefunden.
               </div>
             ) : (
               <div className="grid gap-4 md:grid-cols-2">
-                <div className="rounded-2xl border bg-gray-50 p-5">
+                <div className="rounded-[24px] border border-white/10 bg-white/5 p-5">
                   <div className="flex flex-wrap items-center gap-3">
-                    <div className="text-lg font-semibold text-gray-900">
+                    <div className="text-lg font-semibold text-white">
                       {planLabel(subscription.plan_key)}
                     </div>
                     <span
@@ -604,19 +625,19 @@ export default async function HomePage() {
                       {effectiveStatus?.label}
                     </span>
                   </div>
-                  <p className="mt-3 text-sm leading-6 text-gray-600">
+                  <p className="mt-3 text-sm leading-6 text-white/68">
                     {subscriptionPrice} inkl. MwSt. ·{" "}
                     {billingCycleLabel(subscription.billing_cycle)}
                   </p>
-                  <p className="mt-2 text-sm leading-6 text-gray-600">
+                  <p className="mt-2 text-sm leading-6 text-white/60">
                     Trial endet: {formatDate(subscription.trial_ends_at)} · Periode bis:{" "}
                     {formatDate(subscription.current_period_end)}
                   </p>
                 </div>
 
-                <div className="rounded-2xl border bg-gray-50 p-5">
-                  <div className="text-sm font-medium text-gray-500">Scope</div>
-                  <div className="mt-3 space-y-2 text-sm text-gray-700">
+                <div className="rounded-[24px] border border-white/10 bg-white/5 p-5">
+                  <div className="text-sm font-medium text-white/50">Scope</div>
+                  <div className="mt-3 space-y-2 text-sm text-white/72">
                     <div>Reviere: {reviersCount}</div>
                     <div>
                       Members: {resolvedSubscription?.currentMemberUsage ?? membersCount} /{" "}
@@ -646,25 +667,28 @@ export default async function HomePage() {
             }
           >
             {recentEvents.length === 0 ? (
-              <div className="rounded-2xl border bg-gray-50 p-5 text-sm text-gray-600">
+              <div className="rounded-[24px] border border-white/10 bg-white/5 p-5 text-sm text-white/68">
                 Noch keine aktuellen Events im Dashboard-Scope sichtbar.
               </div>
             ) : (
               <div className="space-y-3">
                 {recentEvents.map((event) => (
-                  <div key={event.id} className="rounded-2xl border bg-gray-50 p-4">
+                  <div
+                    key={event.id}
+                    className="rounded-[24px] border border-white/10 bg-white/5 p-4"
+                  >
                     <div className="flex flex-wrap items-start justify-between gap-3">
                       <div>
-                        <div className="text-sm font-medium text-gray-900">
+                        <div className="text-sm font-medium text-white">
                           {formatSpecies(event.top_species)}
                           {event.top_count ? ` · ${event.top_count}` : ""}
                         </div>
-                        <p className="mt-1 text-sm text-gray-600">
+                        <p className="mt-1 text-sm text-white/65">
                           Kamera: {cameraNameById.get(event.camera_id) ?? "—"}
                         </p>
                       </div>
 
-                      <div className="text-right text-xs text-gray-500">
+                      <div className="text-right text-xs text-white/45">
                         <div>{formatDateTime(event.start_at)}</div>
                         <div className="mt-1">
                           Assets: {event.asset_count ?? 0} · Score:{" "}
@@ -699,25 +723,28 @@ export default async function HomePage() {
               }
             >
               {recentEvents.length === 0 ? (
-                <div className="rounded-2xl border bg-gray-50 p-5 text-sm text-gray-600">
+                <div className="rounded-[24px] border border-white/10 bg-white/5 p-5 text-sm text-white/68">
                   Noch keine aktuellen Events im Dashboard-Scope sichtbar.
                 </div>
               ) : (
                 <div className="space-y-3">
                   {recentEvents.map((event) => (
-                    <div key={event.id} className="rounded-2xl border bg-gray-50 p-4">
+                    <div
+                      key={event.id}
+                      className="rounded-[24px] border border-white/10 bg-white/5 p-4"
+                    >
                       <div className="flex flex-wrap items-start justify-between gap-3">
                         <div>
-                          <div className="text-sm font-medium text-gray-900">
+                          <div className="text-sm font-medium text-white">
                             {formatSpecies(event.top_species)}
                             {event.top_count ? ` · ${event.top_count}` : ""}
                           </div>
-                          <p className="mt-1 text-sm text-gray-600">
+                          <p className="mt-1 text-sm text-white/65">
                             Kamera: {cameraNameById.get(event.camera_id) ?? "—"}
                           </p>
                         </div>
 
-                        <div className="text-right text-xs text-gray-500">
+                        <div className="text-right text-xs text-white/45">
                           <div>{formatDateTime(event.start_at)}</div>
                           <div className="mt-1">
                             Assets: {event.asset_count ?? 0} · Score:{" "}
@@ -749,24 +776,27 @@ export default async function HomePage() {
               }
             >
               {cameras.length === 0 ? (
-                <div className="rounded-2xl border bg-gray-50 p-5 text-sm text-gray-600">
+                <div className="rounded-[24px] border border-white/10 bg-white/5 p-5 text-sm text-white/68">
                   Noch keine Kameras angelegt.
                 </div>
               ) : (
                 <div className="space-y-3">
                   {cameras.map((camera) => (
-                    <div key={camera.id} className="rounded-2xl border bg-gray-50 p-4">
+                    <div
+                      key={camera.id}
+                      className="rounded-[24px] border border-white/10 bg-white/5 p-4"
+                    >
                       <div className="flex flex-wrap items-start justify-between gap-3">
                         <div>
-                          <div className="text-sm font-medium text-gray-900">
+                          <div className="text-sm font-medium text-white">
                             {camera.name}
                           </div>
-                          <p className="mt-1 text-sm text-gray-600">
+                          <p className="mt-1 text-sm text-white/65">
                             {camera.location_name || "Keine Ortsbezeichnung"}
                           </p>
                         </div>
 
-                        <div className="text-right text-xs text-gray-500">
+                        <div className="text-right text-xs text-white/45">
                           <div>Erstellt: {formatDate(camera.created_at)}</div>
                           <div className="mt-1">
                             Last seen: {formatDateTime(camera.last_seen_at)}
@@ -796,24 +826,27 @@ export default async function HomePage() {
             }
           >
             {cameras.length === 0 ? (
-              <div className="rounded-2xl border bg-gray-50 p-5 text-sm text-gray-600">
+              <div className="rounded-[24px] border border-white/10 bg-white/5 p-5 text-sm text-white/68">
                 Noch keine Kameras angelegt.
               </div>
             ) : (
               <div className="space-y-3">
                 {cameras.map((camera) => (
-                  <div key={camera.id} className="rounded-2xl border bg-gray-50 p-4">
+                  <div
+                    key={camera.id}
+                    className="rounded-[24px] border border-white/10 bg-white/5 p-4"
+                  >
                     <div className="flex flex-wrap items-start justify-between gap-3">
                       <div>
-                        <div className="text-sm font-medium text-gray-900">
+                        <div className="text-sm font-medium text-white">
                           {camera.name}
                         </div>
-                        <p className="mt-1 text-sm text-gray-600">
+                        <p className="mt-1 text-sm text-white/65">
                           {camera.location_name || "Keine Ortsbezeichnung"}
                         </p>
                       </div>
 
-                      <div className="text-right text-xs text-gray-500">
+                      <div className="text-right text-xs text-white/45">
                         <div>Erstellt: {formatDate(camera.created_at)}</div>
                         <div className="mt-1">
                           Last seen: {formatDateTime(camera.last_seen_at)}

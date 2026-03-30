@@ -1,4 +1,4 @@
-// src/app/orga/subscription/page.tsx #15
+// src/app/orga/subscription/page.tsx #16
 import { requirePathAccess } from "@/lib/authz";
 import { supabaseServer } from "@/lib/supabaseServer";
 import { BILLING_PLANS, type BillingCycle } from "@/lib/billing/plans";
@@ -83,32 +83,32 @@ function statusUi(status: SubscriptionStatus) {
     case "trialing":
       return {
         label: "Trialing",
-        badgeClass: "border-blue-200 bg-blue-50 text-blue-700",
+        badgeClass: "border-sky-300/25 bg-sky-300/10 text-sky-200",
       };
     case "active":
       return {
         label: "Active",
-        badgeClass: "border-emerald-200 bg-emerald-50 text-emerald-700",
+        badgeClass: "border-emerald-300/25 bg-emerald-300/10 text-emerald-200",
       };
     case "past_due":
       return {
         label: "Past Due",
-        badgeClass: "border-amber-200 bg-amber-50 text-amber-700",
+        badgeClass: "border-amber-300/25 bg-amber-300/10 text-amber-200",
       };
     case "canceled":
       return {
         label: "Canceled",
-        badgeClass: "border-orange-200 bg-orange-50 text-orange-700",
+        badgeClass: "border-orange-300/25 bg-orange-300/10 text-orange-200",
       };
     case "expired":
       return {
         label: "Expired",
-        badgeClass: "border-rose-200 bg-rose-50 text-rose-700",
+        badgeClass: "border-rose-300/25 bg-rose-300/10 text-rose-200",
       };
     default:
       return {
         label: status,
-        badgeClass: "border-gray-200 bg-gray-50 text-gray-700",
+        badgeClass: "border-white/10 bg-white/5 text-white/72",
       };
   }
 }
@@ -123,10 +123,10 @@ function Section({
   children: React.ReactNode;
 }) {
   return (
-    <section className="rounded-2xl border bg-white p-6 shadow-sm">
+    <section className="rounded-[28px] border border-white/10 bg-white/5 p-6 backdrop-blur-sm">
       <div>
-        <h2 className="text-lg font-medium">{title}</h2>
-        <p className="mt-1 text-sm text-gray-600">{text}</p>
+        <h2 className="text-lg font-medium text-white">{title}</h2>
+        <p className="mt-1 text-sm text-white/65">{text}</p>
       </div>
       <div className="mt-6">{children}</div>
     </section>
@@ -241,11 +241,25 @@ export default async function SubscriptionPage() {
   if (!subscription) {
     return (
       <main className="space-y-8">
+        <section className="rounded-[32px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(201,149,46,0.16),transparent_24%),linear-gradient(135deg,rgba(255,255,255,0.06),rgba(255,255,255,0.03))] p-6 backdrop-blur-sm">
+          <div>
+            <div className="text-xs font-medium uppercase tracking-[0.22em] text-amber-200/80">
+              Subscription
+            </div>
+            <h1 className="mt-3 text-3xl font-semibold tracking-tight text-white">
+              Subscription
+            </h1>
+            <p className="mt-2 max-w-3xl text-sm text-white/68">
+              Für diese Organization wurde noch keine Subscription gefunden.
+            </p>
+          </div>
+        </section>
+
         <Section
           title="Subscription"
           text="Für diese Organization wurde noch keine Subscription gefunden."
         >
-          <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-900">
+          <div className="rounded-[24px] border border-amber-300/20 bg-amber-300/10 p-5 text-sm text-amber-100">
             Bitte prüfe die Subscription-Konfiguration in der Datenbank.
           </div>
         </Section>
@@ -268,14 +282,28 @@ export default async function SubscriptionPage() {
 
   return (
     <main className="space-y-8">
+      <section className="rounded-[32px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(201,149,46,0.16),transparent_24%),linear-gradient(135deg,rgba(255,255,255,0.06),rgba(255,255,255,0.03))] p-6 backdrop-blur-sm">
+        <div>
+          <div className="text-xs font-medium uppercase tracking-[0.22em] text-amber-200/80">
+            Subscription
+          </div>
+          <h1 className="mt-3 text-3xl font-semibold tracking-tight text-white">
+            Subscription
+          </h1>
+          <p className="mt-2 max-w-3xl text-sm text-white/68">
+            Status, aktueller Plan und verfügbare Planoptionen der aktiven Organization.
+          </p>
+        </div>
+      </section>
+
       <Section
         title="Subscription"
         text="Status, aktueller Plan und verfügbare Planoptionen der aktiven Organization."
       >
         <div className="grid gap-4 md:grid-cols-2">
-          <div className="rounded-2xl border bg-gray-50 p-5">
+          <div className="rounded-[24px] border border-white/10 bg-white/5 p-5">
             <div className="flex flex-wrap items-center gap-3">
-              <div className="text-lg font-semibold text-gray-900">
+              <div className="text-lg font-semibold text-white">
                 {BILLING_PLANS[subscription.plan_key].label}
               </div>
               <span
@@ -285,7 +313,7 @@ export default async function SubscriptionPage() {
               </span>
             </div>
 
-            <div className="mt-4 space-y-2 text-sm text-gray-700">
+            <div className="mt-4 space-y-2 text-sm text-white/72">
               <div>
                 Preis: {planPriceText(subscription)} inkl. MwSt. ·{" "}
                 {billingCycleLabel(subscription.billing_cycle)}
@@ -296,12 +324,12 @@ export default async function SubscriptionPage() {
             </div>
           </div>
 
-          <div className="rounded-2xl border bg-gray-50 p-5">
-            <div className="text-sm font-medium text-gray-500">
+          <div className="rounded-[24px] border border-white/10 bg-white/5 p-5">
+            <div className="text-sm font-medium text-white/50">
               Aktuelle Nutzung
             </div>
 
-            <div className="mt-4 space-y-2 text-sm text-gray-700">
+            <div className="mt-4 space-y-2 text-sm text-white/72">
               <div>
                 Kameras: {currentCameraCount} / {subscription.max_cameras}
               </div>

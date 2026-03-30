@@ -1,4 +1,4 @@
-// src/app/orga/reviere/new/page.tsx #3
+// src/app/orga/reviere/new/page.tsx #4
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { requirePathAccess } from "@/lib/authz";
@@ -66,10 +66,15 @@ export default async function NewRevierPage() {
 
   return (
     <main className="space-y-8">
-      <section className="space-y-3">
+      <section className="rounded-[32px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(201,149,46,0.16),transparent_24%),linear-gradient(135deg,rgba(255,255,255,0.06),rgba(255,255,255,0.03))] p-6 backdrop-blur-sm">
         <div>
-          <h1 className="text-3xl font-semibold tracking-tight">Revier anlegen</h1>
-          <p className="mt-2 max-w-3xl text-sm text-gray-600">
+          <div className="text-xs font-medium uppercase tracking-[0.22em] text-amber-200/80">
+            Revier anlegen
+          </div>
+          <h1 className="mt-3 text-3xl font-semibold tracking-tight text-white">
+            Revier anlegen
+          </h1>
+          <p className="mt-2 max-w-3xl text-sm text-white/68">
             Lege hier ein neues Revier für die aktive Organisation an. Das Revier
             wird anschließend als fachlicher Scope für Kameras und Auswertungen
             verfügbar.
@@ -77,13 +82,13 @@ export default async function NewRevierPage() {
         </div>
       </section>
 
-      <section className="rounded-2xl border bg-white p-6 shadow-sm">
+      <section className="rounded-[28px] border border-white/10 bg-white/5 p-6 backdrop-blur-sm">
         <form action={createRevier} className="space-y-6">
           <div className="grid gap-4 md:grid-cols-2">
             <div>
               <label
                 htmlFor="name"
-                className="mb-2 block text-sm font-medium text-gray-900"
+                className="mb-2 block text-sm font-medium text-white"
               >
                 Reviername *
               </label>
@@ -92,7 +97,7 @@ export default async function NewRevierPage() {
                 name="name"
                 type="text"
                 required
-                className="w-full rounded-md border px-3 py-2 text-sm outline-none ring-0"
+                className="w-full rounded-[10px] border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none ring-0 placeholder:text-white/35"
                 placeholder="z. B. Demo-Nord"
               />
             </div>
@@ -100,7 +105,7 @@ export default async function NewRevierPage() {
             <div>
               <label
                 htmlFor="area_ha"
-                className="mb-2 block text-sm font-medium text-gray-900"
+                className="mb-2 block text-sm font-medium text-white"
               >
                 Fläche in ha *
               </label>
@@ -111,7 +116,7 @@ export default async function NewRevierPage() {
                 min="1"
                 step="1"
                 required
-                className="w-full rounded-md border px-3 py-2 text-sm outline-none ring-0"
+                className="w-full rounded-[10px] border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none ring-0 placeholder:text-white/35"
                 placeholder="z. B. 250"
               />
             </div>
@@ -119,7 +124,7 @@ export default async function NewRevierPage() {
             <div>
               <label
                 htmlFor="status"
-                className="mb-2 block text-sm font-medium text-gray-900"
+                className="mb-2 block text-sm font-medium text-white"
               >
                 Status
               </label>
@@ -127,11 +132,17 @@ export default async function NewRevierPage() {
                 id="status"
                 name="status"
                 defaultValue="active"
-                className="w-full rounded-md border px-3 py-2 text-sm outline-none ring-0"
+                className="w-full rounded-[10px] border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none ring-0"
               >
-                <option value="active">Active</option>
-                <option value="paused">Paused</option>
-                <option value="archived">Archived</option>
+                <option value="active" className="bg-[#102018] text-white">
+                  Active
+                </option>
+                <option value="paused" className="bg-[#102018] text-white">
+                  Paused
+                </option>
+                <option value="archived" className="bg-[#102018] text-white">
+                  Archived
+                </option>
               </select>
             </div>
           </div>
@@ -144,7 +155,7 @@ export default async function NewRevierPage() {
 
             <Link
               href="/orga/reviere"
-              className="rounded-md border px-4 py-2 text-sm hover:bg-gray-50"
+              className="rounded-[10px] border border-white/10 bg-white/5 px-4 py-2 text-sm text-white/78 hover:border-amber-300/20 hover:bg-white/8 hover:text-white"
             >
               Abbrechen
             </Link>

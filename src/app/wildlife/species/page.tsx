@@ -1,4 +1,4 @@
-// src/app/wildlife/species/page.tsx
+// src/app/wildlife/species/page.tsx #2
 export const runtime = "nodejs";
 
 import Link from "next/link";
@@ -107,25 +107,28 @@ function SpeciesPageHeader({
   revierValue: string;
 }) {
   return (
-    <section className="space-y-3">
+    <section className="rounded-[32px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(201,149,46,0.16),transparent_24%),linear-gradient(135deg,rgba(255,255,255,0.06),rgba(255,255,255,0.03))] p-6 backdrop-blur-sm">
       <div>
-        <h1 className="text-3xl font-semibold">Species</h1>
-        <p className="text-sm text-gray-600">
+        <div className="text-xs font-medium uppercase tracking-[0.22em] text-amber-200/80">
+          Species
+        </div>
+        <h1 className="mt-3 text-3xl font-semibold text-white">Species</h1>
+        <p className="mt-2 text-sm text-white/68">
           Artenübersicht, Häufigkeiten und Schwerpunkte für den aktuellen Revier-Scope.
         </p>
       </div>
 
-      <div className="flex flex-wrap items-center gap-1.5">
+      <div className="mt-5 flex flex-wrap items-center gap-1.5">
         {(["30d", "90d", "365d"] as PeriodKey[]).map((p) => {
           const active = p === period;
           return (
             <Link
               key={p}
               href={buildHref(p, revierValue)}
-              className={`rounded-md border px-2.5 py-1 text-xs ${
+              className={`rounded-full border px-3 py-1.5 text-xs ${
                 active
-                  ? "border-black bg-black text-white"
-                  : "border-gray-300 bg-white text-black hover:bg-gray-100"
+                  ? "border-amber-300/30 bg-amber-300/15 text-amber-100"
+                  : "border-white/10 bg-white/5 text-white/72 hover:bg-white/8"
               }`}
             >
               {p}
@@ -134,6 +137,24 @@ function SpeciesPageHeader({
         })}
       </div>
     </section>
+  );
+}
+
+function StatCard({
+  title,
+  value,
+  subline,
+}: {
+  title: string;
+  value: string | number;
+  subline: string;
+}) {
+  return (
+    <div className="rounded-[28px] border border-white/10 bg-white/5 p-4 backdrop-blur-sm">
+      <div className="text-xs uppercase tracking-wide text-white/45">{title}</div>
+      <div className="mt-2 text-3xl font-semibold text-white">{value}</div>
+      <div className="mt-1 text-sm text-white/60">{subline}</div>
+    </div>
   );
 }
 
@@ -160,7 +181,7 @@ export default async function WildlifeSpeciesPage(props: {
       <main className="space-y-8">
         <SpeciesPageHeader period={period} revierValue="all" />
 
-        <div className="rounded-xl border bg-white p-4 text-sm text-red-600">
+        <div className="rounded-[24px] border border-rose-300/20 bg-rose-300/10 p-4 text-sm text-rose-100">
           Active organization not found.
         </div>
       </main>
@@ -182,7 +203,7 @@ export default async function WildlifeSpeciesPage(props: {
       <main className="space-y-8">
         <SpeciesPageHeader period={period} revierValue="all" />
 
-        <div className="rounded-xl border bg-white p-4 text-sm text-red-600">
+        <div className="rounded-[24px] border border-rose-300/20 bg-rose-300/10 p-4 text-sm text-rose-100">
           Fehler beim Laden der Reviere: {reviersError.message}
         </div>
       </main>
@@ -206,7 +227,7 @@ export default async function WildlifeSpeciesPage(props: {
       <main className="space-y-8">
         <SpeciesPageHeader period={period} revierValue="all" />
 
-        <div className="rounded-xl border bg-white p-4 text-sm text-gray-600">
+        <div className="rounded-[24px] border border-white/10 bg-white/5 p-4 text-sm text-white/68">
           Für die aktive Organisation sind derzeit keine aktiven Reviere vorhanden.
         </div>
       </main>
@@ -234,7 +255,7 @@ export default async function WildlifeSpeciesPage(props: {
           revierValue={currentRevierValue}
         />
 
-        <div className="rounded-xl border bg-white p-4 text-sm text-red-600">
+        <div className="rounded-[24px] border border-rose-300/20 bg-rose-300/10 p-4 text-sm text-rose-100">
           Fehler beim Laden der Kameras: {camerasError.message}
         </div>
       </main>
@@ -258,7 +279,7 @@ export default async function WildlifeSpeciesPage(props: {
           revierValue={currentRevierValue}
         />
 
-        <div className="rounded-xl border bg-white p-4 text-sm text-gray-600">
+        <div className="rounded-[24px] border border-white/10 bg-white/5 p-4 text-sm text-white/68">
           Für den aktuellen Revier-Scope sind keine Kameras vorhanden.
         </div>
       </main>
@@ -281,7 +302,7 @@ export default async function WildlifeSpeciesPage(props: {
           revierValue={currentRevierValue}
         />
 
-        <div className="rounded-xl border bg-white p-4 text-sm text-red-600">
+        <div className="rounded-[24px] border border-rose-300/20 bg-rose-300/10 p-4 text-sm text-rose-100">
           Fehler beim Laden der Events: {eventsError.message}
         </div>
       </main>
@@ -303,7 +324,7 @@ export default async function WildlifeSpeciesPage(props: {
             revierValue={currentRevierValue}
           />
 
-          <div className="rounded-xl border bg-white p-4 text-sm text-red-600">
+          <div className="rounded-[24px] border border-rose-300/20 bg-rose-300/10 p-4 text-sm text-rose-100">
             Fehler beim Laden der Species-Zusammenfassung:{" "}
             {err instanceof Error ? err.message : "unknown error"}
           </div>
@@ -384,55 +405,47 @@ export default async function WildlifeSpeciesPage(props: {
       <SpeciesPageHeader period={period} revierValue={currentRevierValue} />
 
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <div className="rounded-xl border bg-white p-4">
-          <div className="text-xs uppercase tracking-wide text-gray-500">
-            Observed Species
-          </div>
-          <div className="mt-2 text-3xl font-semibold">{totalSpecies}</div>
-          <div className="mt-1 text-sm text-gray-600">im Zeitraum</div>
-        </div>
-
-        <div className="rounded-xl border bg-white p-4">
-          <div className="text-xs uppercase tracking-wide text-gray-500">
-            Species Events
-          </div>
-          <div className="mt-2 text-3xl font-semibold">{totalEvents}</div>
-          <div className="mt-1 text-sm text-gray-600">mit Species-Summary</div>
-        </div>
-
-        <div className="rounded-xl border bg-white p-4">
-          <div className="text-xs uppercase tracking-wide text-gray-500">
-            Observed Animals
-          </div>
-          <div className="mt-2 text-3xl font-semibold">{totalObservedAnimals}</div>
-          <div className="mt-1 text-sm text-gray-600">aggregiert</div>
-        </div>
-
-        <div className="rounded-xl border bg-white p-4">
-          <div className="text-xs uppercase tracking-wide text-gray-500">
-            Cameras In Scope
-          </div>
-          <div className="mt-2 text-3xl font-semibold">{cameraList.length}</div>
-          <div className="mt-1 text-sm text-gray-600">aktueller Revier-Scope</div>
-        </div>
+        <StatCard
+          title="Observed Species"
+          value={totalSpecies}
+          subline="im Zeitraum"
+        />
+        <StatCard
+          title="Species Events"
+          value={totalEvents}
+          subline="mit Species-Summary"
+        />
+        <StatCard
+          title="Observed Animals"
+          value={totalObservedAnimals}
+          subline="aggregiert"
+        />
+        <StatCard
+          title="Cameras In Scope"
+          value={cameraList.length}
+          subline="aktueller Revier-Scope"
+        />
       </section>
 
       <section className="grid gap-4 lg:grid-cols-[0.8fr_1.2fr]">
-        <div className="rounded-xl border bg-white p-5">
+        <div className="rounded-[28px] border border-white/10 bg-white/5 p-5 backdrop-blur-sm">
           <div className="mb-4">
-            <h2 className="text-lg font-medium">Top Species</h2>
-            <p className="text-sm text-gray-600">
+            <h2 className="text-lg font-medium text-white">Top Species</h2>
+            <p className="text-sm text-white/65">
               Schnellblick auf die häufigsten Arten im gewählten Zeitraum.
             </p>
           </div>
 
           <div className="space-y-3">
             {topSpecies.map((row) => (
-              <div key={row.species} className="rounded-lg border p-3 text-sm">
+              <div
+                key={row.species}
+                className="rounded-[20px] border border-white/10 bg-white/5 p-3 text-sm"
+              >
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                    <div className="font-medium">{titleCase(row.species)}</div>
-                    <div className="mt-1 text-xs text-gray-500">
+                    <div className="font-medium text-white">{titleCase(row.species)}</div>
+                    <div className="mt-1 text-xs text-white/45">
                       Top Camera:{" "}
                       {row.topCameraId
                         ? cameraLabelById[row.topCameraId] ?? row.topCameraId
@@ -441,8 +454,8 @@ export default async function WildlifeSpeciesPage(props: {
                   </div>
 
                   <div className="text-right">
-                    <div className="font-medium">{row.eventCount} Events</div>
-                    <div className="text-xs text-gray-500">
+                    <div className="font-medium text-white">{row.eventCount} Events</div>
+                    <div className="text-xs text-white/45">
                       {row.observedAnimals} Tiere
                     </div>
                   </div>
@@ -451,30 +464,30 @@ export default async function WildlifeSpeciesPage(props: {
             ))}
 
             {topSpecies.length === 0 && (
-              <div className="text-sm text-gray-600">
+              <div className="text-sm text-white/68">
                 Noch keine Species-Daten im gewählten Zeitraum.
               </div>
             )}
           </div>
         </div>
 
-        <div className="rounded-xl border bg-white p-5">
+        <div className="rounded-[28px] border border-white/10 bg-white/5 p-5 backdrop-blur-sm">
           <div className="mb-4">
-            <h2 className="text-lg font-medium">Species Overview</h2>
-            <p className="text-sm text-gray-600">
+            <h2 className="text-lg font-medium text-white">Species Overview</h2>
+            <p className="text-sm text-white/65">
               Detaillierte Artenübersicht für den aktuellen Revier-Scope.
             </p>
           </div>
 
           {speciesOverview.length === 0 ? (
-            <div className="rounded-md border border-gray-200 bg-gray-50 p-4 text-sm text-gray-600">
+            <div className="rounded-[14px] border border-white/10 bg-white/5 p-4 text-sm text-white/68">
               Keine Species-Beobachtungen im gewählten Zeitraum gefunden.
             </div>
           ) : (
             <div className="overflow-x-auto">
               <table className="min-w-full border-collapse text-sm">
                 <thead>
-                  <tr className="border-b text-left">
+                  <tr className="border-b border-white/8 text-left text-white/55">
                     <th className="px-3 py-2 font-medium">Species</th>
                     <th className="px-3 py-2 font-medium">Events</th>
                     <th className="px-3 py-2 font-medium">Observed Animals</th>
@@ -486,20 +499,25 @@ export default async function WildlifeSpeciesPage(props: {
                 </thead>
                 <tbody>
                   {speciesOverview.map((row) => (
-                    <tr key={row.species} className="border-b last:border-b-0">
-                      <td className="px-3 py-2 font-medium">
+                    <tr
+                      key={row.species}
+                      className="border-b border-white/8 last:border-b-0"
+                    >
+                      <td className="px-3 py-2 font-medium text-white">
                         {titleCase(row.species)}
                       </td>
-                      <td className="px-3 py-2">{row.eventCount}</td>
-                      <td className="px-3 py-2">{row.observedAnimals}</td>
-                      <td className="px-3 py-2">{row.avgAnimals.toFixed(2)}</td>
-                      <td className="px-3 py-2">{row.maxAnimals}</td>
-                      <td className="px-3 py-2">
+                      <td className="px-3 py-2 text-white/72">{row.eventCount}</td>
+                      <td className="px-3 py-2 text-white/72">{row.observedAnimals}</td>
+                      <td className="px-3 py-2 text-white/72">{row.avgAnimals.toFixed(2)}</td>
+                      <td className="px-3 py-2 text-white/72">{row.maxAnimals}</td>
+                      <td className="px-3 py-2 text-white/72">
                         {row.topCameraId
                           ? cameraLabelById[row.topCameraId] ?? row.topCameraId
                           : "—"}
                       </td>
-                      <td className="px-3 py-2">{row.avgRelevance.toFixed(3)}</td>
+                      <td className="px-3 py-2 text-white/72">
+                        {row.avgRelevance.toFixed(3)}
+                      </td>
                     </tr>
                   ))}
                 </tbody>

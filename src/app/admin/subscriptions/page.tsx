@@ -1,4 +1,4 @@
-// src/app/admin/subscriptions/page.tsx #3
+// src/app/admin/subscriptions/page.tsx #4
 import { requirePathAccess } from "@/lib/authz";
 import { supabaseServer } from "@/lib/supabaseServer";
 import AdminSubscriptionRequestActions from "./AdminSubscriptionRequestActions";
@@ -93,16 +93,34 @@ function planLabel(planKey: PlanKey) {
 function statusBadge(status: RequestStatus) {
   switch (status) {
     case "open":
-      return "border-amber-200 bg-amber-50 text-amber-700";
+      return "border-amber-300/20 bg-amber-300/10 text-amber-100";
     case "approved":
-      return "border-emerald-200 bg-emerald-50 text-emerald-700";
+      return "border-emerald-300/20 bg-emerald-300/10 text-emerald-100";
     case "rejected":
-      return "border-rose-200 bg-rose-50 text-rose-700";
+      return "border-rose-300/20 bg-rose-300/10 text-rose-100";
     case "canceled":
-      return "border-gray-200 bg-gray-50 text-gray-700";
+      return "border-white/10 bg-white/5 text-white/68";
     default:
-      return "border-gray-200 bg-gray-50 text-gray-700";
+      return "border-white/10 bg-white/5 text-white/68";
   }
+}
+
+function StatCard({
+  title,
+  value,
+  subline,
+}: {
+  title: string;
+  value: string | number;
+  subline: string;
+}) {
+  return (
+    <div className="rounded-[28px] border border-white/10 bg-white/5 p-5 backdrop-blur-sm">
+      <div className="text-xs uppercase tracking-wide text-white/45">{title}</div>
+      <div className="mt-2 text-3xl font-semibold text-white">{value}</div>
+      <div className="mt-1 text-sm text-white/60">{subline}</div>
+    </div>
+  );
 }
 
 export default async function AdminSubscriptionsPage() {
@@ -183,44 +201,70 @@ export default async function AdminSubscriptionsPage() {
 
   return (
     <main className="space-y-8">
-      <section className="rounded-2xl border bg-white p-6 shadow-sm">
-        <h1 className="text-2xl font-semibold tracking-tight">
-          Admin · Subscription Requests
+      <section className="rounded-[32px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(201,149,46,0.16),transparent_24%),linear-gradient(135deg,rgba(255,255,255,0.06),rgba(255,255,255,0.03))] p-6 backdrop-blur-sm">
+        <div className="text-xs font-medium uppercase tracking-[0.22em] text-amber-200/80">
+          Admin
+        </div>
+        <h1 className="mt-3 text-3xl font-semibold text-white">
+          Subscription Requests
         </h1>
-        <p className="mt-2 text-sm text-gray-600">
+        <p className="mt-2 text-sm text-white/68">
           Interne Venaris-Ansicht für offene Plananfragen. Zugriff nur für{" "}
           {VENARIS_ADMIN_EMAIL}.
         </p>
       </section>
 
-      <section className="rounded-2xl border bg-white p-6 shadow-sm">
+      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <StatCard
+          title="Open Requests"
+          value={openRequests.length}
+          subline="aktuell offen"
+        />
+        <StatCard
+          title="Recent Decisions"
+          value={recentRequests.length}
+          subline="letzte Bearbeitungen"
+        />
+        <StatCard
+          title="Admin Access"
+          value="Restricted"
+          subline="nur definierter Venaris-Admin"
+        />
+        <StatCard
+          title="Scope"
+          value="Commercial"
+          subline="Planwechsel und Freigaben"
+        />
+      </section>
+
+      <section className="rounded-[28px] border border-white/10 bg-white/5 p-6 backdrop-blur-sm">
         <div className="flex items-center justify-between gap-4">
           <div>
-            <h2 className="text-lg font-medium">Offene Anfragen</h2>
-            <p className="mt-1 text-sm text-gray-600">
+            <h2 className="text-lg font-medium text-white">Offene Anfragen</h2>
+            <p className="mt-1 text-sm text-white/65">
               Diese Anfragen können genehmigt oder abgelehnt werden.
             </p>
           </div>
-          <div className="text-sm text-gray-500">{openRequests.length} offen</div>
+          <div className="text-sm text-white/50">{openRequests.length} offen</div>
         </div>
 
         <div className="mt-6 space-y-4">
           {openRequests.length === 0 ? (
-            <div className="rounded-2xl border bg-gray-50 p-5 text-sm text-gray-600">
+            <div className="rounded-[24px] border border-white/10 bg-white/5 p-5 text-sm text-white/68">
               Aktuell gibt es keine offenen Plananfragen.
             </div>
           ) : (
             openRequests.map((request) => (
               <div
                 key={request.id}
-                className="rounded-2xl border bg-gray-50 p-5"
+                className="rounded-[24px] border border-white/10 bg-white/5 p-5"
               >
                 <div className="flex flex-wrap items-start justify-between gap-4">
                   <div>
-                    <div className="text-base font-semibold text-gray-900">
+                    <div className="text-base font-semibold text-white">
                       {request.organization?.name ?? "Unbekannte Organization"}
                     </div>
-                    <div className="mt-1 text-sm text-gray-600">
+                    <div className="mt-1 text-sm text-white/60">
                       {request.organization?.slug ?? "—"} ·{" "}
                       {planLabel(request.current_plan_key)} →{" "}
                       {planLabel(request.requested_plan_key)} ·{" "}
@@ -238,24 +282,24 @@ export default async function AdminSubscriptionsPage() {
                 </div>
 
                 <div className="mt-4 grid gap-3 md:grid-cols-2">
-                  <div className="text-sm text-gray-700">
+                  <div className="text-sm text-white/72">
                     <div>
-                      <span className="font-medium">Angelegt:</span>{" "}
+                      <span className="font-medium text-white">Angelegt:</span>{" "}
                       {formatDateTime(request.created_at)}
                     </div>
                     <div className="mt-1 break-all">
-                      <span className="font-medium">Request ID:</span>{" "}
+                      <span className="font-medium text-white">Request ID:</span>{" "}
                       {request.id}
                     </div>
                     <div className="mt-1 break-all">
-                      <span className="font-medium">Anfragender User:</span>{" "}
+                      <span className="font-medium text-white">Anfragender User:</span>{" "}
                       {request.requested_by_user_id}
                     </div>
                   </div>
 
-                  <div className="text-sm text-gray-700">
+                  <div className="text-sm text-white/72">
                     <div>
-                      <span className="font-medium">Nachricht:</span>{" "}
+                      <span className="font-medium text-white">Nachricht:</span>{" "}
                       {request.message?.trim() || "—"}
                     </div>
                   </div>
@@ -270,31 +314,31 @@ export default async function AdminSubscriptionsPage() {
         </div>
       </section>
 
-      <section className="rounded-2xl border bg-white p-6 shadow-sm">
+      <section className="rounded-[28px] border border-white/10 bg-white/5 p-6 backdrop-blur-sm">
         <div>
-          <h2 className="text-lg font-medium">Zuletzt bearbeitet</h2>
-          <p className="mt-1 text-sm text-gray-600">
+          <h2 className="text-lg font-medium text-white">Zuletzt bearbeitet</h2>
+          <p className="mt-1 text-sm text-white/65">
             Die letzten genehmigten oder abgelehnten Anfragen.
           </p>
         </div>
 
         <div className="mt-6 space-y-4">
           {recentRequests.length === 0 ? (
-            <div className="rounded-2xl border bg-gray-50 p-5 text-sm text-gray-600">
+            <div className="rounded-[24px] border border-white/10 bg-white/5 p-5 text-sm text-white/68">
               Noch keine bearbeiteten Plananfragen vorhanden.
             </div>
           ) : (
             recentRequests.map((request) => (
               <div
                 key={request.id}
-                className="rounded-2xl border bg-gray-50 p-5"
+                className="rounded-[24px] border border-white/10 bg-white/5 p-5"
               >
                 <div className="flex flex-wrap items-start justify-between gap-4">
                   <div>
-                    <div className="text-base font-semibold text-gray-900">
+                    <div className="text-base font-semibold text-white">
                       {request.organization?.name ?? "Unbekannte Organization"}
                     </div>
-                    <div className="mt-1 text-sm text-gray-600">
+                    <div className="mt-1 text-sm text-white/60">
                       {request.organization?.slug ?? "—"} ·{" "}
                       {planLabel(request.current_plan_key)} →{" "}
                       {planLabel(request.requested_plan_key)} ·{" "}
@@ -311,25 +355,25 @@ export default async function AdminSubscriptionsPage() {
                   </span>
                 </div>
 
-                <div className="mt-4 grid gap-3 text-sm text-gray-700 md:grid-cols-2">
+                <div className="mt-4 grid gap-3 text-sm text-white/72 md:grid-cols-2">
                   <div>
                     <div>
-                      <span className="font-medium">Angelegt:</span>{" "}
+                      <span className="font-medium text-white">Angelegt:</span>{" "}
                       {formatDateTime(request.created_at)}
                     </div>
                     <div className="mt-1">
-                      <span className="font-medium">Bearbeitet:</span>{" "}
+                      <span className="font-medium text-white">Bearbeitet:</span>{" "}
                       {formatDateTime(request.processed_at)}
                     </div>
                   </div>
 
                   <div>
                     <div>
-                      <span className="font-medium">Nachricht:</span>{" "}
+                      <span className="font-medium text-white">Nachricht:</span>{" "}
                       {request.message?.trim() || "—"}
                     </div>
                     <div className="mt-1">
-                      <span className="font-medium">Notiz:</span>{" "}
+                      <span className="font-medium text-white">Notiz:</span>{" "}
                       {request.resolution_note?.trim() || "—"}
                     </div>
                   </div>

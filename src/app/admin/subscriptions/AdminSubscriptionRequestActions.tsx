@@ -1,4 +1,4 @@
-// src/app/admin/subscriptions/AdminSubscriptionRequestActions.tsx #1
+// src/app/admin/subscriptions/AdminSubscriptionRequestActions.tsx #2
 "use client";
 
 import { useState } from "react";
@@ -55,7 +55,7 @@ export default function AdminSubscriptionRequestActions({
   return (
     <div className="space-y-3">
       {error ? (
-        <div className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800">
+        <div className="rounded-[18px] border border-rose-300/20 bg-rose-300/10 px-3 py-2 text-sm text-rose-100">
           {error}
         </div>
       ) : null}
@@ -67,7 +67,7 @@ export default function AdminSubscriptionRequestActions({
           onClick={() =>
             runAction("approve", "Approved manually by Venaris admin")
           }
-          className="inline-flex rounded-md bg-black px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+          className="inline-flex rounded-full border border-amber-300/20 bg-[#c9952e] px-4 py-2 text-sm font-medium text-[#102018] hover:bg-[#ddb055] disabled:opacity-50"
         >
           {loading === "approve" ? "Genehmigt..." : "Genehmigen"}
         </button>
@@ -78,7 +78,7 @@ export default function AdminSubscriptionRequestActions({
           onClick={() =>
             runAction("reject", "Rejected manually by Venaris admin")
           }
-          className="inline-flex rounded-md border px-4 py-2 text-sm hover:bg-gray-100 disabled:opacity-50"
+          className="inline-flex rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-white/80 hover:bg-white/8 disabled:opacity-50"
         >
           {loading === "reject" ? "Abgelehnt..." : "Ablehnen"}
         </button>

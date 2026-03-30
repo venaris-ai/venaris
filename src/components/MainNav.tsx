@@ -1,4 +1,4 @@
-// src/components/MainNav.tsx #2
+// src/components/MainNav.tsx #3
 import Link from "next/link";
 import {
   MAIN_NAV_ITEMS,
@@ -25,7 +25,7 @@ export default async function MainNav() {
         <Link
           key={item.href}
           href={item.href}
-          className="rounded-md border px-3 py-1 bg-white text-black hover:bg-gray-100"
+          className="rounded-full border border-white/10 bg-white/5 px-3.5 py-1.5 text-white/78 backdrop-blur-sm hover:border-amber-300/20 hover:bg-white/8 hover:text-white"
         >
           {item.label}
         </Link>

@@ -1,4 +1,4 @@
-// src/components/RevierScopeSelect.tsx
+// src/components/RevierScopeSelect.tsx #2
 "use client";
 
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
@@ -28,11 +28,17 @@ export default function RevierScopeSelect({ reviers, value }: Props) {
     <select
       value={value}
       onChange={(e) => handleChange(e.target.value)}
-      className="bg-transparent px-0 py-0 text-xs text-black outline-none"
+      className="bg-transparent px-0 py-0 text-xs text-white outline-none"
     >
-      <option value="all">All Reviers</option>
+      <option value="all" className="bg-[#102018] text-white">
+        All Reviers
+      </option>
       {reviers.map((revier) => (
-        <option key={revier.id} value={revier.id}>
+        <option
+          key={revier.id}
+          value={revier.id}
+          className="bg-[#102018] text-white"
+        >
           {revier.name}
         </option>
       ))}

@@ -1,4 +1,4 @@
-// src/components/SectionNav.tsx #3
+// src/components/SectionNav.tsx #4
 "use client";
 
 import Link from "next/link";
@@ -56,10 +56,10 @@ export default function SectionNav({ role, email }: Props) {
           <Link
             key={item.href}
             href={item.href}
-            className={`rounded-md border px-2.5 py-1 text-xs ${
+            className={`rounded-full border px-3 py-1.5 text-xs backdrop-blur-sm ${
               active
-                ? "border-black bg-black text-white"
-                : "bg-white text-black hover:bg-gray-100"
+                ? "border-amber-300/30 bg-[#c9952e] text-[#102018] shadow-[0_8px_24px_rgba(201,149,46,0.22)]"
+                : "border-white/10 bg-white/5 text-white/72 hover:border-amber-300/20 hover:bg-white/8 hover:text-white"
             }`}
           >
             {item.label}

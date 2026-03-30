@@ -1,4 +1,4 @@
-// src/app/cameras/health/page.tsx #6
+// src/app/cameras/health/page.tsx #7
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
@@ -354,19 +354,37 @@ async function removeCamera(formData: FormData) {
 function HealthBadge({ status }: { status: string }) {
   const className =
     status === "online"
-      ? "border-green-200 bg-green-50 text-green-800"
+      ? "border-emerald-300/25 bg-emerald-300/10 text-emerald-200"
       : status === "stale"
-      ? "border-yellow-200 bg-yellow-50 text-yellow-800"
-      : status === "offline"
-      ? "border-red-200 bg-red-50 text-red-800"
-      : "border-gray-200 bg-gray-50 text-gray-700";
+        ? "border-amber-300/25 bg-amber-300/10 text-amber-200"
+        : status === "offline"
+          ? "border-rose-300/25 bg-rose-300/10 text-rose-200"
+          : "border-white/10 bg-white/5 text-white/72";
 
   return (
     <span
-      className={`inline-flex rounded-full border px-2 py-0.5 text-xs font-medium ${className}`}
+      className={`inline-flex rounded-full border px-2.5 py-0.5 text-xs font-medium ${className}`}
     >
       {formatHealthLabel(status)}
     </span>
+  );
+}
+
+function StatCard({
+  title,
+  value,
+  text,
+}: {
+  title: string;
+  value: number;
+  text: string;
+}) {
+  return (
+    <div className="rounded-[28px] border border-white/10 bg-white/5 p-6 backdrop-blur-sm">
+      <div className="text-sm text-white/50">{title}</div>
+      <div className="mt-2 text-3xl font-semibold text-white">{value}</div>
+      <p className="mt-2 text-sm text-white/68">{text}</p>
+    </div>
   );
 }
 
@@ -394,14 +412,19 @@ export default async function CamerasHealthPage(props: {
   if (!activeOrganization) {
     return (
       <main className="space-y-8">
-        <section>
-          <h1 className="text-3xl font-semibold tracking-tight">Camera Health</h1>
-          <p className="mt-2 max-w-3xl text-sm text-gray-600">
+        <section className="rounded-[32px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(201,149,46,0.16),transparent_24%),linear-gradient(135deg,rgba(255,255,255,0.06),rgba(255,255,255,0.03))] p-6 backdrop-blur-sm">
+          <div className="text-xs font-medium uppercase tracking-[0.22em] text-amber-200/80">
+            Camera Health
+          </div>
+          <h1 className="mt-3 text-3xl font-semibold tracking-tight text-white">
+            Camera Health
+          </h1>
+          <p className="mt-2 max-w-3xl text-sm text-white/68">
             Überwache hier die Kameras der aktiven Organisation im aktuellen
             Revier-Scope.
           </p>
         </section>
-        <div className="rounded-xl border bg-white p-4 text-sm text-red-600">
+        <div className="rounded-[24px] border border-rose-300/20 bg-rose-300/10 p-4 text-sm text-rose-100">
           Active organization not found.
         </div>
       </main>
@@ -420,14 +443,19 @@ export default async function CamerasHealthPage(props: {
   if (reviersError) {
     return (
       <main className="space-y-8">
-        <section>
-          <h1 className="text-3xl font-semibold tracking-tight">Camera Health</h1>
-          <p className="mt-2 max-w-3xl text-sm text-gray-600">
+        <section className="rounded-[32px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(201,149,46,0.16),transparent_24%),linear-gradient(135deg,rgba(255,255,255,0.06),rgba(255,255,255,0.03))] p-6 backdrop-blur-sm">
+          <div className="text-xs font-medium uppercase tracking-[0.22em] text-amber-200/80">
+            Camera Health
+          </div>
+          <h1 className="mt-3 text-3xl font-semibold tracking-tight text-white">
+            Camera Health
+          </h1>
+          <p className="mt-2 max-w-3xl text-sm text-white/68">
             Überwache hier die Kameras der aktiven Organisation im aktuellen
             Revier-Scope.
           </p>
         </section>
-        <div className="rounded-xl border bg-white p-4 text-sm text-red-600">
+        <div className="rounded-[24px] border border-rose-300/20 bg-rose-300/10 p-4 text-sm text-rose-100">
           Fehler beim Laden der Reviere: {reviersError.message}
         </div>
       </main>
@@ -442,17 +470,34 @@ export default async function CamerasHealthPage(props: {
   const revierScope = resolveRevierScope(rawRevier, allowedReviers);
   const allowedRevierIds = allowedReviers.map((revier) => revier.id);
 
+  const scopeLabel =
+    revierScope.type === "single"
+      ? reviers.find((r) => r.id === revierScope.revierId)?.name ?? "Ein Revier"
+      : "Alle aktiven Reviere";
+
   if (allowedRevierIds.length === 0) {
     return (
       <main className="space-y-8">
-        <section>
-          <h1 className="text-3xl font-semibold tracking-tight">Camera Health</h1>
-          <p className="mt-2 max-w-3xl text-sm text-gray-600">
-            Überwache hier die Kameras der aktiven Organisation im aktuellen
-            Revier-Scope.
-          </p>
+        <section className="rounded-[32px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(201,149,46,0.16),transparent_24%),linear-gradient(135deg,rgba(255,255,255,0.06),rgba(255,255,255,0.03))] p-6 backdrop-blur-sm">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <div className="text-xs font-medium uppercase tracking-[0.22em] text-amber-200/80">
+                Camera Health
+              </div>
+              <h1 className="mt-3 text-3xl font-semibold tracking-tight text-white">
+                Camera Health
+              </h1>
+              <p className="mt-2 max-w-3xl text-sm text-white/68">
+                Überwache hier die Kameras der aktiven Organisation im aktuellen
+                Revier-Scope.
+              </p>
+            </div>
+            <div className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-white/72">
+              {scopeLabel}
+            </div>
+          </div>
         </section>
-        <div className="rounded-xl border bg-white p-4 text-sm text-gray-600">
+        <div className="rounded-[24px] border border-white/10 bg-white/5 p-4 text-sm text-white/68">
           Für die aktive Organisation sind derzeit keine aktiven Reviere vorhanden.
         </div>
       </main>
@@ -475,14 +520,19 @@ export default async function CamerasHealthPage(props: {
   if (camerasError) {
     return (
       <main className="space-y-8">
-        <section>
-          <h1 className="text-3xl font-semibold tracking-tight">Camera Health</h1>
-          <p className="mt-2 max-w-3xl text-sm text-gray-600">
+        <section className="rounded-[32px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(201,149,46,0.16),transparent_24%),linear-gradient(135deg,rgba(255,255,255,0.06),rgba(255,255,255,0.03))] p-6 backdrop-blur-sm">
+          <div className="text-xs font-medium uppercase tracking-[0.22em] text-amber-200/80">
+            Camera Health
+          </div>
+          <h1 className="mt-3 text-3xl font-semibold tracking-tight text-white">
+            Camera Health
+          </h1>
+          <p className="mt-2 max-w-3xl text-sm text-white/68">
             Überwache hier die Kameras der aktiven Organisation im aktuellen
             Revier-Scope.
           </p>
         </section>
-        <div className="rounded-xl border bg-white p-4 text-sm text-red-600">
+        <div className="rounded-[24px] border border-rose-300/20 bg-rose-300/10 p-4 text-sm text-rose-100">
           Fehler beim Laden der Kameras: {camerasError.message}
         </div>
       </main>
@@ -495,46 +545,60 @@ export default async function CamerasHealthPage(props: {
   if (cameraIds.length === 0) {
     return (
       <main className="space-y-8">
-        <section>
-          <h1 className="text-3xl font-semibold tracking-tight">Camera Health</h1>
-          <p className="mt-2 max-w-3xl text-sm text-gray-600">
-            Überwache hier die Kameras der aktiven Organisation im aktuellen
-            Revier-Scope.
-          </p>
+        <section className="rounded-[32px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(201,149,46,0.16),transparent_24%),linear-gradient(135deg,rgba(255,255,255,0.06),rgba(255,255,255,0.03))] p-6 backdrop-blur-sm">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <div className="text-xs font-medium uppercase tracking-[0.22em] text-amber-200/80">
+                Camera Health
+              </div>
+              <h1 className="mt-3 text-3xl font-semibold tracking-tight text-white">
+                Camera Health
+              </h1>
+              <p className="mt-2 max-w-3xl text-sm text-white/68">
+                Überwache hier die Kameras der aktiven Organisation im aktuellen
+                Revier-Scope.
+              </p>
+            </div>
+            <div className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-white/72">
+              {scopeLabel}
+            </div>
+          </div>
         </section>
 
         {changed ? (
-          <section className="rounded-2xl border border-green-200 bg-green-50 p-4">
-            <p className="text-sm text-green-800">Kamera-Status wurde gespeichert.</p>
+          <section className="rounded-[24px] border border-emerald-300/20 bg-emerald-300/10 p-4">
+            <p className="text-sm text-emerald-100">Kamera-Status wurde gespeichert.</p>
           </section>
         ) : null}
 
         {removed ? (
-          <section className="rounded-2xl border border-green-200 bg-green-50 p-4">
-            <p className="text-sm text-green-800">Kamera wurde dauerhaft entfernt.</p>
+          <section className="rounded-[24px] border border-emerald-300/20 bg-emerald-300/10 p-4">
+            <p className="text-sm text-emerald-100">Kamera wurde dauerhaft entfernt.</p>
           </section>
         ) : null}
 
-        <section className="rounded-2xl border bg-white shadow-sm">
-          <div className="flex items-center justify-between border-b px-6 py-4">
+        <section className="rounded-[28px] border border-white/10 bg-white/5 backdrop-blur-sm">
+          <div className="flex items-center justify-between border-b border-white/8 px-6 py-4">
             <div>
-              <h2 className="text-lg font-medium">Kameraliste</h2>
-              <p className="mt-1 text-sm text-gray-600">
+              <h2 className="text-lg font-medium text-white">Kameraliste</h2>
+              <p className="mt-1 text-sm text-white/65">
                 Sichtbare Kameras der aktiven Organisation im gültigen Revier-Scope.
               </p>
             </div>
             <Link
               href="/cameras/new"
-              className="rounded-md border px-3 py-2 text-sm hover:bg-gray-50"
+              className="rounded-full border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/78 hover:border-amber-300/20 hover:bg-white/8 hover:text-white"
             >
               Kamera hinzufügen
             </Link>
           </div>
 
           <div className="px-6 py-10">
-            <div className="rounded-2xl border border-dashed bg-gray-50 p-8">
-              <h3 className="text-base font-medium">Keine Kameras im aktuellen Scope</h3>
-              <p className="mt-2 max-w-2xl text-sm leading-6 text-gray-600">
+            <div className="rounded-[24px] border border-dashed border-white/10 bg-white/5 p-8">
+              <h3 className="text-base font-medium text-white">
+                Keine Kameras im aktuellen Scope
+              </h3>
+              <p className="mt-2 max-w-2xl text-sm leading-6 text-white/68">
                 Für den aktuellen Revier-Scope sind keine Kameras vorhanden.
               </p>
             </div>
@@ -554,14 +618,19 @@ export default async function CamerasHealthPage(props: {
   if (healthError) {
     return (
       <main className="space-y-8">
-        <section>
-          <h1 className="text-3xl font-semibold tracking-tight">Camera Health</h1>
-          <p className="mt-2 max-w-3xl text-sm text-gray-600">
+        <section className="rounded-[32px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(201,149,46,0.16),transparent_24%),linear-gradient(135deg,rgba(255,255,255,0.06),rgba(255,255,255,0.03))] p-6 backdrop-blur-sm">
+          <div className="text-xs font-medium uppercase tracking-[0.22em] text-amber-200/80">
+            Camera Health
+          </div>
+          <h1 className="mt-3 text-3xl font-semibold tracking-tight text-white">
+            Camera Health
+          </h1>
+          <p className="mt-2 max-w-3xl text-sm text-white/68">
             Überwache hier die Kameras der aktiven Organisation im aktuellen
             Revier-Scope.
           </p>
         </section>
-        <div className="rounded-xl border bg-white p-4 text-sm text-red-600">
+        <div className="rounded-[24px] border border-rose-300/20 bg-rose-300/10 p-4 text-sm text-rose-100">
           Fehler beim Laden des Kamera-Health-Status: {healthError.message}
         </div>
       </main>
@@ -606,72 +675,73 @@ export default async function CamerasHealthPage(props: {
 
   return (
     <main className="space-y-8">
-      <section>
-        <h1 className="text-3xl font-semibold tracking-tight">Camera Health</h1>
-        <p className="mt-2 max-w-3xl text-sm text-gray-600">
-          Überwache hier die Kameras der aktiven Organisation im aktuellen
-          Revier-Scope.
-        </p>
+      <section className="rounded-[32px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(201,149,46,0.16),transparent_24%),linear-gradient(135deg,rgba(255,255,255,0.06),rgba(255,255,255,0.03))] p-6 backdrop-blur-sm">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <div className="text-xs font-medium uppercase tracking-[0.22em] text-amber-200/80">
+              Camera Health
+            </div>
+            <h1 className="mt-3 text-3xl font-semibold tracking-tight text-white">
+              Camera Health
+            </h1>
+            <p className="mt-2 max-w-3xl text-sm text-white/68">
+              Überwache hier die Kameras der aktiven Organisation im aktuellen
+              Revier-Scope.
+            </p>
+          </div>
+          <div className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-white/72">
+            {scopeLabel}
+          </div>
+        </div>
       </section>
 
       {changed ? (
-        <section className="rounded-2xl border border-green-200 bg-green-50 p-4">
-          <p className="text-sm text-green-800">Kamera-Status wurde gespeichert.</p>
+        <section className="rounded-[24px] border border-emerald-300/20 bg-emerald-300/10 p-4">
+          <p className="text-sm text-emerald-100">Kamera-Status wurde gespeichert.</p>
         </section>
       ) : null}
 
       {removed ? (
-        <section className="rounded-2xl border border-green-200 bg-green-50 p-4">
-          <p className="text-sm text-green-800">Kamera wurde dauerhaft entfernt.</p>
+        <section className="rounded-[24px] border border-emerald-300/20 bg-emerald-300/10 p-4">
+          <p className="text-sm text-emerald-100">Kamera wurde dauerhaft entfernt.</p>
         </section>
       ) : null}
 
       <section className="grid gap-4 md:grid-cols-4">
-        <div className="rounded-2xl border bg-white p-6 shadow-sm">
-          <div className="text-sm text-gray-500">Online</div>
-          <div className="mt-2 text-3xl font-semibold">{onlineCount}</div>
-          <p className="mt-2 text-sm text-gray-600">
-            Kameras mit aktuellem Lebenszeichen innerhalb des Online-Fensters.
-          </p>
-        </div>
-
-        <div className="rounded-2xl border bg-white p-6 shadow-sm">
-          <div className="text-sm text-gray-500">Stale</div>
-          <div className="mt-2 text-3xl font-semibold">{staleCount}</div>
-          <p className="mt-2 text-sm text-gray-600">
-            Kameras mit verspätetem, aber noch nicht kritischem Status.
-          </p>
-        </div>
-
-        <div className="rounded-2xl border bg-white p-6 shadow-sm">
-          <div className="text-sm text-gray-500">Offline</div>
-          <div className="mt-2 text-3xl font-semibold">{offlineCount}</div>
-          <p className="mt-2 text-sm text-gray-600">
-            Kameras ohne Lebenszeichen jenseits des Offline-Fensters.
-          </p>
-        </div>
-
-        <div className="rounded-2xl border bg-white p-6 shadow-sm">
-          <div className="text-sm text-gray-500">Unknown</div>
-          <div className="mt-2 text-3xl font-semibold">{unknownCount}</div>
-          <p className="mt-2 text-sm text-gray-600">
-            Kameras ohne verwertbares letztes Lebenszeichen.
-          </p>
-        </div>
+        <StatCard
+          title="Online"
+          value={onlineCount}
+          text="Kameras mit aktuellem Lebenszeichen innerhalb des Online-Fensters."
+        />
+        <StatCard
+          title="Stale"
+          value={staleCount}
+          text="Kameras mit verspätetem, aber noch nicht kritischem Status."
+        />
+        <StatCard
+          title="Offline"
+          value={offlineCount}
+          text="Kameras ohne Lebenszeichen jenseits des Offline-Fensters."
+        />
+        <StatCard
+          title="Unknown"
+          value={unknownCount}
+          text="Kameras ohne verwertbares letztes Lebenszeichen."
+        />
       </section>
 
-      <section className="rounded-2xl border bg-white shadow-sm">
-        <div className="flex items-center justify-between border-b px-6 py-4">
+      <section className="rounded-[28px] border border-white/10 bg-white/5 backdrop-blur-sm">
+        <div className="flex items-center justify-between border-b border-white/8 px-6 py-4">
           <div>
-            <h2 className="text-lg font-medium">Kameraliste</h2>
-            <p className="mt-1 text-sm text-gray-600">
+            <h2 className="text-lg font-medium text-white">Kameraliste</h2>
+            <p className="mt-1 text-sm text-white/65">
               Sichtbare Kameras der aktiven Organisation im gültigen Revier-Scope.
             </p>
           </div>
 
           <Link
             href="/cameras/new"
-            className="rounded-md border px-3 py-2 text-sm hover:bg-gray-50"
+            className="rounded-full border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/78 hover:border-amber-300/20 hover:bg-white/8 hover:text-white"
           >
             Kamera hinzufügen
           </Link>
@@ -679,7 +749,7 @@ export default async function CamerasHealthPage(props: {
 
         <div className="overflow-x-auto">
           <table className="min-w-full text-sm">
-            <thead className="bg-gray-50 text-left text-gray-600">
+            <thead className="bg-white/5 text-left text-white/55">
               <tr>
                 <th className="px-6 py-3 font-medium whitespace-nowrap">Kamera</th>
                 <th className="px-6 py-3 font-medium whitespace-nowrap">Revier</th>
@@ -695,16 +765,16 @@ export default async function CamerasHealthPage(props: {
 
             <tbody>
               {rows.map((row) => (
-                <tr key={row.id} className="border-t align-middle">
-                  <td className="px-6 py-4 font-medium text-gray-900 whitespace-nowrap">
+                <tr key={row.id} className="border-t border-white/8 align-middle">
+                  <td className="px-6 py-4 font-medium text-white whitespace-nowrap">
                     {row.name}
                   </td>
 
-                  <td className="px-6 py-4 text-gray-600 whitespace-nowrap">
+                  <td className="px-6 py-4 text-white/68 whitespace-nowrap">
                     {row.revier_name}
                   </td>
 
-                  <td className="px-6 py-4 text-gray-600 whitespace-nowrap">
+                  <td className="px-6 py-4 text-white/68 whitespace-nowrap">
                     {formatMethod(row.import_method)}
                   </td>
 
@@ -720,21 +790,16 @@ export default async function CamerasHealthPage(props: {
                     saveAction={saveCameraStatus}
                   />
 
-                  <td className="px-6 py-4 text-gray-600 whitespace-nowrap">
+                  <td className="px-6 py-4 text-white/68 whitespace-nowrap">
                     {formatAgo(row.last_seen_at)}
                   </td>
 
-<CameraRowActions
-  cameraId={row.id}
-  canManage={canManageCameras}
-  removeAction={removeCamera}
-  returnRevier={rawRevier ?? ""}
-/>
-
-
-
-
-
+                  <CameraRowActions
+                    cameraId={row.id}
+                    canManage={canManageCameras}
+                    removeAction={removeCamera}
+                    returnRevier={rawRevier ?? ""}
+                  />
                 </tr>
               ))}
             </tbody>
@@ -742,7 +807,7 @@ export default async function CamerasHealthPage(props: {
         </div>
 
         {healthRuleHint ? (
-          <div className="border-t px-6 py-3 text-xs text-gray-500">
+          <div className="border-t border-white/8 px-6 py-3 text-xs text-white/45">
             * Health-Regeln im aktuellen Scope: {healthRuleHint}
           </div>
         ) : null}

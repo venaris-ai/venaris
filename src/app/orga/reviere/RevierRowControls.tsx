@@ -1,4 +1,4 @@
-// src/app/orga/reviere/RevierRowControls.tsx #2
+// src/app/orga/reviere/RevierRowControls.tsx #3
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
@@ -56,34 +56,40 @@ export default function RevierRowControls({
           <input
             value={name}
             onChange={(e) => setName(e.target.value)}
-            className="w-full min-w-[220px] rounded-md border px-2.5 py-1.5 text-sm"
+            className="w-full min-w-[220px] rounded-[10px] border border-white/10 bg-white/5 px-2.5 py-1.5 text-sm text-white outline-none placeholder:text-white/35"
             aria-label="Reviername"
           />
         </form>
       </td>
 
-      <td className="px-6 py-4 text-gray-600 whitespace-nowrap">
+      <td className="px-6 py-4 text-white/68 whitespace-nowrap">
         <input
           type="number"
           min={1}
           step={1}
           value={areaHa}
           onChange={(e) => setAreaHa(e.target.value)}
-          className="w-24 rounded-md border px-2.5 py-1.5 text-sm"
+          className="w-24 rounded-[10px] border border-white/10 bg-white/5 px-2.5 py-1.5 text-sm text-white outline-none"
           aria-label="Fläche in ha"
         />
       </td>
 
-      <td className="px-6 py-4 text-gray-600 whitespace-nowrap">
+      <td className="px-6 py-4 text-white/68 whitespace-nowrap">
         <select
           value={status}
           onChange={(e) => setStatus(e.target.value as RevierStatus)}
-          className="rounded-md border px-2.5 py-1.5 text-sm"
+          className="rounded-[10px] border border-white/10 bg-white/5 px-2.5 py-1.5 text-sm text-white outline-none"
           aria-label="Status"
         >
-          <option value="active">Active</option>
-          <option value="paused">Paused</option>
-          <option value="archived">Archived</option>
+          <option value="active" className="bg-[#102018] text-white">
+            Active
+          </option>
+          <option value="paused" className="bg-[#102018] text-white">
+            Paused
+          </option>
+          <option value="archived" className="bg-[#102018] text-white">
+            Archived
+          </option>
         </select>
       </td>
     </>

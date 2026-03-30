@@ -1,4 +1,4 @@
-// src/app/cameras/new/CreateCameraForm.tsx #6
+// src/app/cameras/new/CreateCameraForm.tsx #7
 "use client";
 
 import { useMemo, useState } from "react";
@@ -86,20 +86,20 @@ function copyText(value: string) {
 function badgeTone(allowed: boolean) {
   return allowed
     ? {
-        wrap: "border-blue-200 bg-blue-50",
-        title: "text-blue-900",
-        text: "text-blue-900/80",
-        hint: "text-blue-900/70",
-        pill: "border-blue-300 bg-white text-blue-900",
-        bar: "bg-blue-700",
+        wrap: "border-sky-300/20 bg-sky-300/10",
+        title: "text-sky-100",
+        text: "text-sky-100/85",
+        hint: "text-sky-100/70",
+        pill: "border-sky-300/25 bg-white/5 text-sky-100",
+        bar: "bg-sky-300",
       }
     : {
-        wrap: "border-red-200 bg-red-50",
-        title: "text-red-900",
-        text: "text-red-800",
-        hint: "text-red-700",
-        pill: "border-red-300 bg-white text-red-900",
-        bar: "bg-red-600",
+        wrap: "border-rose-300/20 bg-rose-300/10",
+        title: "text-rose-100",
+        text: "text-rose-100/85",
+        hint: "text-rose-100/70",
+        pill: "border-rose-300/25 bg-white/5 text-rose-100",
+        bar: "bg-rose-300",
       };
 }
 
@@ -258,7 +258,7 @@ export default function CreateCameraForm({
 
   return (
     <div className="space-y-6">
-      <section className={`rounded-2xl border p-5 shadow-sm ${tone.wrap}`}>
+      <section className={`rounded-[28px] border p-5 backdrop-blur-sm ${tone.wrap}`}>
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <h2 className={`text-base font-semibold ${tone.title}`}>Kamera-Nutzung</h2>
@@ -270,12 +270,12 @@ export default function CreateCameraForm({
             </p>
           </div>
 
-          <div className={`rounded-xl border px-3 py-2 text-sm font-medium ${tone.pill}`}>
+          <div className={`rounded-[14px] border px-3 py-2 text-sm font-medium ${tone.pill}`}>
             {currentCameraCount} / {maxCameras}
           </div>
         </div>
 
-        <div className="mt-4 h-2 rounded-full bg-white/70">
+        <div className="mt-4 h-2 rounded-full bg-white/10">
           <div
             className={`h-2 rounded-full ${tone.bar}`}
             style={{ width: `${usagePercent}%` }}
@@ -283,7 +283,7 @@ export default function CreateCameraForm({
         </div>
 
         {effectiveStatus !== rawStatus ? (
-          <p className="mt-3 text-xs text-red-700">
+          <p className="mt-3 text-xs text-rose-200">
             Hinweis: Der Trial ist fachlich bereits abgelaufen und wird effektiv als
             `expired` behandelt.
           </p>
@@ -292,22 +292,22 @@ export default function CreateCameraForm({
 
       <form
         onSubmit={onSubmit}
-        className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm"
+        className="rounded-[28px] border border-white/10 bg-white/5 p-6 backdrop-blur-sm"
       >
         <div className="grid gap-5 md:grid-cols-2">
           <div className="md:col-span-2">
-            <label className="mb-1 block text-sm font-medium">Organization</label>
-            <div className="w-full rounded-xl border border-neutral-200 bg-neutral-50 px-3 py-2 text-sm text-neutral-700">
+            <label className="mb-1 block text-sm font-medium text-white">Organization</label>
+            <div className="w-full rounded-[14px] border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/72">
               {organization.name} ({organization.slug})
             </div>
           </div>
 
           <div className="md:col-span-2">
-            <label className="mb-1 block text-sm font-medium">Camera Name</label>
+            <label className="mb-1 block text-sm font-medium text-white">Camera Name</label>
             <input
               value={cameraName}
               onChange={(e) => setCameraName(e.target.value)}
-              className="w-full rounded-xl border border-neutral-300 px-3 py-2"
+              className="w-full rounded-[14px] border border-white/10 bg-white/5 px-3 py-2 text-white outline-none placeholder:text-white/35"
               placeholder="e.g. Reolink North Edge"
               required
               disabled={!cameraPolicy.allowed}
@@ -315,16 +315,16 @@ export default function CreateCameraForm({
           </div>
 
           <div>
-            <label className="mb-1 block text-sm font-medium">Method</label>
+            <label className="mb-1 block text-sm font-medium text-white">Method</label>
             <select
               value={method}
               onChange={(e) => setMethod(e.target.value as "smtp" | "ftp" | "manual")}
-              className="w-full rounded-xl border border-neutral-300 px-3 py-2"
+              className="w-full rounded-[14px] border border-white/10 bg-white/5 px-3 py-2 text-white outline-none"
               required
               disabled={!cameraPolicy.allowed}
             >
               {METHODS.map((m) => (
-                <option key={m.value} value={m.value}>
+                <option key={m.value} value={m.value} className="bg-[#102018] text-white">
                   {m.label}
                 </option>
               ))}
@@ -332,16 +332,16 @@ export default function CreateCameraForm({
           </div>
 
           <div>
-            <label className="mb-1 block text-sm font-medium">Vendor</label>
+            <label className="mb-1 block text-sm font-medium text-white">Vendor</label>
             <select
               value={vendor}
               onChange={(e) => setVendor(e.target.value as (typeof VENDORS)[number])}
-              className="w-full rounded-xl border border-neutral-300 px-3 py-2"
+              className="w-full rounded-[14px] border border-white/10 bg-white/5 px-3 py-2 text-white outline-none"
               required
               disabled={!cameraPolicy.allowed}
             >
               {VENDORS.map((v) => (
-                <option key={v} value={v}>
+                <option key={v} value={v} className="bg-[#102018] text-white">
                   {v}
                 </option>
               ))}
@@ -349,16 +349,16 @@ export default function CreateCameraForm({
           </div>
 
           <div className="md:col-span-2">
-            <label className="mb-1 block text-sm font-medium">Revier</label>
+            <label className="mb-1 block text-sm font-medium text-white">Revier</label>
             <select
               value={revierId}
               onChange={(e) => setRevierId(e.target.value)}
-              className="w-full rounded-xl border border-neutral-300 px-3 py-2"
+              className="w-full rounded-[14px] border border-white/10 bg-white/5 px-3 py-2 text-white outline-none"
               required
               disabled={!cameraPolicy.allowed || filteredReviers.length === 0}
             >
               {filteredReviers.map((revier) => (
-                <option key={revier.id} value={revier.id}>
+                <option key={revier.id} value={revier.id} className="bg-[#102018] text-white">
                   {formatRevierLabel(revier)}
                 </option>
               ))}
@@ -366,44 +366,50 @@ export default function CreateCameraForm({
           </div>
 
           <div className="md:col-span-2">
-            <label className="mb-1 block text-sm font-medium">Location Name (optional)</label>
+            <label className="mb-1 block text-sm font-medium text-white">
+              Location Name (optional)
+            </label>
             <input
               value={locationName}
               onChange={(e) => setLocationName(e.target.value)}
-              className="w-full rounded-xl border border-neutral-300 px-3 py-2"
+              className="w-full rounded-[14px] border border-white/10 bg-white/5 px-3 py-2 text-white outline-none placeholder:text-white/35"
               placeholder="e.g. Forest edge west"
               disabled={!cameraPolicy.allowed}
             />
           </div>
 
           <div>
-            <label className="mb-1 block text-sm font-medium">Latitude (optional)</label>
+            <label className="mb-1 block text-sm font-medium text-white">
+              Latitude (optional)
+            </label>
             <input
               type="number"
               step="any"
               value={latitude}
               onChange={(e) => setLatitude(e.target.value)}
-              className="w-full rounded-xl border border-neutral-300 px-3 py-2"
+              className="w-full rounded-[14px] border border-white/10 bg-white/5 px-3 py-2 text-white outline-none placeholder:text-white/35"
               placeholder="52.123456"
               disabled={!cameraPolicy.allowed}
             />
           </div>
 
           <div>
-            <label className="mb-1 block text-sm font-medium">Longitude (optional)</label>
+            <label className="mb-1 block text-sm font-medium text-white">
+              Longitude (optional)
+            </label>
             <input
               type="number"
               step="any"
               value={longitude}
               onChange={(e) => setLongitude(e.target.value)}
-              className="w-full rounded-xl border border-neutral-300 px-3 py-2"
+              className="w-full rounded-[14px] border border-white/10 bg-white/5 px-3 py-2 text-white outline-none placeholder:text-white/35"
               placeholder="8.123456"
               disabled={!cameraPolicy.allowed}
             />
           </div>
 
           <div>
-            <label className="mb-1 block text-sm font-medium">
+            <label className="mb-1 block text-sm font-medium text-white">
               Direction (0–359, optional)
             </label>
             <input
@@ -413,18 +419,18 @@ export default function CreateCameraForm({
               step={1}
               value={directionDeg}
               onChange={(e) => setDirectionDeg(e.target.value)}
-              className="w-full rounded-xl border border-neutral-300 px-3 py-2"
+              className="w-full rounded-[14px] border border-white/10 bg-white/5 px-3 py-2 text-white outline-none placeholder:text-white/35"
               placeholder="180"
               disabled={!cameraPolicy.allowed}
             />
           </div>
 
           <div className="md:col-span-2">
-            <label className="mb-1 block text-sm font-medium">Notes (optional)</label>
+            <label className="mb-1 block text-sm font-medium text-white">Notes (optional)</label>
             <textarea
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
-              className="min-h-[100px] w-full rounded-xl border border-neutral-300 px-3 py-2"
+              className="min-h-[100px] w-full rounded-[14px] border border-white/10 bg-white/5 px-3 py-2 text-white outline-none placeholder:text-white/35"
               placeholder="Optional setup notes"
               disabled={!cameraPolicy.allowed}
             />
@@ -432,7 +438,7 @@ export default function CreateCameraForm({
         </div>
 
         {error ? (
-          <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+          <div className="mt-4 rounded-[14px] border border-rose-300/20 bg-rose-300/10 px-3 py-2 text-sm text-rose-100">
             {error}
           </div>
         ) : null}
@@ -441,37 +447,37 @@ export default function CreateCameraForm({
           <button
             type="submit"
             disabled={loading || !cameraPolicy.allowed || filteredReviers.length === 0}
-            className="rounded-xl bg-black px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+            className="rounded-[14px] bg-[#c9952e] px-4 py-2 text-sm font-medium text-[#102018] disabled:opacity-50"
           >
             {!cameraPolicy.allowed
               ? "Kameraanlage gesperrt"
               : loading
-              ? "Creating..."
-              : "Create Camera"}
+                ? "Creating..."
+                : "Create Camera"}
           </button>
         </div>
       </form>
 
       {camera ? (
-        <div className="space-y-5 rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
+        <div className="space-y-5 rounded-[28px] border border-white/10 bg-white/5 p-6 backdrop-blur-sm">
           <div>
-            <h2 className="text-lg font-semibold">Provisioning Result</h2>
-            <p className="mt-1 text-sm text-neutral-600">
+            <h2 className="text-lg font-semibold text-white">Provisioning Result</h2>
+            <p className="mt-1 text-sm text-white/68">
               The camera has been created successfully. Save the provisioning data now.
             </p>
           </div>
 
           {copyMsg ? (
-            <div className="rounded-xl border border-neutral-200 bg-neutral-50 px-3 py-2 text-sm text-neutral-700">
+            <div className="rounded-[14px] border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/72">
               {copyMsg}
             </div>
           ) : null}
 
-          <div className="space-y-3 rounded-2xl border border-neutral-200 bg-neutral-50 p-5">
+          <div className="space-y-3 rounded-[24px] border border-white/10 bg-white/5 p-5">
             <div className="flex items-start justify-between gap-3">
               <div>
-                <h3 className="text-base font-semibold">Core Provisioning</h3>
-                <p className="mt-1 text-sm text-neutral-600">
+                <h3 className="text-base font-semibold text-white">Core Provisioning</h3>
+                <p className="mt-1 text-sm text-white/68">
                   Basisdaten dieser Kamera für spätere Referenz.
                 </p>
               </div>
@@ -480,31 +486,31 @@ export default function CreateCameraForm({
                 onClick={() =>
                   handleCopy("Core provisioning", buildCoreProvisioningCopy(camera))
                 }
-                className="rounded-md border px-3 py-2 text-xs hover:bg-white"
+                className="rounded-[10px] border border-white/10 bg-white/5 px-3 py-2 text-xs text-white/78 hover:border-amber-300/20 hover:bg-white/8 hover:text-white"
               >
                 Copy block
               </button>
             </div>
 
-            <div className="grid gap-2 text-sm">
+            <div className="grid gap-2 text-sm text-white/78">
               <div>
-                <span className="font-medium">Camera ID:</span> {camera.id}
+                <span className="font-medium text-white">Camera ID:</span> {camera.id}
               </div>
               <div>
-                <span className="font-medium">Technical Name:</span> {camera.technicalName}
+                <span className="font-medium text-white">Technical Name:</span> {camera.technicalName}
               </div>
               <div className="break-all">
-                <span className="font-medium">Ingest Token:</span> {camera.ingestToken}
+                <span className="font-medium text-white">Ingest Token:</span> {camera.ingestToken}
               </div>
             </div>
           </div>
 
           {ftpProvisioning ? (
-            <div className="space-y-4 rounded-2xl border border-neutral-200 bg-neutral-50 p-5">
+            <div className="space-y-4 rounded-[24px] border border-white/10 bg-white/5 p-5">
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <h3 className="text-base font-semibold">FTP Setup</h3>
-                  <p className="mt-1 text-sm text-neutral-600">
+                  <h3 className="text-base font-semibold text-white">FTP Setup</h3>
+                  <p className="mt-1 text-sm text-white/68">
                     Enter these values into the camera now. The password is shown only once.
                   </p>
                 </div>
@@ -513,34 +519,34 @@ export default function CreateCameraForm({
                   onClick={() =>
                     handleCopy("FTP setup", buildFtpProvisioningCopy(ftpProvisioning))
                   }
-                  className="rounded-md border px-3 py-2 text-xs hover:bg-white"
+                  className="rounded-[10px] border border-white/10 bg-white/5 px-3 py-2 text-xs text-white/78 hover:border-amber-300/20 hover:bg-white/8 hover:text-white"
                 >
                   Copy block
                 </button>
               </div>
 
-              <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+              <div className="rounded-[14px] border border-amber-300/20 bg-amber-300/10 px-3 py-2 text-sm text-amber-100">
                 Important: store the FTP password now. It will not be shown again after this page.
               </div>
 
-              <div className="grid gap-2 text-sm">
+              <div className="grid gap-2 text-sm text-white/78">
                 <div>
-                  <span className="font-medium">FTP Server:</span> {ftpProvisioning.host}
+                  <span className="font-medium text-white">FTP Server:</span> {ftpProvisioning.host}
                 </div>
                 <div>
-                  <span className="font-medium">FTP Port:</span> {ftpProvisioning.port}
+                  <span className="font-medium text-white">FTP Port:</span> {ftpProvisioning.port}
                 </div>
                 <div>
-                  <span className="font-medium">FTP Username:</span> {ftpProvisioning.username}
+                  <span className="font-medium text-white">FTP Username:</span> {ftpProvisioning.username}
                 </div>
-                <div className="rounded-xl border border-neutral-200 bg-white px-3 py-3">
+                <div className="rounded-[14px] border border-white/10 bg-white/5 px-3 py-3 text-white">
                   <span className="font-medium">FTP Password:</span> {ftpProvisioning.password}
                 </div>
                 <div>
-                  <span className="font-medium">Path:</span> {ftpProvisioning.path}
+                  <span className="font-medium text-white">Path:</span> {ftpProvisioning.path}
                 </div>
                 <div>
-                  <span className="font-medium">Passive Mode:</span>{" "}
+                  <span className="font-medium text-white">Passive Mode:</span>{" "}
                   {ftpProvisioning.passiveMode ? "Enabled" : "Disabled"}
                 </div>
               </div>
@@ -548,11 +554,11 @@ export default function CreateCameraForm({
           ) : null}
 
           {!ftpProvisioning && camera.routing.smtpAlias ? (
-            <div className="space-y-4 rounded-2xl border border-neutral-200 bg-neutral-50 p-5">
+            <div className="space-y-4 rounded-[24px] border border-white/10 bg-white/5 p-5">
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <h3 className="text-base font-semibold">SMTP Setup</h3>
-                  <p className="mt-1 text-sm text-neutral-600">
+                  <h3 className="text-base font-semibold text-white">SMTP Setup</h3>
+                  <p className="mt-1 text-sm text-white/68">
                     Use this e-mail address in the camera configuration.
                   </p>
                 </div>
@@ -566,26 +572,26 @@ export default function CreateCameraForm({
                         )
                       : undefined
                   }
-                  className="rounded-md border px-3 py-2 text-xs hover:bg-white"
+                  className="rounded-[10px] border border-white/10 bg-white/5 px-3 py-2 text-xs text-white/78 hover:border-amber-300/20 hover:bg-white/8 hover:text-white"
                 >
                   Copy block
                 </button>
               </div>
 
-              <div className="grid gap-2 text-sm">
+              <div className="grid gap-2 text-sm text-white/78">
                 <div>
-                  <span className="font-medium">SMTP Alias:</span> {camera.routing.smtpAlias}
+                  <span className="font-medium text-white">SMTP Alias:</span> {camera.routing.smtpAlias}
                 </div>
               </div>
             </div>
           ) : null}
 
           {!ftpProvisioning && camera.routing.manualLabel ? (
-            <div className="space-y-4 rounded-2xl border border-neutral-200 bg-neutral-50 p-5">
+            <div className="space-y-4 rounded-[24px] border border-white/10 bg-white/5 p-5">
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <h3 className="text-base font-semibold">Manual Import Setup</h3>
-                  <p className="mt-1 text-sm text-neutral-600">
+                  <h3 className="text-base font-semibold text-white">Manual Import Setup</h3>
+                  <p className="mt-1 text-sm text-white/68">
                     This camera is ready for manual uploads in the Import section.
                   </p>
                 </div>
@@ -599,15 +605,15 @@ export default function CreateCameraForm({
                         )
                       : undefined
                   }
-                  className="rounded-md border px-3 py-2 text-xs hover:bg-white"
+                  className="rounded-[10px] border border-white/10 bg-white/5 px-3 py-2 text-xs text-white/78 hover:border-amber-300/20 hover:bg-white/8 hover:text-white"
                 >
                   Copy block
                 </button>
               </div>
 
-              <div className="grid gap-2 text-sm">
+              <div className="grid gap-2 text-sm text-white/78">
                 <div>
-                  <span className="font-medium">Manual Label:</span> {camera.routing.manualLabel}
+                  <span className="font-medium text-white">Manual Label:</span> {camera.routing.manualLabel}
                 </div>
               </div>
             </div>

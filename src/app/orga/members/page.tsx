@@ -1,4 +1,4 @@
-// src/app/orga/members/page.tsx #13
+// src/app/orga/members/page.tsx #14
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
@@ -74,10 +74,6 @@ function formatDeliveryState(invite: InviteRow) {
   return "Not sent";
 }
 
-function isMemberRole(value: string): value is MemberRole {
-  return ["owner", "admin", "member", "viewer"].includes(value);
-}
-
 async function loadMemberForMutation(params: {
   organizationId: string;
   userId: string;
@@ -139,7 +135,7 @@ async function saveMemberChanges(formData: FormData) {
     throw new Error("Missing target user.");
   }
 
-  if (!isMemberRole(nextRoleRaw)) {
+  if (!["owner", "admin", "member", "viewer"].includes(nextRoleRaw)) {
     throw new Error("Invalid target role.");
   }
 
@@ -429,6 +425,24 @@ async function revokeInvite(formData: FormData) {
   redirect("/orga/members?revoked=1");
 }
 
+function StatCard({
+  title,
+  value,
+  text,
+}: {
+  title: string;
+  value: number;
+  text: string;
+}) {
+  return (
+    <div className="rounded-[28px] border border-white/10 bg-white/5 p-6 backdrop-blur-sm">
+      <div className="text-sm text-white/50">{title}</div>
+      <div className="mt-2 text-3xl font-semibold text-white">{value}</div>
+      <p className="mt-2 text-sm text-white/68">{text}</p>
+    </div>
+  );
+}
+
 export default async function OrgaMembersPage({
   searchParams,
 }: {
@@ -520,101 +534,97 @@ export default async function OrgaMembersPage({
 
   return (
     <main className="space-y-8">
-      <section>
-        <h1 className="text-3xl font-semibold tracking-tight">Members</h1>
-        <p className="mt-2 max-w-3xl text-sm text-gray-600">
-          Verwalte hier die Nutzer der aktiven Organisation. Rollen bestimmen,
-          welche administrativen und operativen Rechte innerhalb des aktuellen
-          Tenant-Kontexts bestehen.
-        </p>
+      <section className="rounded-[32px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(201,149,46,0.16),transparent_24%),linear-gradient(135deg,rgba(255,255,255,0.06),rgba(255,255,255,0.03))] p-6 backdrop-blur-sm">
+        <div>
+          <div className="text-xs font-medium uppercase tracking-[0.22em] text-amber-200/80">
+            Members
+          </div>
+          <h1 className="mt-3 text-3xl font-semibold tracking-tight text-white">
+            Members
+          </h1>
+          <p className="mt-2 max-w-3xl text-sm text-white/68">
+            Verwalte hier die Nutzer der aktiven Organisation. Rollen bestimmen,
+            welche administrativen und operativen Rechte innerhalb des aktuellen
+            Tenant-Kontexts bestehen.
+          </p>
+        </div>
       </section>
 
       {invited ? (
-        <section className="rounded-2xl border border-green-200 bg-green-50 p-4">
-          <p className="text-sm text-green-800">
+        <section className="rounded-[24px] border border-emerald-300/20 bg-emerald-300/10 p-4">
+          <p className="text-sm text-emerald-100">
             Einladung wurde erfolgreich angelegt.
           </p>
         </section>
       ) : null}
 
       {resent ? (
-        <section className="rounded-2xl border border-green-200 bg-green-50 p-4">
-          <p className="text-sm text-green-800">
+        <section className="rounded-[24px] border border-emerald-300/20 bg-emerald-300/10 p-4">
+          <p className="text-sm text-emerald-100">
             Einladung wurde erneut versendet.
           </p>
         </section>
       ) : null}
 
       {revoked ? (
-        <section className="rounded-2xl border border-green-200 bg-green-50 p-4">
-          <p className="text-sm text-green-800">
+        <section className="rounded-[24px] border border-emerald-300/20 bg-emerald-300/10 p-4">
+          <p className="text-sm text-emerald-100">
             Einladung wurde widerrufen.
           </p>
         </section>
       ) : null}
 
       {changed ? (
-        <section className="rounded-2xl border border-green-200 bg-green-50 p-4">
-          <p className="text-sm text-green-800">
+        <section className="rounded-[24px] border border-emerald-300/20 bg-emerald-300/10 p-4">
+          <p className="text-sm text-emerald-100">
             Member-Änderungen wurden gespeichert.
           </p>
         </section>
       ) : null}
 
       {removed ? (
-        <section className="rounded-2xl border border-green-200 bg-green-50 p-4">
-          <p className="text-sm text-green-800">
+        <section className="rounded-[24px] border border-emerald-300/20 bg-emerald-300/10 p-4">
+          <p className="text-sm text-emerald-100">
             Member wurde dauerhaft entfernt.
           </p>
         </section>
       ) : null}
 
       <section className="grid gap-4 md:grid-cols-4">
-        <div className="rounded-2xl border bg-white p-6 shadow-sm">
-          <div className="text-sm text-gray-500">Owner</div>
-          <div className="mt-2 text-3xl font-semibold">{ownerCount}</div>
-          <p className="mt-2 text-sm text-gray-600">
-            Voller Zugriff auf die Organisation.
-          </p>
-        </div>
-
-        <div className="rounded-2xl border bg-white p-6 shadow-sm">
-          <div className="text-sm text-gray-500">Admin</div>
-          <div className="mt-2 text-3xl font-semibold">{adminCount}</div>
-          <p className="mt-2 text-sm text-gray-600">
-            Operative Verwaltung innerhalb der Orga.
-          </p>
-        </div>
-
-        <div className="rounded-2xl border bg-white p-6 shadow-sm">
-          <div className="text-sm text-gray-500">Member</div>
-          <div className="mt-2 text-3xl font-semibold">{memberCount}</div>
-          <p className="mt-2 text-sm text-gray-600">
-            Reguläre produktive Nutzer.
-          </p>
-        </div>
-
-        <div className="rounded-2xl border bg-white p-6 shadow-sm">
-          <div className="text-sm text-gray-500">Viewer</div>
-          <div className="mt-2 text-3xl font-semibold">{viewerCount}</div>
-          <p className="mt-2 text-sm text-gray-600">
-            Lesender Zugriff ohne Admin-Funktion.
-          </p>
-        </div>
+        <StatCard
+          title="Owner"
+          value={ownerCount}
+          text="Voller Zugriff auf die Organisation."
+        />
+        <StatCard
+          title="Admin"
+          value={adminCount}
+          text="Operative Verwaltung innerhalb der Orga."
+        />
+        <StatCard
+          title="Member"
+          value={memberCount}
+          text="Reguläre produktive Nutzer."
+        />
+        <StatCard
+          title="Viewer"
+          value={viewerCount}
+          text="Lesender Zugriff ohne Admin-Funktion."
+        />
       </section>
 
-      <section className="rounded-2xl border bg-white shadow-sm">
-        <div className="flex items-center justify-between border-b px-6 py-4">
+      <section className="rounded-[28px] border border-white/10 bg-white/5 backdrop-blur-sm">
+        <div className="flex items-center justify-between border-b border-white/8 px-6 py-4">
           <div>
-            <h2 className="text-lg font-medium">Mitgliederliste</h2>
-            <p className="mt-1 text-sm text-gray-600">
+            <h2 className="text-lg font-medium text-white">Mitgliederliste</h2>
+            <p className="mt-1 text-sm text-white/65">
               Aktuelle Memberships der aktiven Organisation.
             </p>
           </div>
 
           <Link
             href="/orga/members/invite"
-            className="rounded-md border px-3 py-2 text-sm hover:bg-gray-50"
+            className="rounded-full border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/78 hover:border-amber-300/20 hover:bg-white/8 hover:text-white"
           >
             Mitglied einladen
           </Link>
@@ -622,9 +632,11 @@ export default async function OrgaMembersPage({
 
         {members.length === 0 ? (
           <div className="px-6 py-10">
-            <div className="rounded-2xl border border-dashed bg-gray-50 p-8">
-              <h3 className="text-base font-medium">Noch keine Members vorhanden</h3>
-              <p className="mt-2 max-w-2xl text-sm leading-6 text-gray-600">
+            <div className="rounded-[24px] border border-dashed border-white/10 bg-white/5 p-8">
+              <h3 className="text-base font-medium text-white">
+                Noch keine Members vorhanden
+              </h3>
+              <p className="mt-2 max-w-2xl text-sm leading-6 text-white/68">
                 Für die aktive Organisation wurden bisher noch keine Memberships
                 angelegt.
               </p>
@@ -633,7 +645,7 @@ export default async function OrgaMembersPage({
         ) : (
           <div className="overflow-x-auto">
             <table className="min-w-full text-sm">
-              <thead className="bg-gray-50 text-left text-gray-600">
+              <thead className="bg-white/5 text-left text-white/55">
                 <tr>
                   <th className="px-6 py-3 font-medium whitespace-nowrap">E-Mail</th>
                   <th className="px-6 py-3 font-medium whitespace-nowrap">Rolle</th>
@@ -676,9 +688,9 @@ export default async function OrgaMembersPage({
                   return (
                     <tr
                       key={`${member.organization_id}-${member.user_id}`}
-                      className="border-t align-middle"
+                      className="border-t border-white/8 align-middle"
                     >
-                      <td className="px-6 py-4 font-medium text-gray-900 whitespace-nowrap">
+                      <td className="px-6 py-4 font-medium text-white whitespace-nowrap">
                         {authUser?.email ?? "—"}
                       </td>
 
@@ -692,11 +704,11 @@ export default async function OrgaMembersPage({
                         saveAction={saveMemberChanges}
                       />
 
-                      <td className="px-6 py-4 text-gray-600 whitespace-nowrap">
+                      <td className="px-6 py-4 text-white/68 whitespace-nowrap">
                         {formatDateTime(authUser?.last_sign_in_at ?? null)}
                       </td>
 
-                      <td className="px-6 py-4 text-gray-600 whitespace-nowrap">
+                      <td className="px-6 py-4 text-white/68 whitespace-nowrap">
                         {formatDateTime(member.created_at)}
                       </td>
 
@@ -718,19 +730,21 @@ export default async function OrgaMembersPage({
         )}
       </section>
 
-      <section className="rounded-2xl border bg-white shadow-sm">
-        <div className="border-b px-6 py-4">
-          <h2 className="text-lg font-medium">Offene Einladungen</h2>
-          <p className="mt-1 text-sm text-gray-600">
+      <section className="rounded-[28px] border border-white/10 bg-white/5 backdrop-blur-sm">
+        <div className="border-b border-white/8 px-6 py-4">
+          <h2 className="text-lg font-medium text-white">Offene Einladungen</h2>
+          <p className="mt-1 text-sm text-white/65">
             Noch nicht angenommene Einladungen der aktiven Organisation.
           </p>
         </div>
 
         {invites.length === 0 ? (
           <div className="px-6 py-10">
-            <div className="rounded-2xl border border-dashed bg-gray-50 p-8">
-              <h3 className="text-base font-medium">Keine offenen Einladungen</h3>
-              <p className="mt-2 max-w-2xl text-sm leading-6 text-gray-600">
+            <div className="rounded-[24px] border border-dashed border-white/10 bg-white/5 p-8">
+              <h3 className="text-base font-medium text-white">
+                Keine offenen Einladungen
+              </h3>
+              <p className="mt-2 max-w-2xl text-sm leading-6 text-white/68">
                 Sobald Du ein neues Mitglied einlädst, erscheint die Einladung hier.
               </p>
             </div>
@@ -738,7 +752,7 @@ export default async function OrgaMembersPage({
         ) : (
           <div className="overflow-x-auto">
             <table className="min-w-full text-sm">
-              <thead className="bg-gray-50 text-left text-gray-600">
+              <thead className="bg-white/5 text-left text-white/55">
                 <tr>
                   <th className="px-6 py-3 font-medium whitespace-nowrap">E-Mail</th>
                   <th className="px-6 py-3 font-medium whitespace-nowrap">Rolle</th>
@@ -751,28 +765,28 @@ export default async function OrgaMembersPage({
               </thead>
               <tbody>
                 {invites.map((invite) => (
-                  <tr key={invite.id} className="border-t align-middle">
-                    <td className="px-6 py-4 font-medium text-gray-900 whitespace-nowrap">
+                  <tr key={invite.id} className="border-t border-white/8 align-middle">
+                    <td className="px-6 py-4 font-medium text-white whitespace-nowrap">
                       {invite.email}
                     </td>
-                    <td className="px-6 py-4 text-gray-600 whitespace-nowrap">
+                    <td className="px-6 py-4 text-white/68 whitespace-nowrap">
                       {formatRole(invite.role)}
                     </td>
-                    <td className="px-6 py-4 text-gray-600 whitespace-nowrap">
+                    <td className="px-6 py-4 text-white/68 whitespace-nowrap">
                       {formatInviteStatus(invite.status)}
                     </td>
-                    <td className="px-6 py-4 text-gray-600">
+                    <td className="px-6 py-4 text-white/68">
                       <div>{formatDeliveryState(invite)}</div>
                       {invite.email_error?.trim() ? (
-                        <div className="mt-1 text-xs text-red-700">
+                        <div className="mt-1 text-xs text-rose-200">
                           {invite.email_error}
                         </div>
                       ) : null}
                     </td>
-                    <td className="px-6 py-4 text-gray-600 whitespace-nowrap">
+                    <td className="px-6 py-4 text-white/68 whitespace-nowrap">
                       {formatDateTime(invite.invited_at)}
                     </td>
-                    <td className="px-6 py-4 text-gray-600 whitespace-nowrap">
+                    <td className="px-6 py-4 text-white/68 whitespace-nowrap">
                       {formatDateTime(invite.expires_at)}
                     </td>
                     <td className="px-6 py-4">
@@ -781,7 +795,7 @@ export default async function OrgaMembersPage({
                           <input type="hidden" name="invite_id" value={invite.id} />
                           <button
                             type="submit"
-                            className="rounded-md border px-3 py-2 text-sm hover:bg-gray-50"
+                            className="rounded-full border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/78 hover:border-amber-300/20 hover:bg-white/8 hover:text-white"
                           >
                             Resend
                           </button>
@@ -791,7 +805,7 @@ export default async function OrgaMembersPage({
                           <input type="hidden" name="invite_id" value={invite.id} />
                           <button
                             type="submit"
-                            className="rounded-md border px-3 py-2 text-sm hover:bg-gray-50"
+                            className="rounded-full border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/78 hover:border-rose-300/20 hover:bg-rose-300/10 hover:text-rose-200"
                           >
                             Revoke
                           </button>

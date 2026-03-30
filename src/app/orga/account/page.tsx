@@ -1,4 +1,4 @@
-// src/app/orga/account/page.tsx #2
+// src/app/orga/account/page.tsx #3
 import { redirect } from "next/navigation";
 import { requirePathAccess } from "@/lib/authz";
 import { supabaseServer } from "@/lib/supabaseServer";
@@ -115,6 +115,24 @@ async function saveOrganizationAccount(formData: FormData) {
   redirect("/orga/account?saved=1");
 }
 
+function StatCard({
+  title,
+  value,
+  text,
+}: {
+  title: string;
+  value: string;
+  text: string;
+}) {
+  return (
+    <div className="rounded-[28px] border border-white/10 bg-white/5 p-6 backdrop-blur-sm">
+      <div className="text-sm text-white/50">{title}</div>
+      <div className="mt-2 text-xl font-semibold text-white">{value}</div>
+      <p className="mt-2 text-sm text-white/68">{text}</p>
+    </div>
+  );
+}
+
 export default async function OrgaAccountPage({
   searchParams,
 }: {
@@ -173,65 +191,64 @@ export default async function OrgaAccountPage({
 
   return (
     <main className="space-y-8">
-      <section>
-        <h1 className="text-3xl font-semibold tracking-tight">Mein Konto</h1>
-        <p className="mt-2 max-w-3xl text-sm text-gray-600">
-          Pflege hier die Stammdaten Deiner Organisation. Editierbar sind die
-          fachlichen Organisations- und Rechnungsfelder, während technische
-          Systemfelder bewusst read-only bleiben.
-        </p>
+      <section className="rounded-[32px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(201,149,46,0.16),transparent_24%),linear-gradient(135deg,rgba(255,255,255,0.06),rgba(255,255,255,0.03))] p-6 backdrop-blur-sm">
+        <div>
+          <div className="text-xs font-medium uppercase tracking-[0.22em] text-amber-200/80">
+            Account
+          </div>
+          <h1 className="mt-3 text-3xl font-semibold tracking-tight text-white">
+            Mein Konto
+          </h1>
+          <p className="mt-2 max-w-3xl text-sm text-white/68">
+            Pflege hier die Stammdaten Deiner Organisation. Editierbar sind die
+            fachlichen Organisations- und Rechnungsfelder, während technische
+            Systemfelder bewusst read-only bleiben.
+          </p>
+        </div>
       </section>
 
       {saved ? (
-        <section className="rounded-2xl border border-green-200 bg-green-50 p-4">
-          <p className="text-sm text-green-800">
+        <section className="rounded-[24px] border border-emerald-300/20 bg-emerald-300/10 p-4">
+          <p className="text-sm text-emerald-100">
             Änderungen wurden erfolgreich gespeichert.
           </p>
         </section>
       ) : null}
 
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <div className="rounded-2xl border bg-white p-6 shadow-sm">
-          <div className="text-sm text-gray-500">Name</div>
-          <div className="mt-2 text-xl font-semibold">{org.name}</div>
-          <p className="mt-2 text-sm text-gray-600">
-            Anzeigename der aktiven Organisation.
-          </p>
-        </div>
+        <StatCard
+          title="Name"
+          value={org.name}
+          text="Anzeigename der aktiven Organisation."
+        />
 
-        <div className="rounded-2xl border bg-white p-6 shadow-sm">
-          <div className="text-sm text-gray-500">Slug</div>
-          <div className="mt-2 text-xl font-semibold">{org.slug}</div>
-          <p className="mt-2 text-sm text-gray-600">
-            Technischer Kurzname, aktuell read-only.
-          </p>
-        </div>
+        <StatCard
+          title="Slug"
+          value={org.slug}
+          text="Technischer Kurzname, aktuell read-only."
+        />
 
-        <div className="rounded-2xl border bg-white p-6 shadow-sm">
-          <div className="text-sm text-gray-500">Kind</div>
-          <div className="mt-2 text-xl font-semibold">{formatKind(org.kind)}</div>
-          <p className="mt-2 text-sm text-gray-600">
-            Typisierung des Tenants in Venaris.
-          </p>
-        </div>
+        <StatCard
+          title="Kind"
+          value={formatKind(org.kind)}
+          text="Typisierung des Tenants in Venaris."
+        />
 
-        <div className="rounded-2xl border bg-white p-6 shadow-sm">
-          <div className="text-sm text-gray-500">Status</div>
-          <div className="mt-2 text-xl font-semibold">{formatStatus(org.status)}</div>
-          <p className="mt-2 text-sm text-gray-600">
-            Lebenszyklus der Organisation, aktuell read-only.
-          </p>
-        </div>
+        <StatCard
+          title="Status"
+          value={formatStatus(org.status)}
+          text="Lebenszyklus der Organisation, aktuell read-only."
+        />
       </section>
 
       <section className="grid gap-4 xl:grid-cols-3">
-        <section className="rounded-2xl border bg-white p-6 shadow-sm xl:col-span-2">
-          <h2 className="text-lg font-medium">Organisationsdaten bearbeiten</h2>
+        <section className="rounded-[28px] border border-white/10 bg-white/5 p-6 backdrop-blur-sm xl:col-span-2">
+          <h2 className="text-lg font-medium text-white">Organisationsdaten bearbeiten</h2>
 
           <form action={saveOrganizationAccount} className="mt-6 space-y-6">
             <div className="grid gap-4 md:grid-cols-2">
               <div>
-                <label htmlFor="name" className="mb-2 block text-sm font-medium text-gray-900">
+                <label htmlFor="name" className="mb-2 block text-sm font-medium text-white">
                   Organisationsname *
                 </label>
                 <input
@@ -240,12 +257,15 @@ export default async function OrgaAccountPage({
                   type="text"
                   required
                   defaultValue={org.name}
-                  className="w-full rounded-md border px-3 py-2 text-sm outline-none"
+                  className="w-full rounded-[10px] border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none placeholder:text-white/35"
                 />
               </div>
 
               <div>
-                <label htmlFor="legal_name" className="mb-2 block text-sm font-medium text-gray-900">
+                <label
+                  htmlFor="legal_name"
+                  className="mb-2 block text-sm font-medium text-white"
+                >
                   Legal Name
                 </label>
                 <input
@@ -253,12 +273,15 @@ export default async function OrgaAccountPage({
                   name="legal_name"
                   type="text"
                   defaultValue={org.legal_name ?? ""}
-                  className="w-full rounded-md border px-3 py-2 text-sm outline-none"
+                  className="w-full rounded-[10px] border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none placeholder:text-white/35"
                 />
               </div>
 
               <div>
-                <label htmlFor="legal_form" className="mb-2 block text-sm font-medium text-gray-900">
+                <label
+                  htmlFor="legal_form"
+                  className="mb-2 block text-sm font-medium text-white"
+                >
                   Rechtsform
                 </label>
                 <input
@@ -266,13 +289,16 @@ export default async function OrgaAccountPage({
                   name="legal_form"
                   type="text"
                   defaultValue={org.legal_form ?? ""}
-                  className="w-full rounded-md border px-3 py-2 text-sm outline-none"
+                  className="w-full rounded-[10px] border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none placeholder:text-white/35"
                   placeholder="z. B. GmbH"
                 />
               </div>
 
               <div>
-                <label htmlFor="contact_person" className="mb-2 block text-sm font-medium text-gray-900">
+                <label
+                  htmlFor="contact_person"
+                  className="mb-2 block text-sm font-medium text-white"
+                >
                   Ansprechpartner
                 </label>
                 <input
@@ -280,12 +306,15 @@ export default async function OrgaAccountPage({
                   name="contact_person"
                   type="text"
                   defaultValue={org.contact_person ?? ""}
-                  className="w-full rounded-md border px-3 py-2 text-sm outline-none"
+                  className="w-full rounded-[10px] border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none placeholder:text-white/35"
                 />
               </div>
 
               <div>
-                <label htmlFor="billing_email" className="mb-2 block text-sm font-medium text-gray-900">
+                <label
+                  htmlFor="billing_email"
+                  className="mb-2 block text-sm font-medium text-white"
+                >
                   Billing E-Mail
                 </label>
                 <input
@@ -293,12 +322,15 @@ export default async function OrgaAccountPage({
                   name="billing_email"
                   type="email"
                   defaultValue={org.billing_email ?? ""}
-                  className="w-full rounded-md border px-3 py-2 text-sm outline-none"
+                  className="w-full rounded-[10px] border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none placeholder:text-white/35"
                 />
               </div>
 
               <div>
-                <label htmlFor="customer_reference" className="mb-2 block text-sm font-medium text-gray-900">
+                <label
+                  htmlFor="customer_reference"
+                  className="mb-2 block text-sm font-medium text-white"
+                >
                   Kundenreferenz
                 </label>
                 <input
@@ -306,12 +338,15 @@ export default async function OrgaAccountPage({
                   name="customer_reference"
                   type="text"
                   defaultValue={org.customer_reference ?? ""}
-                  className="w-full rounded-md border px-3 py-2 text-sm outline-none"
+                  className="w-full rounded-[10px] border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none placeholder:text-white/35"
                 />
               </div>
 
               <div className="md:col-span-2">
-                <label htmlFor="billing_street" className="mb-2 block text-sm font-medium text-gray-900">
+                <label
+                  htmlFor="billing_street"
+                  className="mb-2 block text-sm font-medium text-white"
+                >
                   Straße / Hausnummer
                 </label>
                 <input
@@ -319,12 +354,15 @@ export default async function OrgaAccountPage({
                   name="billing_street"
                   type="text"
                   defaultValue={org.billing_street ?? ""}
-                  className="w-full rounded-md border px-3 py-2 text-sm outline-none"
+                  className="w-full rounded-[10px] border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none placeholder:text-white/35"
                 />
               </div>
 
               <div>
-                <label htmlFor="billing_postal_code" className="mb-2 block text-sm font-medium text-gray-900">
+                <label
+                  htmlFor="billing_postal_code"
+                  className="mb-2 block text-sm font-medium text-white"
+                >
                   PLZ
                 </label>
                 <input
@@ -332,12 +370,15 @@ export default async function OrgaAccountPage({
                   name="billing_postal_code"
                   type="text"
                   defaultValue={org.billing_postal_code ?? ""}
-                  className="w-full rounded-md border px-3 py-2 text-sm outline-none"
+                  className="w-full rounded-[10px] border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none placeholder:text-white/35"
                 />
               </div>
 
               <div>
-                <label htmlFor="billing_city" className="mb-2 block text-sm font-medium text-gray-900">
+                <label
+                  htmlFor="billing_city"
+                  className="mb-2 block text-sm font-medium text-white"
+                >
                   Ort
                 </label>
                 <input
@@ -345,12 +386,15 @@ export default async function OrgaAccountPage({
                   name="billing_city"
                   type="text"
                   defaultValue={org.billing_city ?? ""}
-                  className="w-full rounded-md border px-3 py-2 text-sm outline-none"
+                  className="w-full rounded-[10px] border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none placeholder:text-white/35"
                 />
               </div>
 
               <div>
-                <label htmlFor="billing_country" className="mb-2 block text-sm font-medium text-gray-900">
+                <label
+                  htmlFor="billing_country"
+                  className="mb-2 block text-sm font-medium text-white"
+                >
                   Land
                 </label>
                 <input
@@ -358,12 +402,12 @@ export default async function OrgaAccountPage({
                   name="billing_country"
                   type="text"
                   defaultValue={org.billing_country ?? "DE"}
-                  className="w-full rounded-md border px-3 py-2 text-sm uppercase outline-none"
+                  className="w-full rounded-[10px] border border-white/10 bg-white/5 px-3 py-2 text-sm uppercase text-white outline-none placeholder:text-white/35"
                 />
               </div>
 
               <div>
-                <label htmlFor="vat_id" className="mb-2 block text-sm font-medium text-gray-900">
+                <label htmlFor="vat_id" className="mb-2 block text-sm font-medium text-white">
                   USt-ID / Steuer-ID
                 </label>
                 <input
@@ -371,13 +415,13 @@ export default async function OrgaAccountPage({
                   name="vat_id"
                   type="text"
                   defaultValue={org.vat_id ?? ""}
-                  className="w-full rounded-md border px-3 py-2 text-sm outline-none"
+                  className="w-full rounded-[10px] border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none placeholder:text-white/35"
                 />
               </div>
             </div>
 
             <div>
-              <label htmlFor="notes" className="mb-2 block text-sm font-medium text-gray-900">
+              <label htmlFor="notes" className="mb-2 block text-sm font-medium text-white">
                 Notizen
               </label>
               <textarea
@@ -385,7 +429,7 @@ export default async function OrgaAccountPage({
                 name="notes"
                 rows={5}
                 defaultValue={org.notes ?? ""}
-                className="w-full rounded-md border px-3 py-2 text-sm outline-none"
+                className="w-full rounded-[10px] border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none placeholder:text-white/35"
               />
             </div>
 
@@ -398,45 +442,45 @@ export default async function OrgaAccountPage({
           </form>
         </section>
 
-        <aside className="rounded-2xl border bg-white p-6 shadow-sm">
-          <h2 className="text-lg font-medium">Read-only Systemdaten</h2>
+        <aside className="rounded-[28px] border border-white/10 bg-white/5 p-6 backdrop-blur-sm">
+          <h2 className="text-lg font-medium text-white">Read-only Systemdaten</h2>
 
-          <dl className="mt-4 divide-y">
+          <dl className="mt-4 divide-y divide-white/8">
             <div className="grid gap-2 py-3">
-              <dt className="text-sm font-medium text-gray-500">Organisation ID</dt>
-              <dd className="text-sm break-all text-gray-900">{org.id}</dd>
+              <dt className="text-sm font-medium text-white/45">Organisation ID</dt>
+              <dd className="text-sm break-all text-white">{org.id}</dd>
             </div>
 
             <div className="grid gap-2 py-3">
-              <dt className="text-sm font-medium text-gray-500">Slug</dt>
-              <dd className="text-sm text-gray-900">{org.slug}</dd>
+              <dt className="text-sm font-medium text-white/45">Slug</dt>
+              <dd className="text-sm text-white">{org.slug}</dd>
             </div>
 
             <div className="grid gap-2 py-3">
-              <dt className="text-sm font-medium text-gray-500">Kind</dt>
-              <dd className="text-sm text-gray-900">{formatKind(org.kind)}</dd>
+              <dt className="text-sm font-medium text-white/45">Kind</dt>
+              <dd className="text-sm text-white">{formatKind(org.kind)}</dd>
             </div>
 
             <div className="grid gap-2 py-3">
-              <dt className="text-sm font-medium text-gray-500">Status</dt>
-              <dd className="text-sm text-gray-900">{formatStatus(org.status)}</dd>
+              <dt className="text-sm font-medium text-white/45">Status</dt>
+              <dd className="text-sm text-white">{formatStatus(org.status)}</dd>
             </div>
 
             <div className="grid gap-2 py-3">
-              <dt className="text-sm font-medium text-gray-500">Owner User ID</dt>
-              <dd className="text-sm break-all text-gray-900">
+              <dt className="text-sm font-medium text-white/45">Owner User ID</dt>
+              <dd className="text-sm break-all text-white">
                 {show(org.owner_user_id)}
               </dd>
             </div>
 
             <div className="grid gap-2 py-3">
-              <dt className="text-sm font-medium text-gray-500">Angelegt am</dt>
-              <dd className="text-sm text-gray-900">{formatDate(org.created_at)}</dd>
+              <dt className="text-sm font-medium text-white/45">Angelegt am</dt>
+              <dd className="text-sm text-white">{formatDate(org.created_at)}</dd>
             </div>
 
             <div className="grid gap-2 py-3">
-              <dt className="text-sm font-medium text-gray-500">Logo URL</dt>
-              <dd className="text-sm break-all text-gray-900">
+              <dt className="text-sm font-medium text-white/45">Logo URL</dt>
+              <dd className="text-sm break-all text-white">
                 {show(org.logo_url)}
               </dd>
             </div>

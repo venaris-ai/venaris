@@ -1,4 +1,4 @@
-// src/app/cameras/ingest/page.tsx #3
+// src/app/cameras/ingest/page.tsx #4
 export const dynamic = "force-dynamic";
 
 import { requirePathAccess } from "@/lib/authz";
@@ -74,16 +74,16 @@ function Badge({
 }) {
   const cls =
     tone === "ok"
-      ? "bg-green-100 text-green-800"
+      ? "border-emerald-300/25 bg-emerald-300/10 text-emerald-200"
       : tone === "warn"
-      ? "bg-yellow-100 text-yellow-800"
-      : tone === "err"
-      ? "bg-red-100 text-red-800"
-      : "bg-gray-100 text-gray-800";
+        ? "border-amber-300/25 bg-amber-300/10 text-amber-200"
+        : tone === "err"
+          ? "border-rose-300/25 bg-rose-300/10 text-rose-200"
+          : "border-white/10 bg-white/5 text-white/72";
 
   return (
     <span
-      className={`inline-flex items-center rounded px-2 py-0.5 text-xs font-medium ${cls}`}
+      className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium ${cls}`}
     >
       {children}
     </span>
@@ -163,6 +163,7 @@ export default async function CamerasIngestPage(props: {
 
   let items: Batch[] = [];
   let apiError: string | null = null;
+  let scopeLabel = "Alle aktiven Reviere";
 
   const { data: reviersData, error: reviersError } = await supabase
     .from("reviers")
@@ -181,6 +182,12 @@ export default async function CamerasIngestPage(props: {
     }));
     const revierScope = resolveRevierScope(rawRevier, allowedReviers);
     const allowedRevierIds = allowedReviers.map((revier) => revier.id);
+
+    if (revierScope.type === "single") {
+      scopeLabel =
+        reviers.find((revier) => revier.id === revierScope.revierId)?.name ??
+        "Ein Revier";
+    }
 
     if (allowedRevierIds.length > 0) {
       let camerasQuery = supabase
@@ -231,29 +238,39 @@ export default async function CamerasIngestPage(props: {
   }
 
   return (
-    <main className="space-y-6">
-      <section className="flex items-center justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-semibold tracking-tight">
-            Ingest Monitoring
-          </h1>
-          <p className="mt-2 text-sm text-gray-600">
-            Überblick über die letzten Ingest-Batches der aktiven Organisation.
-          </p>
-        </div>
+    <main className="space-y-8">
+      <section className="rounded-[32px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(201,149,46,0.16),transparent_24%),linear-gradient(135deg,rgba(255,255,255,0.06),rgba(255,255,255,0.03))] p-6 backdrop-blur-sm">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <div className="text-xs font-medium uppercase tracking-[0.22em] text-amber-200/80">
+              Ingest Monitoring
+            </div>
+            <h1 className="mt-3 text-3xl font-semibold tracking-tight text-white">
+              Ingest Monitoring
+            </h1>
+            <p className="mt-2 text-sm text-white/68">
+              Überblick über die letzten Ingest-Batches der aktiven Organisation.
+            </p>
+          </div>
 
-        <a
-          href="/cameras/ingest"
-          className="rounded-md border px-3 py-2 text-sm hover:bg-gray-50"
-          title="Reload page"
-        >
-          Refresh
-        </a>
+          <div className="flex items-center gap-2">
+            <div className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-white/72">
+              {scopeLabel}
+            </div>
+            <a
+              href="/cameras/ingest"
+              className="rounded-full border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/78 hover:border-amber-300/20 hover:bg-white/8 hover:text-white"
+              title="Reload page"
+            >
+              Refresh
+            </a>
+          </div>
+        </div>
       </section>
 
-      <section className="overflow-hidden rounded-2xl border bg-white shadow-sm">
+      <section className="overflow-hidden rounded-[28px] border border-white/10 bg-white/5 backdrop-blur-sm">
         <table className="w-full text-sm">
-          <thead className="border-b bg-gray-50 text-left">
+          <thead className="border-b border-white/8 bg-white/5 text-left text-white/55">
             <tr>
               <th className="px-3 py-2">Time</th>
               <th className="px-3 py-2">Source</th>
@@ -267,7 +284,7 @@ export default async function CamerasIngestPage(props: {
           <tbody>
             {items.length === 0 ? (
               <tr>
-                <td className="px-3 py-6 text-gray-500" colSpan={7}>
+                <td className="px-3 py-6 text-white/45" colSpan={7}>
                   No ingest batches yet.
                 </td>
               </tr>
@@ -279,14 +296,14 @@ export default async function CamerasIngestPage(props: {
 
                 const errClass =
                   errTone === "err"
-                    ? "font-medium text-red-700"
+                    ? "font-medium text-rose-200"
                     : errTone === "warn"
-                    ? "font-medium text-yellow-700"
-                    : "text-gray-400";
+                      ? "font-medium text-amber-200"
+                      : "text-white/35";
 
                 return (
-                  <tr key={batch.id} className="border-b last:border-b-0">
-                    <td className="whitespace-nowrap px-3 py-2 text-gray-700">
+                  <tr key={batch.id} className="border-b border-white/8 last:border-b-0">
+                    <td className="whitespace-nowrap px-3 py-2 text-white/72">
                       {formatUtcTimestamp(batch.received_at)}
                     </td>
 
@@ -294,11 +311,11 @@ export default async function CamerasIngestPage(props: {
                       <Badge tone={srcTone}>{batch.source || "-"}</Badge>
                     </td>
 
-                    <td className="px-3 py-2">
+                    <td className="px-3 py-2 text-white">
                       {batch.camera?.name || batch.camera_id || "-"}
                     </td>
 
-                    <td className="px-3 py-2">{batch.file_count ?? "-"}</td>
+                    <td className="px-3 py-2 text-white/72">{batch.file_count ?? "-"}</td>
 
                     <td className="px-3 py-2">
                       <Badge tone={stTone}>{batch.status || "-"}</Badge>
@@ -308,11 +325,11 @@ export default async function CamerasIngestPage(props: {
                       {batch.error_summary ? (
                         batch.error_summary
                       ) : (
-                        <span className="text-gray-400">-</span>
+                        <span className="text-white/35">-</span>
                       )}
                     </td>
 
-                    <td className="px-3 py-2 font-mono text-xs text-gray-600">
+                    <td className="px-3 py-2 font-mono text-xs text-white/55">
                       {batch.id.slice(0, 8)}…
                     </td>
                   </tr>
@@ -324,7 +341,9 @@ export default async function CamerasIngestPage(props: {
       </section>
 
       {apiError ? (
-        <p className="text-sm text-red-700">API error: {apiError}</p>
+        <div className="rounded-[24px] border border-rose-300/20 bg-rose-300/10 p-4 text-sm text-rose-100">
+          API error: {apiError}
+        </div>
       ) : null}
     </main>
   );

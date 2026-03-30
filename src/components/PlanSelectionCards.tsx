@@ -1,4 +1,4 @@
-// src/components/PlanSelectionCards.tsx #1
+// src/components/PlanSelectionCards.tsx #2
 "use client";
 
 import { useMemo, useState } from "react";
@@ -186,7 +186,7 @@ export default function PlanSelectionCards({
   return (
     <div className="space-y-4">
       {pendingRequest ? (
-        <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">
+        <div className="rounded-[24px] border border-emerald-300/20 bg-emerald-300/10 p-4 text-sm text-emerald-100">
           Anfrage erfasst:{" "}
           <strong>{BILLING_PLANS[pendingRequest.requestedPlanKey].label}</strong>{" "}
           ({pendingRequest.requestType}). Bis zur Bearbeitung ist keine weitere
@@ -195,7 +195,7 @@ export default function PlanSelectionCards({
       ) : null}
 
       {error ? (
-        <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-900">
+        <div className="rounded-[24px] border border-rose-300/20 bg-rose-300/10 p-4 text-sm text-rose-100">
           {error}
         </div>
       ) : null}
@@ -208,33 +208,35 @@ export default function PlanSelectionCards({
           return (
             <div
               key={planKey}
-              className={`rounded-2xl border p-5 ${
-                isCurrent ? "border-blue-300 bg-blue-50" : "bg-white"
+              className={`rounded-[28px] border p-5 backdrop-blur-sm ${
+                isCurrent
+                  ? "border-sky-300/30 bg-[linear-gradient(180deg,rgba(165,203,255,0.14),rgba(255,255,255,0.04))]"
+                  : "border-white/10 bg-white/5"
               }`}
             >
               <div className="flex items-center justify-between gap-3">
-                <div className="text-base font-semibold text-gray-900">
+                <div className="text-base font-semibold text-white">
                   {plan.label}
                 </div>
                 {isCurrent ? (
-                  <span className="rounded-full border border-blue-300 bg-white px-3 py-1 text-xs font-medium text-blue-900">
+                  <span className="rounded-full border border-sky-300/30 bg-white/5 px-3 py-1 text-xs font-medium text-sky-100">
                     Aktuell
                   </span>
                 ) : null}
               </div>
 
-              <p className="mt-3 text-sm leading-6 text-gray-600">
+              <p className="mt-3 text-sm leading-6 text-white/68">
                 {plan.description}
               </p>
 
-              <div className="mt-4 text-2xl font-semibold tracking-tight text-gray-900">
+              <div className="mt-4 text-2xl font-semibold tracking-tight text-white">
                 {planPriceText(planKey, billingCycle, currency)}
               </div>
-              <div className="mt-1 text-xs text-gray-500">
+              <div className="mt-1 text-xs text-white/45">
                 {billingCycleLabel(billingCycle)} · inkl. MwSt.
               </div>
 
-              <div className="mt-4 space-y-2 text-sm text-gray-700">
+              <div className="mt-4 space-y-2 text-sm text-white/72">
                 <div>
                   Kameras: {plan.maxCameras == null ? "Individuell" : plan.maxCameras}
                 </div>
@@ -243,7 +245,7 @@ export default function PlanSelectionCards({
                 </div>
               </div>
 
-              <p className="mt-4 min-h-16 text-sm leading-6 text-gray-600">
+              <p className="mt-4 min-h-16 text-sm leading-6 text-white/68">
                 {helperText}
               </p>
 
@@ -251,7 +253,7 @@ export default function PlanSelectionCards({
                 type="button"
                 disabled={disabled || loading}
                 onClick={() => choosePlan(planKey)}
-                className="mt-4 inline-flex w-full items-center justify-center rounded-md bg-black px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
+                className="mt-4 inline-flex w-full items-center justify-center rounded-[12px] bg-[#c9952e] px-4 py-2 text-sm font-medium text-[#102018] disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {loading ? "Wird angefragt..." : "Plan auswählen"}
               </button>

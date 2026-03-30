@@ -1,4 +1,4 @@
-// src/app/cameras/page.tsx #4
+// src/app/cameras/page.tsx #5
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
@@ -77,15 +77,15 @@ function formatDateTime(ts: string | null | undefined) {
 function statusBadgeTone(status?: string | null) {
   const s = (status || "").toLowerCase();
   if (s === "completed" || s === "ok" || s === "success" || s === "done") {
-    return "bg-green-100 text-green-800";
+    return "border-emerald-300/25 bg-emerald-300/10 text-emerald-200";
   }
   if (s === "error" || s === "failed") {
-    return "bg-red-100 text-red-800";
+    return "border-rose-300/25 bg-rose-300/10 text-rose-200";
   }
   if (s === "processing" || s === "running") {
-    return "bg-yellow-100 text-yellow-800";
+    return "border-amber-300/25 bg-amber-300/10 text-amber-200";
   }
-  return "bg-gray-100 text-gray-800";
+  return "border-white/10 bg-white/5 text-white/72";
 }
 
 function StatCard({
@@ -98,12 +98,12 @@ function StatCard({
   subline: string;
 }) {
   return (
-    <div className="rounded-2xl border bg-white p-5 shadow-sm">
-      <div className="text-xs uppercase tracking-wide text-gray-500">{title}</div>
-      <div className="mt-2 text-3xl font-semibold tracking-tight text-gray-900">
+    <div className="rounded-[28px] border border-white/10 bg-white/5 p-5 backdrop-blur-sm">
+      <div className="text-xs uppercase tracking-wide text-white/45">{title}</div>
+      <div className="mt-2 text-3xl font-semibold tracking-tight text-white">
         {value}
       </div>
-      <div className="mt-1 text-sm text-gray-600">{subline}</div>
+      <div className="mt-1 text-sm text-white/65">{subline}</div>
     </div>
   );
 }
@@ -353,10 +353,15 @@ export default function CamerasPage() {
 
   return (
     <main className="space-y-8">
-      <section className="space-y-3">
+      <section className="rounded-[32px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(201,149,46,0.16),transparent_24%),linear-gradient(135deg,rgba(255,255,255,0.06),rgba(255,255,255,0.03))] p-6 backdrop-blur-sm">
         <div>
-          <h1 className="text-3xl font-semibold tracking-tight">Cameras</h1>
-          <p className="mt-2 max-w-3xl text-sm text-gray-600">
+          <div className="text-xs font-medium uppercase tracking-[0.22em] text-amber-200/80">
+            Cameras
+          </div>
+          <h1 className="mt-3 text-3xl font-semibold tracking-tight text-white">
+            Cameras
+          </h1>
+          <p className="mt-2 max-w-3xl text-sm text-white/68">
             Operative Übersicht über Kamera-Health, aktuelle Assets, Ingest und
             Quick Upload.
           </p>
@@ -392,56 +397,61 @@ export default function CamerasPage() {
       </section>
 
       <section className="grid gap-4 xl:grid-cols-2">
-        <section className="rounded-2xl border bg-white p-6 shadow-sm">
+        <section className="rounded-[28px] border border-white/10 bg-white/5 p-6 backdrop-blur-sm">
           <div>
-            <h2 className="text-lg font-medium">Arbeitskontext</h2>
-            <p className="mt-1 text-sm text-gray-600">
+            <h2 className="text-lg font-medium text-white">Arbeitskontext</h2>
+            <p className="mt-1 text-sm text-white/65">
               Steuere hier den Scope für Assets und Ingest-Batches.
             </p>
           </div>
 
           <div className="mt-6 space-y-5">
             <div className="space-y-2">
-              <label className="text-sm font-medium">Kamera</label>
+              <label className="text-sm font-medium text-white">Kamera</label>
               <select
-                className="w-full rounded-md border p-2"
+                className="w-full rounded-full border border-white/10 bg-white/5 p-2 text-white outline-none backdrop-blur-sm"
                 value={cameraId}
                 onChange={(e) => setCameraId(e.target.value)}
               >
                 {cameraOptions.map((o) => (
-                  <option key={o.id || "all"} value={o.id}>
+                  <option
+                    key={o.id || "all"}
+                    value={o.id}
+                    className="bg-[#102018] text-white"
+                  >
                     {o.label}
                   </option>
                 ))}
               </select>
-              <div className="text-xs text-gray-500">
+              <div className="text-xs text-white/45">
                 {selectedCamera
                   ? `Aktuell ausgewählt: ${selectedCamera.name}`
                   : "Aktuell: alle Kameras"}
               </div>
             </div>
 
-            <label className="flex items-center gap-2 text-sm">
+            <label className="flex items-center gap-2 text-sm text-white/78">
               <input
                 type="checkbox"
                 checked={onlyRelevant}
                 onChange={(e) => setOnlyRelevant(e.target.checked)}
+                className="rounded border-white/10 bg-white/5"
               />
               Nur relevante Assets
             </label>
           </div>
         </section>
 
-        <section className="rounded-2xl border bg-white p-6 shadow-sm">
+        <section className="rounded-[28px] border border-white/10 bg-white/5 p-6 backdrop-blur-sm">
           <div>
-            <h2 className="text-lg font-medium">Quick Upload</h2>
-            <p className="mt-1 text-sm text-gray-600">
+            <h2 className="text-lg font-medium text-white">Quick Upload</h2>
+            <p className="mt-1 text-sm text-white/65">
               Einzelbild direkt an die ausgewählte Kamera senden.
             </p>
           </div>
 
           <div className="mt-6 flex flex-wrap items-center gap-3">
-            <label className="inline-block cursor-pointer rounded-md border px-4 py-2 text-sm hover:bg-gray-50">
+            <label className="inline-block cursor-pointer rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-white/78 backdrop-blur-sm hover:border-amber-300/20 hover:bg-white/8 hover:text-white">
               Bild auswählen
               <input
                 className="hidden"
@@ -454,28 +464,28 @@ export default function CamerasPage() {
             <button
               onClick={upload}
               disabled={uploading || !cameraId || !file}
-              className="rounded-md bg-black px-4 py-2 text-sm text-white disabled:opacity-60"
+              className="rounded-full bg-[#c9952e] px-4 py-2 text-sm text-[#102018] disabled:opacity-60"
             >
               {uploading ? "Uploading…" : "Upload"}
             </button>
           </div>
 
-          <div className="mt-3 text-xs text-gray-500">
+          <div className="mt-3 text-xs text-white/45">
             Upload funktioniert nur mit ausgewählter Kamera.
           </div>
 
           {file ? (
-            <div className="mt-3 text-sm text-gray-700">
-              Ausgewählt: <span className="font-medium">{file.name}</span>
+            <div className="mt-3 text-sm text-white/72">
+              Ausgewählt: <span className="font-medium text-white">{file.name}</span>
             </div>
           ) : null}
         </section>
       </section>
 
       {attentionCount > 0 ? (
-        <section className="rounded-2xl border border-amber-200 bg-amber-50 p-6 shadow-sm">
-          <h2 className="text-lg font-medium text-amber-900">Attention</h2>
-          <p className="mt-2 text-sm leading-6 text-amber-900/80">
+        <section className="rounded-[28px] border border-amber-300/20 bg-amber-300/10 p-6 backdrop-blur-sm">
+          <h2 className="text-lg font-medium text-amber-100">Attention</h2>
+          <p className="mt-2 text-sm leading-6 text-amber-100/85">
             {healthCounts.stale} stale und {healthCounts.offline} offline Kameras
             benötigen Aufmerksamkeit.
           </p>
@@ -483,41 +493,44 @@ export default function CamerasPage() {
       ) : null}
 
       {msg ? (
-        <div className="rounded-2xl border bg-white px-4 py-3 text-sm shadow-sm">
+        <div className="rounded-[28px] border border-white/10 bg-white/5 px-4 py-3 text-sm text-white/78 backdrop-blur-sm">
           {msg}
         </div>
       ) : null}
 
       <section className="grid gap-4 xl:grid-cols-2">
-        <section className="rounded-2xl border bg-white p-6 shadow-sm">
+        <section className="rounded-[28px] border border-white/10 bg-white/5 p-6 backdrop-blur-sm">
           <div className="mb-4 flex items-center justify-between">
             <div>
-              <h2 className="text-lg font-medium">Letzte Ingest-Batches</h2>
-              <p className="text-sm text-gray-600">
+              <h2 className="text-lg font-medium text-white">Letzte Ingest-Batches</h2>
+              <p className="text-sm text-white/65">
                 Jüngste Import- und Ingest-Aktivität.
               </p>
             </div>
             {loadingInitial || loadingBatches ? (
-              <div className="text-xs text-gray-500">lädt…</div>
+              <div className="text-xs text-white/45">lädt…</div>
             ) : null}
           </div>
 
           <div className="space-y-3">
             {batches.map((b) => (
-              <div key={b.id} className="rounded-xl border bg-gray-50 p-4 text-sm">
+              <div
+                key={b.id}
+                className="rounded-[20px] border border-white/10 bg-white/5 p-4 text-sm"
+              >
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                    <div className="font-medium text-gray-900">
+                    <div className="font-medium text-white">
                       {b.cameras?.name || b.camera_id || "—"}
                     </div>
-                    <div className="mt-1 text-xs text-gray-500">
+                    <div className="mt-1 text-xs text-white/45">
                       {formatDateTime(b.received_at)} · {b.source ?? "?"} · files:{" "}
                       {b.file_count ?? "?"}
                     </div>
                   </div>
 
                   <span
-                    className={`inline-flex rounded px-2 py-0.5 text-xs font-medium ${statusBadgeTone(
+                    className={`inline-flex rounded-full border px-2.5 py-0.5 text-xs font-medium ${statusBadgeTone(
                       b.status
                     )}`}
                   >
@@ -526,27 +539,27 @@ export default function CamerasPage() {
                 </div>
 
                 {b.error_summary ? (
-                  <div className="mt-2 text-xs text-red-700">{b.error_summary}</div>
+                  <div className="mt-2 text-xs text-rose-200">{b.error_summary}</div>
                 ) : null}
               </div>
             ))}
 
             {batches.length === 0 ? (
-              <div className="text-sm text-gray-600">Noch keine Ingest-Batches.</div>
+              <div className="text-sm text-white/68">Noch keine Ingest-Batches.</div>
             ) : null}
           </div>
         </section>
 
-        <section className="rounded-2xl border bg-white p-6 shadow-sm">
+        <section className="rounded-[28px] border border-white/10 bg-white/5 p-6 backdrop-blur-sm">
           <div className="mb-4 flex items-center justify-between">
             <div>
-              <h2 className="text-lg font-medium">Letzte Assets</h2>
-              <p className="text-sm text-gray-600">
+              <h2 className="text-lg font-medium text-white">Letzte Assets</h2>
+              <p className="text-sm text-white/65">
                 Schnelle operative Sicht auf neue Bilder.
               </p>
             </div>
             {loadingInitial || loadingAssets ? (
-              <div className="text-xs text-gray-500">lädt…</div>
+              <div className="text-xs text-white/45">lädt…</div>
             ) : null}
           </div>
 
@@ -556,20 +569,23 @@ export default function CamerasPage() {
               const showRelevant = a.relevant_effective === true;
 
               return (
-                <div key={a.id} className="rounded-xl border bg-gray-50 p-4 text-sm">
-                  <div className="font-mono text-xs text-gray-500">{a.id}</div>
-                  <div className="mt-1 break-all text-xs text-gray-600">
+                <div
+                  key={a.id}
+                  className="rounded-[20px] border border-white/10 bg-white/5 p-4 text-sm"
+                >
+                  <div className="font-mono text-xs text-white/45">{a.id}</div>
+                  <div className="mt-1 break-all text-xs text-white/60">
                     {a.storage_path}
                   </div>
-                  <div className="mt-1 text-xs text-gray-500">
+                  <div className="mt-1 text-xs text-white/45">
                     {a.status} · {formatAgo(a.created_at)}
                   </div>
 
                   <div className="mt-2 flex flex-wrap items-center gap-3">
-                    <span className="text-xs">{rel.text}</span>
+                    <span className="text-xs text-white/78">{rel.text}</span>
                     <button
                       onClick={() => setRelevant(a.id, !showRelevant)}
-                      className="rounded-md border px-3 py-1 text-xs hover:bg-white"
+                      className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-white/78 hover:border-amber-300/20 hover:bg-white/8 hover:text-white"
                     >
                       {showRelevant
                         ? "Als irrelevant markieren"
@@ -581,7 +597,7 @@ export default function CamerasPage() {
                     <img
                       src={urls[a.id]}
                       alt="asset"
-                      className="mt-3 w-full max-w-md rounded-md border"
+                      className="mt-3 w-full max-w-md rounded-[16px] border border-white/10"
                     />
                   ) : null}
                 </div>
@@ -589,7 +605,7 @@ export default function CamerasPage() {
             })}
 
             {assets.length === 0 ? (
-              <div className="text-sm text-gray-600">
+              <div className="text-sm text-white/68">
                 Noch keine Assets in der aktuellen Ansicht.
               </div>
             ) : null}

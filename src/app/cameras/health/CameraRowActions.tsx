@@ -1,4 +1,4 @@
-// src/app/cameras/health/CameraRowActions.tsx #3
+// src/app/cameras/health/CameraRowActions.tsx #4
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
@@ -80,7 +80,7 @@ export default function CameraRowActions({
           <button
             type="submit"
             form={formId}
-            className="inline-flex h-8 w-8 items-center justify-center rounded-md border text-gray-700 hover:bg-gray-50"
+            className="inline-flex h-8 w-8 items-center justify-center rounded-[10px] border border-amber-300/20 bg-amber-300/10 text-amber-200 hover:bg-amber-300/15"
             aria-label="Änderungen speichern"
             title="Änderungen speichern"
           >
@@ -88,7 +88,7 @@ export default function CameraRowActions({
           </button>
         ) : (
           <span
-            className="inline-flex h-8 w-8 items-center justify-center text-gray-300"
+            className="inline-flex h-8 w-8 items-center justify-center rounded-[10px] border border-white/8 text-white/20"
             aria-label="Änderungen speichern"
             title="Änderungen speichern"
           >
@@ -110,7 +110,7 @@ export default function CameraRowActions({
             <input type="hidden" name="return_revier" value={returnRevier} />
             <button
               type="submit"
-              className="inline-flex h-8 w-8 items-center justify-center rounded-md border text-gray-700 hover:bg-gray-50"
+              className="inline-flex h-8 w-8 items-center justify-center rounded-[10px] border border-white/10 bg-white/5 text-white/72 hover:border-rose-300/20 hover:bg-rose-300/10 hover:text-rose-200"
               aria-label="Kamera dauerhaft entfernen"
               title="Kamera dauerhaft entfernen"
             >
@@ -118,7 +118,7 @@ export default function CameraRowActions({
             </button>
           </form>
         ) : (
-          <span className="inline-flex h-8 w-8 items-center justify-center text-gray-300">
+          <span className="inline-flex h-8 w-8 items-center justify-center rounded-[10px] border border-white/8 text-white/20">
             <TrashIcon />
           </span>
         )}

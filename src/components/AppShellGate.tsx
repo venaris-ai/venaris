@@ -1,4 +1,4 @@
-// src/components/AppShellGate.tsx #3
+// src/components/AppShellGate.tsx #4
 "use client";
 
 import { usePathname } from "next/navigation";
@@ -34,7 +34,7 @@ export default function AppShellGate({
   return (
     <>
       {header}
-      <div className="mx-auto max-w-5xl px-6 py-8">{children}</div>
+      <div className="mx-auto max-w-6xl px-6 py-10">{children}</div>
     </>
   );
 }

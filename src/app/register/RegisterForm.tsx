@@ -1,4 +1,4 @@
-// src/app/register/RegisterForm.tsx #1
+// src/app/register/RegisterForm.tsx #2
 "use client";
 
 import { useState } from "react";
@@ -127,59 +127,59 @@ export default function RegisterForm() {
   return (
     <form onSubmit={onSubmit} className="mt-6 space-y-4">
       {error ? (
-        <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+        <div className="rounded-[14px] border border-rose-300/20 bg-rose-300/10 px-3 py-2 text-sm text-rose-100">
           {error}
         </div>
       ) : null}
 
       <div>
-        <label className="mb-1 block text-sm font-medium">
+        <label className="mb-1 block text-sm font-medium text-white">
           Organisationsname
         </label>
         <input
           type="text"
           value={organizationName}
           onChange={(e) => setOrganizationName(e.target.value)}
-          className="w-full rounded-xl border border-neutral-300 px-3 py-2"
+          className="w-full rounded-[14px] border border-white/10 bg-white/5 px-3 py-2 text-white outline-none placeholder:text-white/35"
           placeholder="z. B. Revier Musterwald"
           required
         />
       </div>
 
       <div>
-        <label className="mb-1 block text-sm font-medium">E-Mail</label>
+        <label className="mb-1 block text-sm font-medium text-white">E-Mail</label>
         <input
           type="email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
-          className="w-full rounded-xl border border-neutral-300 px-3 py-2"
+          className="w-full rounded-[14px] border border-white/10 bg-white/5 px-3 py-2 text-white outline-none placeholder:text-white/35"
           required
         />
       </div>
 
       <div>
-        <label className="mb-1 block text-sm font-medium">Passwort</label>
+        <label className="mb-1 block text-sm font-medium text-white">Passwort</label>
         <input
           type="password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
-          className="w-full rounded-xl border border-neutral-300 px-3 py-2"
+          className="w-full rounded-[14px] border border-white/10 bg-white/5 px-3 py-2 text-white outline-none placeholder:text-white/35"
           required
         />
-        <p className="mt-2 text-xs text-neutral-500">
+        <p className="mt-2 text-xs text-white/45">
           Bitte ein Passwort mit mindestens 8 Zeichen festlegen.
         </p>
       </div>
 
       <div>
-        <label className="mb-1 block text-sm font-medium">
+        <label className="mb-1 block text-sm font-medium text-white">
           Passwort wiederholen
         </label>
         <input
           type="password"
           value={passwordRepeat}
           onChange={(e) => setPasswordRepeat(e.target.value)}
-          className="w-full rounded-xl border border-neutral-300 px-3 py-2"
+          className="w-full rounded-[14px] border border-white/10 bg-white/5 px-3 py-2 text-white outline-none placeholder:text-white/35"
           required
         />
       </div>
@@ -187,7 +187,7 @@ export default function RegisterForm() {
       <button
         type="submit"
         disabled={loading}
-        className="w-full rounded-xl bg-black px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+        className="w-full rounded-[14px] bg-[#c9952e] px-4 py-2 text-sm font-medium text-[#102018] disabled:opacity-50"
       >
         {loading ? "Creating account..." : "Konto erstellen"}
       </button>

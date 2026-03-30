@@ -1,4 +1,4 @@
-// src/app/login/LoginForm.tsx #3
+// src/app/login/LoginForm.tsx #4
 "use client";
 
 import { useState } from "react";
@@ -76,24 +76,24 @@ export default function LoginForm() {
   return (
     <form onSubmit={onSubmit} className="space-y-4">
       <div>
-        <label className="mb-1 block text-sm font-medium">E-Mail</label>
+        <label className="mb-1 block text-sm font-medium text-white">E-Mail</label>
         <input
           type="email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
-          className="w-full rounded-xl border border-neutral-300 px-3 py-2"
+          className="w-full rounded-[14px] border border-white/10 bg-white/5 px-3 py-2 text-white outline-none placeholder:text-white/35"
           required
         />
       </div>
 
       <div>
         <div className="mb-1 flex items-center justify-between gap-3">
-          <label className="block text-sm font-medium">Password</label>
+          <label className="block text-sm font-medium text-white">Password</label>
           <button
             type="button"
             onClick={onForgotPassword}
             disabled={resetLoading}
-            className="text-xs text-neutral-600 underline underline-offset-2 hover:text-black disabled:opacity-50"
+            className="text-xs text-white/60 underline underline-offset-2 hover:text-white disabled:opacity-50"
           >
             {resetLoading ? "Sending..." : "Forgot password?"}
           </button>
@@ -103,19 +103,19 @@ export default function LoginForm() {
           type="password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
-          className="w-full rounded-xl border border-neutral-300 px-3 py-2"
+          className="w-full rounded-[14px] border border-white/10 bg-white/5 px-3 py-2 text-white outline-none placeholder:text-white/35"
           required
         />
       </div>
 
       {error ? (
-        <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+        <div className="rounded-[14px] border border-rose-300/20 bg-rose-300/10 px-3 py-2 text-sm text-rose-100">
           {error}
         </div>
       ) : null}
 
       {resetMessage ? (
-        <div className="rounded-xl border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-800">
+        <div className="rounded-[14px] border border-emerald-300/20 bg-emerald-300/10 px-3 py-2 text-sm text-emerald-100">
           {resetMessage}
         </div>
       ) : null}
@@ -123,7 +123,7 @@ export default function LoginForm() {
       <button
         type="submit"
         disabled={loading}
-        className="w-full rounded-xl bg-black px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+        className="w-full rounded-[14px] bg-[#c9952e] px-4 py-2 text-sm font-medium text-[#102018] disabled:opacity-50"
       >
         {loading ? "Signing in..." : "Sign in"}
       </button>

@@ -1,4 +1,4 @@
-// src/app/layout.tsx #7
+// src/app/layout.tsx #9
 import "./globals.css";
 import MainNav from "@/components/MainNav";
 import SectionNav from "@/components/SectionNav";
@@ -73,10 +73,10 @@ async function HeaderBrand() {
   const email = ctx?.user.email ?? null;
 
   return (
-    <div className="font-semibold">
-      Venaris
+    <div className="font-semibold tracking-[0.18em] text-white">
+      VENARIS
       {email ? (
-        <span className="ml-2 text-sm font-normal text-gray-500">
+        <span className="ml-2 text-sm font-normal tracking-normal text-white/55">
           · {email}
         </span>
       ) : null}
@@ -187,21 +187,23 @@ export default async function RootLayout({
       if (blocked) {
         blockedPage = (
           <main className="mx-auto flex min-h-screen max-w-5xl items-center px-6 py-12">
-            <div className="w-full rounded-3xl border border-neutral-200 bg-white p-8 shadow-sm">
+            <div className="w-full rounded-3xl border border-white/10 bg-[linear-gradient(180deg,rgba(17,30,23,0.92),rgba(13,23,18,0.96))] p-8 shadow-sm">
               <div className="flex items-start justify-between gap-4">
                 <div className="max-w-3xl">
-                  <div className="text-sm font-medium text-neutral-500">
+                  <div className="text-sm font-medium text-white/55">
                     Venaris · {organization.name}
                   </div>
-                  <h1 className="mt-3 text-3xl font-semibold tracking-tight text-neutral-950">
+                  <h1 className="mt-3 text-3xl font-semibold tracking-tight text-white">
                     {blockedHeadline(resolved.effectiveStatus)}
                   </h1>
-                  <p className="mt-4 text-sm leading-7 text-neutral-700">
+                  <p className="mt-4 text-sm leading-7 text-white/72">
                     {blockedText(resolved.effectiveStatus)}
                   </p>
-                  <p className="mt-3 text-sm leading-7 text-neutral-600">
+                  <p className="mt-3 text-sm leading-7 text-white/60">
                     Aktueller Plan:{" "}
-                    <strong>{BILLING_PLANS[subscription.plan_key].label}</strong>
+                    <strong className="text-white">
+                      {BILLING_PLANS[subscription.plan_key].label}
+                    </strong>
                     {" · "}
                     {billingCycleLabel(subscription.billing_cycle)}
                     {" · "}
@@ -233,7 +235,7 @@ export default async function RootLayout({
   }
 
   const header = (
-    <header className="border-b">
+    <header className="border-b border-white/8 bg-[#102018]/72 backdrop-blur-xl">
       <div className="mx-auto max-w-5xl px-6 py-3">
         <div className="flex items-end justify-between gap-6">
           <div className="min-w-0">

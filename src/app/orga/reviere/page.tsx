@@ -1,4 +1,4 @@
-// src/app/orga/reviere/page.tsx #6
+// src/app/orga/reviere/page.tsx #7
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
@@ -177,6 +177,24 @@ async function deleteRevier(formData: FormData) {
   redirect("/orga/reviere?deleted=1");
 }
 
+function StatCard({
+  title,
+  value,
+  text,
+}: {
+  title: string;
+  value: number;
+  text: string;
+}) {
+  return (
+    <div className="rounded-[28px] border border-white/10 bg-white/5 p-6 backdrop-blur-sm">
+      <div className="text-sm text-white/50">{title}</div>
+      <div className="mt-2 text-3xl font-semibold text-white">{value}</div>
+      <p className="mt-2 text-sm text-white/68">{text}</p>
+    </div>
+  );
+}
+
 export default async function OrgaRevierePage({
   searchParams,
 }: {
@@ -220,77 +238,76 @@ export default async function OrgaRevierePage({
 
   return (
     <main className="space-y-8">
-      <section>
-        <h1 className="text-3xl font-semibold tracking-tight">Reviere</h1>
-        <p className="mt-2 max-w-3xl text-sm text-gray-600">
-          Reviere sind der fachliche Flächenscope Deiner Organisation. Sie
-          strukturieren Kamerazuordnung, Wildlife-Auswertungen und spätere
-          populationsbezogene Berechnungen innerhalb von Venaris.
-        </p>
+      <section className="rounded-[32px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(201,149,46,0.16),transparent_24%),linear-gradient(135deg,rgba(255,255,255,0.06),rgba(255,255,255,0.03))] p-6 backdrop-blur-sm">
+        <div>
+          <div className="text-xs font-medium uppercase tracking-[0.22em] text-amber-200/80">
+            Reviere
+          </div>
+          <h1 className="mt-3 text-3xl font-semibold tracking-tight text-white">
+            Reviere
+          </h1>
+          <p className="mt-2 max-w-3xl text-sm text-white/68">
+            Reviere sind der fachliche Flächenscope Deiner Organisation. Sie
+            strukturieren Kamerazuordnung, Wildlife-Auswertungen und spätere
+            populationsbezogene Berechnungen innerhalb von Venaris.
+          </p>
+        </div>
       </section>
 
       {created ? (
-        <section className="rounded-2xl border border-green-200 bg-green-50 p-4">
-          <p className="text-sm text-green-800">
+        <section className="rounded-[24px] border border-emerald-300/20 bg-emerald-300/10 p-4">
+          <p className="text-sm text-emerald-100">
             Revier wurde erfolgreich angelegt.
           </p>
         </section>
       ) : null}
 
       {updated ? (
-        <section className="rounded-2xl border border-green-200 bg-green-50 p-4">
-          <p className="text-sm text-green-800">
+        <section className="rounded-[24px] border border-emerald-300/20 bg-emerald-300/10 p-4">
+          <p className="text-sm text-emerald-100">
             Revier wurde erfolgreich aktualisiert.
           </p>
         </section>
       ) : null}
 
       {deleted ? (
-        <section className="rounded-2xl border border-green-200 bg-green-50 p-4">
-          <p className="text-sm text-green-800">
+        <section className="rounded-[24px] border border-emerald-300/20 bg-emerald-300/10 p-4">
+          <p className="text-sm text-emerald-100">
             Revier wurde erfolgreich gelöscht.
           </p>
         </section>
       ) : null}
 
       <section className="grid gap-4 md:grid-cols-3">
-        <div className="rounded-2xl border bg-white p-6 shadow-sm">
-          <div className="text-sm text-gray-500">Active</div>
-          <div className="mt-2 text-3xl font-semibold">{activeCount}</div>
-          <p className="mt-2 text-sm text-gray-600">
-            Produktiv genutzte Reviere im aktuellen Organizationskontext.
-          </p>
-        </div>
-
-        <div className="rounded-2xl border bg-white p-6 shadow-sm">
-          <div className="text-sm text-gray-500">Paused</div>
-          <div className="mt-2 text-3xl font-semibold">{pausedCount}</div>
-          <p className="mt-2 text-sm text-gray-600">
-            Vorübergehend aus dem aktiven Fokus genommene Reviere.
-          </p>
-        </div>
-
-        <div className="rounded-2xl border bg-white p-6 shadow-sm">
-          <div className="text-sm text-gray-500">Archived</div>
-          <div className="mt-2 text-3xl font-semibold">{archivedCount}</div>
-          <p className="mt-2 text-sm text-gray-600">
-            Historisch erhaltene, aber nicht mehr aktiv genutzte Reviere.
-          </p>
-        </div>
+        <StatCard
+          title="Active"
+          value={activeCount}
+          text="Produktiv genutzte Reviere im aktuellen Organizationskontext."
+        />
+        <StatCard
+          title="Paused"
+          value={pausedCount}
+          text="Vorübergehend aus dem aktiven Fokus genommene Reviere."
+        />
+        <StatCard
+          title="Archived"
+          value={archivedCount}
+          text="Historisch erhaltene, aber nicht mehr aktiv genutzte Reviere."
+        />
       </section>
 
-      <section className="rounded-2xl border bg-white shadow-sm">
-        <div className="flex items-center justify-between border-b px-6 py-4">
+      <section className="rounded-[28px] border border-white/10 bg-white/5 backdrop-blur-sm">
+        <div className="flex items-center justify-between border-b border-white/8 px-6 py-4">
           <div>
-            <h2 className="text-lg font-medium">Revierliste</h2>
-            <p className="mt-1 text-sm text-gray-600">
+            <h2 className="text-lg font-medium text-white">Revierliste</h2>
+            <p className="mt-1 text-sm text-white/65">
               Aktuelle Reviere der aktiven Organisation.
             </p>
           </div>
 
           <Link
             href="/orga/reviere/new"
-            className="rounded-md border px-3 py-2 text-sm hover:bg-gray-50"
+            className="rounded-full border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/78 hover:border-amber-300/20 hover:bg-white/8 hover:text-white"
           >
             Revier anlegen
           </Link>
@@ -298,9 +315,11 @@ export default async function OrgaRevierePage({
 
         {reviers.length === 0 ? (
           <div className="px-6 py-10">
-            <div className="rounded-2xl border border-dashed bg-gray-50 p-8">
-              <h3 className="text-base font-medium">Noch keine Reviere angelegt</h3>
-              <p className="mt-2 max-w-2xl text-sm leading-6 text-gray-600">
+            <div className="rounded-[24px] border border-dashed border-white/10 bg-white/5 p-8">
+              <h3 className="text-base font-medium text-white">
+                Noch keine Reviere angelegt
+              </h3>
+              <p className="mt-2 max-w-2xl text-sm leading-6 text-white/68">
                 Für die aktive Organisation sind aktuell noch keine Reviere
                 vorhanden. Reviere bilden den fachlichen Scope für Kameras,
                 Wildlife-Auswertungen und spätere Population Estimates.
@@ -308,7 +327,7 @@ export default async function OrgaRevierePage({
               <div className="mt-5">
                 <Link
                   href="/orga/reviere/new"
-                  className="rounded-md border px-3 py-2 text-sm hover:bg-gray-50"
+                  className="rounded-full border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/78 hover:border-amber-300/20 hover:bg-white/8 hover:text-white"
                 >
                   Erstes Revier anlegen
                 </Link>
@@ -318,7 +337,7 @@ export default async function OrgaRevierePage({
         ) : (
           <div className="overflow-x-auto">
             <table className="min-w-full text-sm">
-              <thead className="bg-gray-50 text-left text-gray-600">
+              <thead className="bg-white/5 text-left text-white/55">
                 <tr>
                   <th className="px-6 py-3 font-medium whitespace-nowrap">Name</th>
                   <th className="px-6 py-3 font-medium whitespace-nowrap">Fläche</th>
@@ -330,7 +349,7 @@ export default async function OrgaRevierePage({
               </thead>
               <tbody>
                 {reviers.map((revier) => (
-                  <tr key={revier.id} className="border-t align-middle">
+                  <tr key={revier.id} className="border-t border-white/8 align-middle">
                     <RevierRowControls
                       revierId={revier.id}
                       initialName={revier.name}

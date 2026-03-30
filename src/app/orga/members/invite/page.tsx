@@ -1,4 +1,4 @@
-// src/app/orga/members/invite/page.tsx #8
+// src/app/orga/members/invite/page.tsx #9
 import Link from "next/link";
 import { randomBytes } from "crypto";
 import { redirect } from "next/navigation";
@@ -289,41 +289,46 @@ export default async function InviteMemberPage() {
 
   return (
     <main className="space-y-8">
-      <section className="space-y-3">
+      <section className="rounded-[32px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(201,149,46,0.16),transparent_24%),linear-gradient(135deg,rgba(255,255,255,0.06),rgba(255,255,255,0.03))] p-6 backdrop-blur-sm">
         <div>
-          <h1 className="text-3xl font-semibold tracking-tight">Mitglied einladen</h1>
-          <p className="mt-2 max-w-3xl text-sm text-gray-600">
+          <div className="text-xs font-medium uppercase tracking-[0.22em] text-amber-200/80">
+            Invite Member
+          </div>
+          <h1 className="mt-3 text-3xl font-semibold tracking-tight text-white">
+            Mitglied einladen
+          </h1>
+          <p className="mt-2 max-w-3xl text-sm text-white/68">
             Lege hier eine neue Einladung für die aktive Organisation an.
           </p>
         </div>
       </section>
 
       <section
-        className={`rounded-2xl border p-5 shadow-sm ${
+        className={`rounded-[28px] border p-5 backdrop-blur-sm ${
           invitePolicy.allowed
-            ? "border-blue-200 bg-blue-50"
-            : "border-red-200 bg-red-50"
+            ? "border-sky-300/20 bg-sky-300/10"
+            : "border-rose-300/20 bg-rose-300/10"
         }`}
       >
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <h2
               className={`text-base font-semibold ${
-                invitePolicy.allowed ? "text-blue-900" : "text-red-900"
+                invitePolicy.allowed ? "text-sky-100" : "text-rose-100"
               }`}
             >
               Member-Nutzung
             </h2>
             <p
               className={`mt-1 text-sm leading-6 ${
-                invitePolicy.allowed ? "text-blue-900/80" : "text-red-800"
+                invitePolicy.allowed ? "text-sky-100/85" : "text-rose-100/85"
               }`}
             >
               {invitePolicy.message}
             </p>
             <p
               className={`mt-1 text-xs ${
-                invitePolicy.allowed ? "text-blue-900/70" : "text-red-700"
+                invitePolicy.allowed ? "text-sky-100/70" : "text-rose-100/70"
               }`}
             >
               Zusammensetzung: {policyInput.activeMemberCount} aktive Members +{" "}
@@ -332,27 +337,27 @@ export default async function InviteMemberPage() {
           </div>
 
           <div
-            className={`rounded-xl border px-3 py-2 text-sm font-medium ${
+            className={`rounded-[14px] border px-3 py-2 text-sm font-medium ${
               invitePolicy.allowed
-                ? "border-blue-300 bg-white text-blue-900"
-                : "border-red-300 bg-white text-red-900"
+                ? "border-sky-300/25 bg-white/5 text-sky-100"
+                : "border-rose-300/25 bg-white/5 text-rose-100"
             }`}
           >
             {resolvedState.currentMemberUsage} / {subscriptionResult.data.max_members}
           </div>
         </div>
 
-        <div className="mt-4 h-2 rounded-full bg-white/70">
+        <div className="mt-4 h-2 rounded-full bg-white/10">
           <div
             className={`h-2 rounded-full ${
-              invitePolicy.allowed ? "bg-blue-700" : "bg-red-600"
+              invitePolicy.allowed ? "bg-sky-300" : "bg-rose-300"
             }`}
             style={{ width: `${usagePercent}%` }}
           />
         </div>
 
         {resolvedState.effectiveStatus !== subscriptionResult.data.status ? (
-          <p className="mt-3 text-xs text-red-700">
+          <p className="mt-3 text-xs text-rose-200">
             Hinweis: Der Trial ist fachlich bereits abgelaufen und wird effektiv als
             `expired` behandelt.
           </p>
@@ -360,13 +365,13 @@ export default async function InviteMemberPage() {
       </section>
 
       <section className="grid gap-4 xl:grid-cols-3">
-        <section className="rounded-2xl border bg-white p-6 shadow-sm xl:col-span-2">
+        <section className="rounded-[28px] border border-white/10 bg-white/5 p-6 backdrop-blur-sm xl:col-span-2">
           <form action={createInvite} className="space-y-6">
             <div className="grid gap-4 md:grid-cols-2">
               <div>
                 <label
                   htmlFor="email"
-                  className="mb-2 block text-sm font-medium text-gray-900"
+                  className="mb-2 block text-sm font-medium text-white"
                 >
                   E-Mail *
                 </label>
@@ -376,7 +381,7 @@ export default async function InviteMemberPage() {
                   type="email"
                   required
                   disabled={!invitePolicy.allowed}
-                  className="w-full rounded-md border px-3 py-2 text-sm outline-none ring-0"
+                  className="w-full rounded-[10px] border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none placeholder:text-white/35"
                   placeholder="name@example.com"
                 />
               </div>
@@ -384,7 +389,7 @@ export default async function InviteMemberPage() {
               <div>
                 <label
                   htmlFor="role"
-                  className="mb-2 block text-sm font-medium text-gray-900"
+                  className="mb-2 block text-sm font-medium text-white"
                 >
                   Rolle
                 </label>
@@ -393,19 +398,27 @@ export default async function InviteMemberPage() {
                   name="role"
                   defaultValue="member"
                   disabled={!invitePolicy.allowed}
-                  className="w-full rounded-md border px-3 py-2 text-sm outline-none ring-0"
+                  className="w-full rounded-[10px] border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none"
                 >
-                  <option value="member">Member</option>
-                  <option value="viewer">Viewer</option>
-                  <option value="admin">Admin</option>
-                  <option value="owner">Owner</option>
+                  <option value="member" className="bg-[#102018] text-white">
+                    Member
+                  </option>
+                  <option value="viewer" className="bg-[#102018] text-white">
+                    Viewer
+                  </option>
+                  <option value="admin" className="bg-[#102018] text-white">
+                    Admin
+                  </option>
+                  <option value="owner" className="bg-[#102018] text-white">
+                    Owner
+                  </option>
                 </select>
               </div>
 
               <div>
                 <label
                   htmlFor="expires_in_days"
-                  className="mb-2 block text-sm font-medium text-gray-900"
+                  className="mb-2 block text-sm font-medium text-white"
                 >
                   Gültig für (Tage)
                 </label>
@@ -418,7 +431,7 @@ export default async function InviteMemberPage() {
                   step="1"
                   defaultValue="14"
                   disabled={!invitePolicy.allowed}
-                  className="w-full rounded-md border px-3 py-2 text-sm outline-none ring-0"
+                  className="w-full rounded-[10px] border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none"
                 />
               </div>
             </div>
@@ -431,7 +444,7 @@ export default async function InviteMemberPage() {
 
               <Link
                 href="/orga/members"
-                className="rounded-md border px-4 py-2 text-sm hover:bg-gray-50"
+                className="rounded-[10px] border border-white/10 bg-white/5 px-4 py-2 text-sm text-white/78 hover:border-amber-300/20 hover:bg-white/8 hover:text-white"
               >
                 Abbrechen
               </Link>
@@ -439,26 +452,26 @@ export default async function InviteMemberPage() {
           </form>
         </section>
 
-        <aside className="rounded-2xl border border-amber-200 bg-amber-50 p-6">
-          <h2 className="text-lg font-medium text-amber-900">Wichtiger Hinweis</h2>
-          <p className="mt-2 text-sm leading-6 text-amber-900/80">
+        <aside className="rounded-[28px] border border-amber-300/20 bg-amber-300/10 p-6 backdrop-blur-sm">
+          <h2 className="text-lg font-medium text-amber-100">Wichtiger Hinweis</h2>
+          <p className="mt-2 text-sm leading-6 text-amber-100/80">
             Neue Einladungen werden per E-Mail verschickt. Der Empfänger kann
             danach seinen Account anlegen und die Einladung direkt annehmen.
           </p>
         </aside>
       </section>
 
-      <section className="rounded-2xl border bg-white shadow-sm">
-        <div className="border-b px-6 py-4">
-          <h2 className="text-lg font-medium">Rollenübersicht</h2>
-          <p className="mt-1 text-sm text-gray-600">
+      <section className="rounded-[28px] border border-white/10 bg-white/5 backdrop-blur-sm">
+        <div className="border-b border-white/8 px-6 py-4">
+          <h2 className="text-lg font-medium text-white">Rollenübersicht</h2>
+          <p className="mt-1 text-sm text-white/65">
             Diese Übersicht hilft bei der Auswahl der passenden Rolle für neue Mitglieder.
           </p>
         </div>
 
         <div className="overflow-x-auto">
           <table className="min-w-full text-sm">
-            <thead className="bg-gray-50 text-left text-gray-600">
+            <thead className="bg-white/5 text-left text-white/55">
               <tr>
                 <th className="px-6 py-3 font-medium">Rolle</th>
                 <th className="px-6 py-3 font-medium">Bedeutung</th>
@@ -466,11 +479,11 @@ export default async function InviteMemberPage() {
             </thead>
             <tbody>
               {roleDescriptions.map((item) => (
-                <tr key={item.role} className="border-t align-top">
-                  <td className="px-6 py-4 font-medium text-gray-900">
+                <tr key={item.role} className="border-t border-white/8 align-top">
+                  <td className="px-6 py-4 font-medium text-white">
                     {item.role}
                   </td>
-                  <td className="px-6 py-4 text-gray-600">{item.text}</td>
+                  <td className="px-6 py-4 text-white/68">{item.text}</td>
                 </tr>
               ))}
             </tbody>
