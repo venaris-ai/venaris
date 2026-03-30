@@ -1,4 +1,4 @@
-// src/app/cameras/new/CreateCameraForm.tsx #4
+// src/app/cameras/new/CreateCameraForm.tsx #6
 "use client";
 
 import { useMemo, useState } from "react";
@@ -17,6 +17,8 @@ type Revier = {
   id: string;
   name: string;
   organization_id: string | null;
+  status: "active" | "paused" | "archived";
+  is_default: boolean;
 };
 
 type Props = {
@@ -132,6 +134,13 @@ function buildManualProvisioningCopy(manualLabel: string) {
   return ["Manual Import Setup", `Manual Label: ${manualLabel}`].join("\n");
 }
 
+function formatRevierLabel(revier: Revier) {
+  if (revier.status === "active") return revier.name;
+  if (revier.status === "paused") return `${revier.name} (Paused)`;
+  if (revier.status === "archived") return `${revier.name} (Archived)`;
+  return revier.name;
+}
+
 export default function CreateCameraForm({
   organization,
   reviers,
@@ -142,7 +151,17 @@ export default function CreateCameraForm({
   rawStatus,
 }: Props) {
   const organizationId = organization.id;
-  const [revierId, setRevierId] = useState("");
+
+  const filteredReviers = useMemo(() => {
+    return reviers.filter((r) => r.organization_id === organizationId);
+  }, [reviers, organizationId]);
+
+  const defaultRevierId = useMemo(() => {
+    const explicitDefault = filteredReviers.find((revier) => revier.is_default);
+    return explicitDefault?.id ?? filteredReviers[0]?.id ?? "";
+  }, [filteredReviers]);
+
+  const [revierId, setRevierId] = useState(defaultRevierId);
   const [cameraName, setCameraName] = useState("");
   const [method, setMethod] = useState<"smtp" | "ftp" | "manual">("smtp");
   const [vendor, setVendor] = useState<(typeof VENDORS)[number]>("reolink");
@@ -157,10 +176,6 @@ export default function CreateCameraForm({
   const [result, setResult] = useState<CreateResponse | null>(null);
   const [copyMsg, setCopyMsg] = useState("");
 
-  const filteredReviers = useMemo(() => {
-    return reviers.filter((r) => r.organization_id === organizationId);
-  }, [reviers, organizationId]);
-
   const usagePercent =
     maxCameras > 0 ? Math.min((currentCameraCount / maxCameras) * 100, 100) : 0;
   const tone = badgeTone(cameraPolicy.allowed);
@@ -170,6 +185,11 @@ export default function CreateCameraForm({
 
     if (!cameraPolicy.allowed) {
       setError(cameraPolicy.message);
+      return;
+    }
+
+    if (!revierId) {
+      setError("Bitte ein Revier auswählen.");
       return;
     }
 
@@ -186,7 +206,7 @@ export default function CreateCameraForm({
         },
         body: JSON.stringify({
           organizationId,
-          revierId: revierId || null,
+          revierId,
           cameraName,
           method,
           vendor,
@@ -213,7 +233,7 @@ export default function CreateCameraForm({
       setLongitude("");
       setDirectionDeg("");
       setNotes("");
-      setRevierId("");
+      setRevierId(defaultRevierId);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unexpected error");
     } finally {
@@ -329,17 +349,17 @@ export default function CreateCameraForm({
           </div>
 
           <div className="md:col-span-2">
-            <label className="mb-1 block text-sm font-medium">Revier (optional)</label>
+            <label className="mb-1 block text-sm font-medium">Revier</label>
             <select
               value={revierId}
               onChange={(e) => setRevierId(e.target.value)}
               className="w-full rounded-xl border border-neutral-300 px-3 py-2"
-              disabled={!cameraPolicy.allowed}
+              required
+              disabled={!cameraPolicy.allowed || filteredReviers.length === 0}
             >
-              <option value="">No revier assigned</option>
               {filteredReviers.map((revier) => (
                 <option key={revier.id} value={revier.id}>
-                  {revier.name}
+                  {formatRevierLabel(revier)}
                 </option>
               ))}
             </select>
@@ -420,7 +440,7 @@ export default function CreateCameraForm({
         <div className="mt-6 flex items-center gap-3">
           <button
             type="submit"
-            disabled={loading || !cameraPolicy.allowed}
+            disabled={loading || !cameraPolicy.allowed || filteredReviers.length === 0}
             className="rounded-xl bg-black px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
           >
             {!cameraPolicy.allowed
@@ -538,18 +558,14 @@ export default function CreateCameraForm({
                 </div>
                 <button
                   type="button"
-onClick={() =>
-  camera.routing.smtpAlias
-    ? handleCopy(
-        "SMTP setup",
-        buildSmtpProvisioningCopy(camera.routing.smtpAlias)
-      )
-    : undefined
-}
-
-
-
-
+                  onClick={() =>
+                    camera.routing.smtpAlias
+                      ? handleCopy(
+                          "SMTP setup",
+                          buildSmtpProvisioningCopy(camera.routing.smtpAlias)
+                        )
+                      : undefined
+                  }
                   className="rounded-md border px-3 py-2 text-xs hover:bg-white"
                 >
                   Copy block
@@ -575,22 +591,14 @@ onClick={() =>
                 </div>
                 <button
                   type="button"
-
-
-onClick={() =>
-  camera.routing.manualLabel
-    ? handleCopy(
-        "Manual import setup",
-        buildManualProvisioningCopy(camera.routing.manualLabel)
-      )
-    : undefined
-}
-
-
-
-
-
-
+                  onClick={() =>
+                    camera.routing.manualLabel
+                      ? handleCopy(
+                          "Manual import setup",
+                          buildManualProvisioningCopy(camera.routing.manualLabel)
+                        )
+                      : undefined
+                  }
                   className="rounded-md border px-3 py-2 text-xs hover:bg-white"
                 >
                   Copy block

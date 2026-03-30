@@ -1,7 +1,10 @@
-// src/app/cameras/new/page.tsx #5
+// src/app/cameras/new/page.tsx #7
 import { requirePathAccess } from "@/lib/authz";
 import { supabaseServer } from "@/lib/supabaseServer";
-import { canCreateCamera, resolveSubscriptionState } from "@/lib/billing/subscriptionPolicy";
+import {
+  canCreateCamera,
+  resolveSubscriptionState,
+} from "@/lib/billing/subscriptionPolicy";
 import CreateCameraForm from "./CreateCameraForm";
 
 type Organization = {
@@ -14,6 +17,8 @@ type Revier = {
   id: string;
   name: string;
   organization_id: string | null;
+  status: "active" | "paused" | "archived";
+  is_default: boolean;
 };
 
 type SubscriptionPolicyRow = {
@@ -41,8 +46,9 @@ export default async function NewCameraPage() {
   const [reviersResult, subscriptionResult, cameraCountResult] = await Promise.all([
     supabase
       .from("reviers")
-      .select("id, name, organization_id")
+      .select("id, name, organization_id, status, is_default")
       .eq("organization_id", activeOrganization.id)
+      .order("is_default", { ascending: false })
       .order("name", { ascending: true }),
 
     supabase
@@ -76,6 +82,8 @@ export default async function NewCameraPage() {
     throw new Error(`Failed to load camera usage: ${cameraCountResult.error.message}`);
   }
 
+  const reviers = (reviersResult.data ?? []) as Revier[];
+
   const policyInput = {
     status: subscriptionResult.data.status,
     trialEndsAt: subscriptionResult.data.trial_ends_at,
@@ -101,7 +109,7 @@ export default async function NewCameraPage() {
 
       <CreateCameraForm
         organization={activeOrganization as Organization}
-        reviers={(reviersResult.data ?? []) as Revier[]}
+        reviers={reviers}
         currentCameraCount={policyInput.currentCameraCount}
         maxCameras={subscriptionResult.data.max_cameras}
         cameraPolicy={cameraPolicy}
