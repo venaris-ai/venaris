@@ -1,7 +1,8 @@
-// src/app/orga/reviere/RevierRowActions.tsx #3
+// src/app/orga/reviere/RevierRowActions.tsx #5
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 
 type DirtyEventDetail = {
   revierId: string;
@@ -54,7 +55,13 @@ export default function RevierRowActions({
   deleteAction: (formData: FormData) => void | Promise<void>;
 }) {
   const [isDirty, setIsDirty] = useState(false);
+  const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
   const formId = useMemo(() => `revier-controls-${revierId}`, [revierId]);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     const handler = (event: Event) => {
@@ -70,58 +77,93 @@ export default function RevierRowActions({
   }, [revierId]);
 
   return (
-    <td className="px-6 py-4 text-right whitespace-nowrap">
-      <div className="flex items-center justify-end gap-2">
-        {isDirty ? (
-          <button
-            type="submit"
-            form={formId}
-            className="inline-flex h-8 w-8 items-center justify-center rounded-[10px] border border-amber-300/20 bg-amber-300/10 text-amber-200 hover:bg-amber-300/15"
-            aria-label="Änderungen speichern"
-            title="Änderungen speichern"
-          >
-            <SaveIcon />
-          </button>
-        ) : (
-          <span
-            className="inline-flex h-8 w-8 items-center justify-center rounded-[10px] border border-white/8 text-white/20"
-            aria-label="Änderungen speichern"
-            title="Änderungen speichern"
-          >
-            <SaveIcon />
-          </span>
-        )}
-
-        {canDelete ? (
-          <form
-            action={deleteAction}
-            onSubmit={(e) => {
-              const ok = window.confirm(
-                "Sind Sie sicher, dass Sie dieses Revier dauerhaft löschen möchten?"
-              );
-              if (!ok) e.preventDefault();
-            }}
-          >
-            <input type="hidden" name="revier_id" value={revierId} />
+    <>
+      <td className="px-6 py-4 text-right whitespace-nowrap">
+        <div className="flex items-center justify-end gap-2">
+          {isDirty ? (
             <button
               type="submit"
-              className="inline-flex h-8 w-8 items-center justify-center rounded-[10px] border border-white/10 bg-white/5 text-white/72 hover:border-rose-300/20 hover:bg-rose-300/10 hover:text-rose-200"
-              aria-label="Revier dauerhaft löschen"
-              title="Revier dauerhaft löschen"
+              form={formId}
+              className="inline-flex h-8 w-8 items-center justify-center rounded-[10px] border border-amber-300/20 bg-amber-300/10 text-amber-200 hover:bg-amber-300/15"
+              aria-label="Änderungen speichern"
+              title="Änderungen speichern"
+            >
+              <SaveIcon />
+            </button>
+          ) : (
+            <span
+              className="inline-flex h-8 w-8 items-center justify-center rounded-[10px] border border-white/8 text-white/20"
+              aria-label="Änderungen speichern"
+              title="Änderungen speichern"
+            >
+              <SaveIcon />
+            </span>
+          )}
+
+          {canDelete ? (
+            <>
+              <button
+                type="button"
+                onClick={() => setIsDeleteConfirmOpen(true)}
+                className="inline-flex h-8 w-8 items-center justify-center rounded-[10px] border border-white/10 bg-white/5 text-white/72 hover:border-rose-300/20 hover:bg-rose-300/10 hover:text-rose-200"
+                aria-label="Revier dauerhaft löschen"
+                title="Revier dauerhaft löschen"
+              >
+                <TrashIcon />
+              </button>
+
+              {mounted && isDeleteConfirmOpen
+                ? createPortal(
+                    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+                      <div className="w-full max-w-md rounded-[20px] border border-white/10 bg-[#102018] p-6 shadow-2xl">
+                        <h3 className="text-lg font-semibold text-white">
+                          Revier löschen?
+                        </h3>
+                        <p className="mt-2 text-sm text-white/70">
+                          Sind Sie sicher, dass Sie dieses Revier dauerhaft
+                          löschen möchten?
+                        </p>
+
+                        <div className="mt-5 flex items-center justify-end gap-3">
+                          <button
+                            type="button"
+                            onClick={() => setIsDeleteConfirmOpen(false)}
+                            className="rounded-[10px] border border-white/10 bg-white/5 px-4 py-2 text-sm text-white/78 hover:bg-white/8 hover:text-white"
+                          >
+                            Abbrechen
+                          </button>
+
+                          <form action={deleteAction}>
+                            <input
+                              type="hidden"
+                              name="revier_id"
+                              value={revierId}
+                            />
+                            <button
+                              type="submit"
+                              className="rounded-[10px] border border-rose-300/20 bg-rose-300/10 px-4 py-2 text-sm text-rose-100 hover:bg-rose-300/15"
+                            >
+                              Löschen
+                            </button>
+                          </form>
+                        </div>
+                      </div>
+                    </div>,
+                    document.body
+                  )
+                : null}
+            </>
+          ) : (
+            <span
+              className="inline-flex h-8 w-8 items-center justify-center rounded-[10px] border border-white/8 text-white/20"
+              aria-label="Default-Revier nicht löschbar"
+              title="Default-Revier nicht löschbar"
             >
               <TrashIcon />
-            </button>
-          </form>
-        ) : (
-          <span
-            className="inline-flex h-8 w-8 items-center justify-center rounded-[10px] border border-white/8 text-white/20"
-            aria-label="Default-Revier nicht löschbar"
-            title="Default-Revier nicht löschbar"
-          >
-            <TrashIcon />
-          </span>
-        )}
-      </div>
-    </td>
+            </span>
+          )}
+        </div>
+      </td>
+    </>
   );
 }

@@ -1,5 +1,6 @@
-// src/app/orga/reviere/new/page.tsx #4
+// src/app/orga/reviere/new/page.tsx #5
 import Link from "next/link";
+import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requirePathAccess } from "@/lib/authz";
 import { supabaseServer } from "@/lib/supabaseServer";
@@ -57,6 +58,9 @@ async function createRevier(formData: FormData) {
   if (error) {
     throw new Error(`Failed to create revier: ${error.message}`);
   }
+
+  revalidatePath("/orga/reviere");
+  revalidatePath("/", "layout");
 
   redirect("/orga/reviere?created=1");
 }
