@@ -1,4 +1,4 @@
-// src/app/orga/reviere/new/page.tsx #2
+// src/app/orga/reviere/new/page.tsx #3
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { requirePathAccess } from "@/lib/authz";
@@ -22,10 +22,7 @@ async function createRevier(formData: FormData) {
 
   const name = String(formData.get("name") ?? "").trim();
   const areaHaRaw = String(formData.get("area_ha") ?? "").trim();
-  const region = String(formData.get("region") ?? "").trim();
-  const country = String(formData.get("country") ?? "DE").trim() || "DE";
   const status = String(formData.get("status") ?? "active").trim() || "active";
-  const notes = String(formData.get("notes") ?? "").trim();
 
   if (!name) {
     throw new Error("Reviername ist erforderlich.");
@@ -41,6 +38,10 @@ async function createRevier(formData: FormData) {
     throw new Error("Fläche in ha muss eine gültige positive Zahl sein.");
   }
 
+  if (!["active", "paused", "archived"].includes(status)) {
+    throw new Error("Ungültiger Revierstatus.");
+  }
+
   const areaHa = Math.round(parsed);
 
   const supabase = supabaseServer();
@@ -48,11 +49,9 @@ async function createRevier(formData: FormData) {
   const { error } = await supabase.from("reviers").insert({
     name,
     area_ha: areaHa,
-    region: region || null,
-    country,
     status,
-    notes: notes || null,
     organization_id: organization.id,
+    is_default: false,
   });
 
   if (error) {
@@ -119,39 +118,6 @@ export default async function NewRevierPage() {
 
             <div>
               <label
-                htmlFor="region"
-                className="mb-2 block text-sm font-medium text-gray-900"
-              >
-                Region
-              </label>
-              <input
-                id="region"
-                name="region"
-                type="text"
-                className="w-full rounded-md border px-3 py-2 text-sm outline-none ring-0"
-                placeholder="z. B. Ostwestfalen"
-              />
-            </div>
-
-            <div>
-              <label
-                htmlFor="country"
-                className="mb-2 block text-sm font-medium text-gray-900"
-              >
-                Land
-              </label>
-              <input
-                id="country"
-                name="country"
-                type="text"
-                defaultValue="DE"
-                className="w-full rounded-md border px-3 py-2 text-sm uppercase outline-none ring-0"
-                placeholder="DE"
-              />
-            </div>
-
-            <div>
-              <label
                 htmlFor="status"
                 className="mb-2 block text-sm font-medium text-gray-900"
               >
@@ -170,22 +136,6 @@ export default async function NewRevierPage() {
             </div>
           </div>
 
-          <div>
-            <label
-              htmlFor="notes"
-              className="mb-2 block text-sm font-medium text-gray-900"
-            >
-              Notizen
-            </label>
-            <textarea
-              id="notes"
-              name="notes"
-              rows={5}
-              className="w-full rounded-md border px-3 py-2 text-sm outline-none ring-0"
-              placeholder="Optionale Beschreibung oder interne Hinweise"
-            />
-          </div>
-
           <div className="flex flex-wrap items-center gap-3">
             <SubmitButton
               idleLabel="Revier speichern"
@@ -200,15 +150,6 @@ export default async function NewRevierPage() {
             </Link>
           </div>
         </form>
-      </section>
-
-      <section className="rounded-2xl border border-amber-200 bg-amber-50 p-6">
-        <h2 className="text-lg font-medium text-amber-900">Hinweis</h2>
-        <p className="mt-2 max-w-3xl text-sm leading-6 text-amber-900/80">
-          Boundary-Import, Kartenlogik und Geometrien folgen später. Für den MVP
-          erfassen wir hier zunächst die operativ wichtigen Stammdaten des
-          Reviers.
-        </p>
       </section>
     </main>
   );

@@ -1,7 +1,13 @@
-// src/app/orga/reviere/page.tsx #4
+// src/app/orga/reviere/page.tsx #6
 import Link from "next/link";
+import { redirect } from "next/navigation";
+import { revalidatePath } from "next/cache";
 import { requirePathAccess } from "@/lib/authz";
 import { supabaseServer } from "@/lib/supabaseServer";
+import RevierRowControls from "./RevierRowControls";
+import RevierRowActions from "./RevierRowActions";
+
+type RevierStatus = "active" | "paused" | "archived";
 
 type RevierRow = {
   id: string;
@@ -10,37 +16,176 @@ type RevierRow = {
   region: string | null;
   country: string | null;
   notes: string | null;
-  status: string;
+  status: RevierStatus;
   created_at: string;
+  is_default: boolean;
 };
 
-function formatArea(areaHa: number | null) {
-  if (areaHa == null) return "—";
-  return `${areaHa} ha`;
+function isRevierStatus(value: string): value is RevierStatus {
+  return ["active", "paused", "archived"].includes(value);
 }
 
-function formatLocation(region: string | null, country: string | null) {
-  if (region && country) return `${region}, ${country}`;
-  if (region) return region;
-  if (country) return country;
-  return "—";
+async function loadRevierForMutation(params: {
+  organizationId: string;
+  revierId: string;
+}) {
+  const supabase = supabaseServer();
+
+  const { data, error } = await supabase
+    .from("reviers")
+    .select("id,name,area_ha,region,country,notes,status,created_at,is_default")
+    .eq("organization_id", params.organizationId)
+    .eq("id", params.revierId)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(`Failed to load target revier: ${error.message}`);
+  }
+
+  return (data as RevierRow | null) ?? null;
 }
 
-function formatStatus(status: string) {
-  if (status === "active") return "Active";
-  if (status === "paused") return "Paused";
-  if (status === "archived") return "Archived";
-  return status;
+async function saveRevierChanges(formData: FormData) {
+  "use server";
+
+  const ctx = await requirePathAccess("/orga/reviere");
+
+  if (!ctx.activeMembership) {
+    throw new Error("Active organization context required");
+  }
+
+  const organization = ctx.activeMembership.organizations;
+  const revierId = String(formData.get("revier_id") ?? "").trim();
+  const name = String(formData.get("name") ?? "").trim();
+  const areaHaRaw = String(formData.get("area_ha") ?? "").trim();
+  const statusRaw = String(formData.get("status") ?? "active").trim();
+
+  if (!organization) {
+    throw new Error("Active organization not found");
+  }
+
+  if (!revierId) {
+    throw new Error("Missing target revier.");
+  }
+
+  if (!name) {
+    throw new Error("Reviername ist erforderlich.");
+  }
+
+  if (!areaHaRaw) {
+    throw new Error("Fläche in ha ist erforderlich.");
+  }
+
+  const parsed = Number(areaHaRaw);
+
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    throw new Error("Fläche in ha muss eine gültige positive Zahl sein.");
+  }
+
+  if (!isRevierStatus(statusRaw)) {
+    throw new Error("Ungültiger Revierstatus.");
+  }
+
+  const targetRevier = await loadRevierForMutation({
+    organizationId: organization.id,
+    revierId,
+  });
+
+  if (!targetRevier) {
+    throw new Error("Target revier not found.");
+  }
+
+  const areaHa = Math.round(parsed);
+
+  if (
+    targetRevier.name === name &&
+    (targetRevier.area_ha ?? null) === areaHa &&
+    targetRevier.status === statusRaw
+  ) {
+    revalidatePath("/orga/reviere");
+    redirect("/orga/reviere");
+  }
+
+  const supabase = supabaseServer();
+
+  const { error } = await supabase
+    .from("reviers")
+    .update({
+      name,
+      area_ha: areaHa,
+      status: statusRaw,
+    })
+    .eq("id", revierId)
+    .eq("organization_id", organization.id);
+
+  if (error) {
+    throw new Error(`Failed to save revier changes: ${error.message}`);
+  }
+
+  revalidatePath("/orga/reviere");
+  revalidatePath("/", "layout");
+  redirect("/orga/reviere?updated=1");
+}
+
+async function deleteRevier(formData: FormData) {
+  "use server";
+
+  const ctx = await requirePathAccess("/orga/reviere");
+
+  if (!ctx.activeMembership) {
+    throw new Error("Active organization context required");
+  }
+
+  const organization = ctx.activeMembership.organizations;
+  const revierId = String(formData.get("revier_id") ?? "").trim();
+
+  if (!organization) {
+    throw new Error("Active organization not found");
+  }
+
+  if (!revierId) {
+    throw new Error("Missing target revier.");
+  }
+
+  const targetRevier = await loadRevierForMutation({
+    organizationId: organization.id,
+    revierId,
+  });
+
+  if (!targetRevier) {
+    throw new Error("Target revier not found.");
+  }
+
+  if (targetRevier.is_default) {
+    throw new Error("Das Default-Revier kann nicht gelöscht werden.");
+  }
+
+  const supabase = supabaseServer();
+
+  const { error } = await supabase
+    .from("reviers")
+    .delete()
+    .eq("id", revierId)
+    .eq("organization_id", organization.id);
+
+  if (error) {
+    throw new Error(`Failed to delete revier: ${error.message}`);
+  }
+
+  revalidatePath("/orga/reviere");
+  revalidatePath("/", "layout");
+  redirect("/orga/reviere?deleted=1");
 }
 
 export default async function OrgaRevierePage({
   searchParams,
 }: {
-  searchParams?: Promise<{ created?: string; updated?: string }>;
+  searchParams?: Promise<{ created?: string; updated?: string; deleted?: string }>;
 }) {
   const params = (await searchParams) ?? {};
   const created = params.created === "1";
   const updated = params.updated === "1";
+  const deleted = params.deleted === "1";
 
   const ctx = await requirePathAccess("/orga/reviere");
 
@@ -58,8 +203,9 @@ export default async function OrgaRevierePage({
 
   const { data, error } = await supabase
     .from("reviers")
-    .select("id,name,area_ha,region,country,notes,status,created_at")
+    .select("id,name,area_ha,region,country,notes,status,created_at,is_default")
     .eq("organization_id", organization.id)
+    .order("is_default", { ascending: false })
     .order("name", { ascending: true });
 
   if (error) {
@@ -95,6 +241,14 @@ export default async function OrgaRevierePage({
         <section className="rounded-2xl border border-green-200 bg-green-50 p-4">
           <p className="text-sm text-green-800">
             Revier wurde erfolgreich aktualisiert.
+          </p>
+        </section>
+      ) : null}
+
+      {deleted ? (
+        <section className="rounded-2xl border border-green-200 bg-green-50 p-4">
+          <p className="text-sm text-green-800">
+            Revier wurde erfolgreich gelöscht.
           </p>
         </section>
       ) : null}
@@ -166,55 +320,36 @@ export default async function OrgaRevierePage({
             <table className="min-w-full text-sm">
               <thead className="bg-gray-50 text-left text-gray-600">
                 <tr>
-                  <th className="px-6 py-3 font-medium">Name</th>
-                  <th className="px-6 py-3 font-medium">Fläche</th>
-                  <th className="px-6 py-3 font-medium">Region / Land</th>
-                  <th className="px-6 py-3 font-medium">Status</th>
-                  <th className="px-6 py-3 font-medium">Notizen</th>
-                  <th className="px-6 py-3 font-medium">Aktion</th>
+                  <th className="px-6 py-3 font-medium whitespace-nowrap">Name</th>
+                  <th className="px-6 py-3 font-medium whitespace-nowrap">Fläche</th>
+                  <th className="px-6 py-3 font-medium whitespace-nowrap">Status</th>
+                  <th className="px-6 py-3 font-medium whitespace-nowrap text-right">
+                    Aktionen
+                  </th>
                 </tr>
               </thead>
               <tbody>
                 {reviers.map((revier) => (
-                  <tr key={revier.id} className="border-t align-top">
-                    <td className="px-6 py-4 font-medium text-gray-900">
-                      {revier.name}
-                    </td>
-                    <td className="px-6 py-4 text-gray-600">
-                      {formatArea(revier.area_ha)}
-                    </td>
-                    <td className="px-6 py-4 text-gray-600">
-                      {formatLocation(revier.region, revier.country)}
-                    </td>
-                    <td className="px-6 py-4 text-gray-600">
-                      {formatStatus(revier.status)}
-                    </td>
-                    <td className="px-6 py-4 text-gray-600">
-                      {revier.notes?.trim() ? revier.notes : "—"}
-                    </td>
-                    <td className="px-6 py-4">
-                      <Link
-                        href={`/orga/reviere/${revier.id}/edit`}
-                        className="rounded-md border px-3 py-2 text-sm hover:bg-gray-50"
-                      >
-                        Edit
-                      </Link>
-                    </td>
+                  <tr key={revier.id} className="border-t align-middle">
+                    <RevierRowControls
+                      revierId={revier.id}
+                      initialName={revier.name}
+                      initialAreaHa={revier.area_ha ?? 1}
+                      initialStatus={revier.status}
+                      saveAction={saveRevierChanges}
+                    />
+
+                    <RevierRowActions
+                      revierId={revier.id}
+                      canDelete={!revier.is_default}
+                      deleteAction={deleteRevier}
+                    />
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
         )}
-      </section>
-
-      <section className="rounded-2xl border border-amber-200 bg-amber-50 p-6">
-        <h2 className="text-lg font-medium text-amber-900">Hinweis</h2>
-        <p className="mt-2 max-w-3xl text-sm leading-6 text-amber-900/80">
-          Boundary-Import, Kartenlogik und Geometrien folgen später. Für den MVP
-          erfassen und pflegen wir hier zunächst die operativ wichtigen
-          Stammdaten der Reviere.
-        </p>
       </section>
     </main>
   );
