@@ -1,4 +1,4 @@
-// src/app/orga/members/page.tsx #14
+// src/app/orga/members/page.tsx #14b
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
@@ -253,14 +253,20 @@ async function removeMember(formData: FormData) {
 
   const supabase = supabaseServer();
 
-  const { error } = await supabase
+  const { error: membershipDeleteError } = await supabase
     .from("organization_members")
     .delete()
     .eq("organization_id", organization.id)
     .eq("user_id", targetUserId);
 
-  if (error) {
-    throw new Error(`Failed to remove member: ${error.message}`);
+  if (membershipDeleteError) {
+    throw new Error(`Failed to remove member: ${membershipDeleteError.message}`);
+  }
+
+  const { error: authDeleteError } = await supabase.auth.admin.deleteUser(targetUserId);
+
+  if (authDeleteError && authDeleteError.message !== "User not found") {
+    throw new Error(`Failed to remove auth user: ${authDeleteError.message}`);
   }
 
   revalidatePath("/orga/members");
@@ -268,6 +274,12 @@ async function removeMember(formData: FormData) {
   revalidatePath("/orga/subscription");
   redirect("/orga/members?removed=1");
 }
+
+
+
+
+
+
 
 async function resendInvite(formData: FormData) {
   "use server";
