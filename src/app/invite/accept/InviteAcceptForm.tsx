@@ -1,4 +1,4 @@
-// src/app/invite/accept/InviteAcceptForm.tsx #5
+// src/app/invite/accept/InviteAcceptForm.tsx #5b
 "use client";
 
 import { useState } from "react";
@@ -22,52 +22,70 @@ export default function InviteAcceptForm({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    setLoading(true);
-    setError("");
+async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
+  e.preventDefault();
+  setLoading(true);
+  setError("");
 
-    if (!password) {
+  if (!password) {
+    setLoading(false);
+    setError("Bitte erst ein Passwort festlegen.");
+    return;
+  }
+
+  if (password.length < 8) {
+    setLoading(false);
+    setError("Das Passwort muss mindestens 8 Zeichen lang sein.");
+    return;
+  }
+
+  if (!passwordRepeat) {
+    setLoading(false);
+    setError("Bitte das Passwort zur Kontrolle wiederholen.");
+    return;
+  }
+
+  if (password !== passwordRepeat) {
+    setLoading(false);
+    setError("Passwort und Wiederholung stimmen nicht überein.");
+    return;
+  }
+
+  let session: Awaited<ReturnType<typeof supabase.auth.getSession>>["data"]["session"] | null =
+    null;
+
+  const signUpResult = await supabase.auth.signUp({
+    email: inviteEmail,
+    password,
+  });
+
+  if (signUpResult.error) {
+    const message = signUpResult.error.message.toLowerCase();
+    const accountAlreadyExists =
+      message.includes("already") || message.includes("registered");
+
+    if (!accountAlreadyExists) {
       setLoading(false);
-      setError("Bitte erst ein Passwort festlegen.");
+      setError(signUpResult.error.message);
       return;
     }
 
-    if (password.length < 8) {
-      setLoading(false);
-      setError("Das Passwort muss mindestens 8 Zeichen lang sein.");
-      return;
-    }
-
-    if (!passwordRepeat) {
-      setLoading(false);
-      setError("Bitte das Passwort zur Kontrolle wiederholen.");
-      return;
-    }
-
-    if (password !== passwordRepeat) {
-      setLoading(false);
-      setError("Passwort und Wiederholung stimmen nicht überein.");
-      return;
-    }
-
-    const signUpResult = await supabase.auth.signUp({
+    const signInExistingResult = await supabase.auth.signInWithPassword({
       email: inviteEmail,
       password,
     });
 
-    if (signUpResult.error) {
+    if (signInExistingResult.error) {
       setLoading(false);
       setError(
-        signUpResult.error.message.includes("already") ||
-          signUpResult.error.message.includes("registered")
-          ? "Für diese E-Mail existiert bereits ein Account. Bitte logge Dich mit dieser E-Mail ein und öffne danach den Einladungslink erneut."
-          : signUpResult.error.message
+        "Für diese E-Mail existiert bereits ein Account. Bitte logge Dich mit dem bestehenden Passwort ein und öffne danach den Einladungslink erneut."
       );
       return;
     }
 
-    let session = signUpResult.data.session ?? null;
+    session = signInExistingResult.data.session ?? null;
+  } else {
+    session = signUpResult.data.session ?? null;
 
     if (!session) {
       const signInResult = await supabase.auth.signInWithPassword({
@@ -85,31 +103,38 @@ export default function InviteAcceptForm({
 
       session = signInResult.data.session ?? null;
     }
-
-    if (!session) {
-      setLoading(false);
-      setError("Keine aktive Session nach Signup/Login erhalten.");
-      return;
-    }
-
-    const acceptResponse = await fetch("/api/invites/accept", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ token }),
-    });
-
-    if (!acceptResponse.ok) {
-      const payload = await acceptResponse.json().catch(() => null);
-      setLoading(false);
-      setError(payload?.error ?? "Einladung konnte nicht angenommen werden.");
-      return;
-    }
-
-    router.push("/");
-    router.refresh();
   }
+
+  if (!session) {
+    setLoading(false);
+    setError("Keine aktive Session nach Signup/Login erhalten.");
+    return;
+  }
+
+  const acceptResponse = await fetch("/api/invites/accept", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ token }),
+  });
+
+  if (!acceptResponse.ok) {
+    const payload = await acceptResponse.json().catch(() => null);
+    setLoading(false);
+    setError(payload?.error ?? "Einladung konnte nicht angenommen werden.");
+    return;
+  }
+
+  router.push("/");
+  router.refresh();
+}
+
+
+
+
+
+
 
   return (
     <form onSubmit={onSubmit} className="space-y-6">
