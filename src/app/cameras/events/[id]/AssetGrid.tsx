@@ -1,4 +1,4 @@
-// src/app/cameras/events/[id]/AssetGrid.tsx #2
+// src/app/cameras/events/[id]/AssetGrid.tsx #3
 "use client";
 
 import { useState } from "react";
@@ -8,21 +8,21 @@ type AssetItem = {
   previewUrl?: string;
   timestampLabel: string;
   storagePath?: string;
-  relevant: boolean | null;
+  relevant: boolean;
+  relevantUser: boolean | null;
   empty?: boolean | null;
   emptyConfidence?: number | null;
 };
 
 function effectiveRelevant(a: AssetItem) {
-  if (typeof a.relevant === "boolean") return a.relevant;
-  if (a.empty === true) return false;
-  return true;
+  if (typeof a.relevantUser === "boolean") return a.relevantUser;
+  return a.relevant;
 }
 
 function badgeLabel(a: AssetItem) {
   const eff = effectiveRelevant(a);
 
-  if (typeof a.relevant === "boolean") {
+  if (typeof a.relevantUser === "boolean") {
     return `OVERRIDE · ${eff ? "relevant" : "irrelevant"}`;
   }
 
@@ -39,7 +39,7 @@ function badgeLabel(a: AssetItem) {
 
 function badgeClasses(a: AssetItem) {
   const eff = effectiveRelevant(a);
-  if (typeof a.relevant === "boolean") {
+  if (typeof a.relevantUser === "boolean") {
     return eff
       ? "border-amber-300/20 bg-amber-300/10 text-amber-200"
       : "border-white/10 bg-white/5 text-white/72";
@@ -55,7 +55,9 @@ export default function AssetGrid({ initialAssets }: { initialAssets: AssetItem[
 
   async function setOverride(assetId: string, next: boolean | null) {
     const prev = assets;
-    setAssets((p) => p.map((a) => (a.id === assetId ? { ...a, relevant: next } : a)));
+    setAssets((p) =>
+      p.map((a) => (a.id === assetId ? { ...a, relevantUser: next } : a))
+    );
     setBusyId(assetId);
 
     try {
@@ -82,7 +84,7 @@ export default function AssetGrid({ initialAssets }: { initialAssets: AssetItem[
       {assets.map((a) => {
         const isBusy = busyId === a.id;
         const eff = effectiveRelevant(a);
-        const isOverride = typeof a.relevant === "boolean";
+        const isOverride = typeof a.relevantUser === "boolean";
 
         return (
           <div

@@ -1,4 +1,4 @@
-// src/app/cameras/page.tsx #5
+// src/app/cameras/page.tsx #6
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
@@ -10,7 +10,8 @@ type AssetRow = {
   storage_path: string;
   status: string;
   created_at: string;
-  relevant: boolean | null;
+  relevant: boolean;
+  relevant_user: boolean | null;
   relevant_effective: boolean;
   empty: boolean | null;
   empty_confidence: number | null;
@@ -42,8 +43,8 @@ function healthEmoji(status?: string) {
 }
 
 function relevanceLabel(a: AssetRow) {
-  if (a.relevant === true) return { text: "✅ relevant (manuell)" };
-  if (a.relevant === false) return { text: "🚫 irrelevant (manuell)" };
+  if (a.relevant_user === true) return { text: "✅ relevant (manuell)" };
+  if (a.relevant_user === false) return { text: "🚫 irrelevant (manuell)" };
 
   if (a.empty === true) {
     const pct =

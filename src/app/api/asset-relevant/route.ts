@@ -1,4 +1,4 @@
-// src/app/api/asset-relevant/route.ts
+// src/app/api/asset-relevant/route.ts #2
 export const runtime = "nodejs";
 
 import { NextResponse } from "next/server";
@@ -7,7 +7,11 @@ import { requireOrganizationRole } from "@/lib/auth";
 
 export async function POST(req: Request) {
   try {
-    const { activeMembership } = await requireOrganizationRole(["owner", "admin", "member"]);
+    const { activeMembership } = await requireOrganizationRole([
+      "owner",
+      "admin",
+      "member",
+    ]);
 
     const activeOrganization = activeMembership.organizations;
 
@@ -27,6 +31,13 @@ export async function POST(req: Request) {
     if (!assetId || relevant === undefined) {
       return NextResponse.json(
         { error: "assetId and relevant required" },
+        { status: 400 }
+      );
+    }
+
+    if (relevant !== null && typeof relevant !== "boolean") {
+      return NextResponse.json(
+        { error: "relevant must be boolean or null" },
         { status: 400 }
       );
     }
@@ -59,16 +70,9 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "not allowed" }, { status: 403 });
     }
 
-    const patch: Record<string, unknown> = { relevant };
-
-    if (relevant === true) {
-      patch.empty = false;
-      patch.empty_confidence = null;
-    }
-
     const { error } = await supabase
       .from("assets")
-      .update(patch)
+      .update({ relevant_user: relevant })
       .eq("id", assetId);
 
     if (error) {

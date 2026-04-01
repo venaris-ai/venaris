@@ -249,7 +249,7 @@ export default async function CameraEventDetailPage(props: {
     const { data: assetsData, error: assetsDataErr } = await supabase
       .from("assets")
       .select(
-        "id,camera_id,storage_path,created_at,captured_at,status,relevant,empty,empty_confidence"
+        "id,camera_id,storage_path,created_at,captured_at,status,relevant,relevant_user,empty,empty_confidence"
       )
       .in("id", assetIds)
       .order("created_at", { ascending: false });
@@ -272,9 +272,13 @@ export default async function CameraEventDetailPage(props: {
     previewUrl: signedUrlsByAssetId[a.id],
     timestampLabel: fmt(a.captured_at ?? a.created_at),
     storagePath: a.storage_path,
-    relevant: a.relevant ?? null,
-    empty: a.empty ?? null,
-    emptyConfidence: a.empty_confidence ?? null,
+
+relevant: a.relevant,
+relevantUser: a.relevant_user ?? null,
+empty: a.empty ?? null,
+emptyConfidence: a.empty_confidence ?? null,
+
+
   }));
 
   const cameraLabel = camera?.name
