@@ -1,9 +1,13 @@
-// src/app/api/camera-health/route.ts #2
+// src/app/api/camera-health/route.ts #2b
 export const runtime = "nodejs";
 
 import { NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabaseServer";
 import { requireOrganizationRole } from "@/lib/auth";
+import {
+  resolveRevierScope,
+  type RevierOption,
+} from "@/lib/intelligence/revierScope";
 
 export async function GET(req: Request) {
   try {
@@ -17,20 +21,53 @@ export async function GET(req: Request) {
       );
     }
 
-    const supabase = supabaseServer();
-    const { searchParams } = new URL(req.url);
-    const revier = searchParams.get("revier");
 
-    let camerasQuery = supabase
-      .from("cameras")
-      .select("id")
-      .eq("organization_id", activeOrganization.id);
+const supabase = supabaseServer();
+const { searchParams } = new URL(req.url);
+const rawRevier = searchParams.get("revier") ?? undefined;
 
-    if (revier && revier !== "all") {
-      camerasQuery = camerasQuery.eq("revier_id", revier);
-    }
+const { data: reviersData, error: reviersError } = await supabase
+  .from("reviers")
+  .select("id,name")
+  .eq("organization_id", activeOrganization.id)
+  .eq("status", "active")
+  .order("name", { ascending: true });
 
-    const { data: cameras, error: camerasError } = await camerasQuery;
+if (reviersError) {
+  return NextResponse.json(
+    { error: reviersError.message },
+    { status: 500 }
+  );
+}
+
+const allowedReviers: RevierOption[] = (reviersData ?? []).map((revier) => ({
+  id: revier.id,
+  name: revier.name,
+}));
+const revierScope = resolveRevierScope(rawRevier, allowedReviers);
+const allowedRevierIds = allowedReviers.map((revier) => revier.id);
+
+if (allowedRevierIds.length === 0) {
+  return NextResponse.json({ items: [] });
+}
+
+let camerasQuery = supabase
+  .from("cameras")
+  .select("id")
+  .eq("organization_id", activeOrganization.id);
+
+camerasQuery =
+  revierScope.type === "single"
+    ? camerasQuery.eq("revier_id", revierScope.revierId)
+    : camerasQuery.in("revier_id", allowedRevierIds);
+
+const { data: cameras, error: camerasError } = await camerasQuery;
+
+
+
+
+
+
 
     if (camerasError) {
       return NextResponse.json(

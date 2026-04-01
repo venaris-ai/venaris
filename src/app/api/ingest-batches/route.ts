@@ -1,7 +1,12 @@
-// src/app/api/ingest-batches/route.ts #2
+// src/app/api/ingest-batches/route.ts #2b
+
 import { NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabaseServer";
 import { requireOrganizationRole } from "@/lib/auth";
+import {
+  resolveRevierScope,
+  type RevierOption,
+} from "@/lib/intelligence/revierScope";
 
 export const dynamic = "force-dynamic";
 
@@ -22,29 +27,62 @@ export async function GET(req: Request) {
       );
     }
 
-    const supabase = supabaseServer();
-    const { searchParams } = new URL(req.url);
+const supabase = supabaseServer();
+const { searchParams } = new URL(req.url);
 
-    const limitRaw = Number(searchParams.get("limit") || 50);
-    const limit = Number.isFinite(limitRaw)
-      ? Math.min(Math.max(limitRaw, 1), 200)
-      : 50;
+const limitRaw = Number(searchParams.get("limit") || 50);
+const limit = Number.isFinite(limitRaw)
+  ? Math.min(Math.max(limitRaw, 1), 200)
+  : 50;
 
-    const source = searchParams.get("source");
-    const status = searchParams.get("status");
-    const cameraId = searchParams.get("cameraId");
-    const revier = searchParams.get("revier");
+const source = searchParams.get("source");
+const status = searchParams.get("status");
+const cameraId = searchParams.get("cameraId");
+const rawRevier = searchParams.get("revier") ?? undefined;
 
-    let camerasQuery = supabase
-      .from("cameras")
-      .select("id")
-      .eq("organization_id", activeOrganization.id);
+const { data: reviersData, error: reviersError } = await supabase
+  .from("reviers")
+  .select("id,name")
+  .eq("organization_id", activeOrganization.id)
+  .eq("status", "active")
+  .order("name", { ascending: true });
 
-    if (revier && revier !== "all") {
-      camerasQuery = camerasQuery.eq("revier_id", revier);
-    }
+if (reviersError) {
+  return NextResponse.json(
+    { error: "revier_lookup_failed", details: reviersError.message },
+    { status: 500 }
+  );
+}
 
-    const { data: cameras, error: camerasError } = await camerasQuery;
+const allowedReviers: RevierOption[] = (reviersData ?? []).map((revier) => ({
+  id: revier.id,
+  name: revier.name,
+}));
+const revierScope = resolveRevierScope(rawRevier, allowedReviers);
+const allowedRevierIds = allowedReviers.map((revier) => revier.id);
+
+if (allowedRevierIds.length === 0) {
+  return NextResponse.json({ ok: true, items: [] });
+}
+
+let camerasQuery = supabase
+  .from("cameras")
+  .select("id")
+  .eq("organization_id", activeOrganization.id);
+
+camerasQuery =
+  revierScope.type === "single"
+    ? camerasQuery.eq("revier_id", revierScope.revierId)
+    : camerasQuery.in("revier_id", allowedRevierIds);
+
+const { data: cameras, error: camerasError } = await camerasQuery;
+
+
+
+
+
+
+
 
     if (camerasError) {
       return NextResponse.json(
