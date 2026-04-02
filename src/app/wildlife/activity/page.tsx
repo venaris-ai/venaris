@@ -1,4 +1,4 @@
-// src/app/wildlife/activity/page.tsx #2
+// src/app/wildlife/activity/page.tsx #2b
 export const runtime = "nodejs";
 
 import Link from "next/link";
@@ -479,27 +479,27 @@ export default async function WildlifeActivityPage(props: {
             </p>
           </div>
 
-          <div className="space-y-2">
-            {overallHourly.map((row) => {
-              const widthPct = `${(row.count / maxOverallHourly) * 100}%`;
+<div className="space-y-2">
+  {overallHourly.map((row) => {
+    const widthPct = `${(row.count / maxOverallHourly) * 100}%`;
 
-              return (
-                <div
-                  key={row.hour}
-                  className="grid grid-cols-[72px_1fr_48px] items-center gap-3"
-                >
-                  <div className="text-sm text-white/72">{fmtHour(row.hour)}</div>
-                  <div className="h-5 rounded bg-white/8">
-                    <div
-                      className="h-5 rounded bg-amber-300/80"
-                      style={{ width: widthPct }}
-                    />
-                  </div>
-                  <div className="text-right text-sm text-white/72">{row.count}</div>
-                </div>
-              );
-            })}
-          </div>
+    return (
+      <div
+        key={row.hour}
+        className="grid grid-cols-[72px_1fr_48px] items-center gap-3"
+      >
+        <div className="text-sm text-white/72">{fmtHour(row.hour)}</div>
+        <div className="h-5 rounded-full bg-white/8">
+          <div
+            className="h-5 rounded-full bg-[#c9952e]"
+            style={{ width: widthPct }}
+          />
+        </div>
+        <div className="text-right text-sm text-white/72">{row.count}</div>
+      </div>
+    );
+  })}
+</div>
         </div>
 
         <div className="rounded-[28px] border border-white/10 bg-white/5 p-5 backdrop-blur-sm">
