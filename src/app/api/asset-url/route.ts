@@ -1,13 +1,28 @@
-// src/app/api/asset-url/route.ts
+// src/app/api/asset-url/route.ts #2
 export const runtime = "nodejs";
 
 import { NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabaseServer";
 import { requireOrganizationRole } from "@/lib/auth";
 
+function isStorageObjectMissing(message: string | undefined) {
+  const value = (message ?? "").toLowerCase();
+
+  return (
+    value.includes("not found") ||
+    value.includes("object not found") ||
+    value.includes("no such object") ||
+    value.includes("does not exist")
+  );
+}
+
 export async function GET(req: Request) {
   try {
-    const { activeMembership } = await requireOrganizationRole(["owner", "admin", "member"]);
+    const { activeMembership } = await requireOrganizationRole([
+      "owner",
+      "admin",
+      "member",
+    ]);
     const activeOrganization = activeMembership.organizations;
 
     if (!activeOrganization) {
@@ -55,10 +70,24 @@ export async function GET(req: Request) {
 
     const { data, error } = await supabase.storage
       .from("camera-assets")
-      .createSignedUrl(path, 60 * 10);
+      .createSignedUrl(asset.storage_path, 60 * 10);
 
     if (error) {
+      if (isStorageObjectMissing(error.message)) {
+        return NextResponse.json(
+          { error: "storage object not found" },
+          { status: 404 }
+        );
+      }
+
       return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    if (!data?.signedUrl) {
+      return NextResponse.json(
+        { error: "signed url missing" },
+        { status: 500 }
+      );
     }
 
     return NextResponse.json({ url: data.signedUrl });
