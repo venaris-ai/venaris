@@ -1,9 +1,9 @@
-// src/app/api/camera-token/route.ts
+// src/app/api/camera-token/route.ts #2
 export const runtime = "nodejs";
 
 import { NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabaseServer";
-import { requireOrganizationRole } from "@/lib/auth";
+import { assertNotDemoWrite, requireOrganizationRole } from "@/lib/auth";
 
 export async function GET(req: Request) {
   try {
@@ -67,10 +67,18 @@ export async function GET(req: Request) {
   }
 }
 
+
 export async function POST(req: Request) {
   try {
-    const { activeMembership } = await requireOrganizationRole(["owner", "admin"]);
+    const ctx = await requireOrganizationRole(["owner", "admin"]);
+    assertNotDemoWrite(ctx);
+
+    const { activeMembership } = ctx;
     const activeOrganization = activeMembership.organizations;
+
+
+
+
 
     if (!activeOrganization) {
       return NextResponse.json(

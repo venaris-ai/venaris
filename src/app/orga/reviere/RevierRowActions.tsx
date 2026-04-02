@@ -1,4 +1,4 @@
-// src/app/orga/reviere/RevierRowActions.tsx #5
+// src/app/orga/reviere/RevierRowActions.tsx #6
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
@@ -49,13 +49,16 @@ export default function RevierRowActions({
   revierId,
   canDelete,
   deleteAction,
+  isDemo = false,
 }: {
   revierId: string;
   canDelete: boolean;
   deleteAction: (formData: FormData) => void | Promise<void>;
+  isDemo?: boolean;
 }) {
   const [isDirty, setIsDirty] = useState(false);
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
+  const [isReadOnlyModalOpen, setIsReadOnlyModalOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
   const formId = useMemo(() => `revier-controls-${revierId}`, [revierId]);
 
@@ -81,15 +84,27 @@ export default function RevierRowActions({
       <td className="px-6 py-4 text-right whitespace-nowrap">
         <div className="flex items-center justify-end gap-2">
           {isDirty ? (
-            <button
-              type="submit"
-              form={formId}
-              className="inline-flex h-8 w-8 items-center justify-center rounded-[10px] border border-amber-300/20 bg-amber-300/10 text-amber-200 hover:bg-amber-300/15"
-              aria-label="Änderungen speichern"
-              title="Änderungen speichern"
-            >
-              <SaveIcon />
-            </button>
+            isDemo ? (
+              <button
+                type="button"
+                onClick={() => setIsReadOnlyModalOpen(true)}
+                className="inline-flex h-8 w-8 items-center justify-center rounded-[10px] border border-amber-300/20 bg-amber-300/10 text-amber-200 hover:bg-amber-300/15"
+                aria-label="Änderungen speichern"
+                title="Änderungen speichern"
+              >
+                <SaveIcon />
+              </button>
+            ) : (
+              <button
+                type="submit"
+                form={formId}
+                className="inline-flex h-8 w-8 items-center justify-center rounded-[10px] border border-amber-300/20 bg-amber-300/10 text-amber-200 hover:bg-amber-300/15"
+                aria-label="Änderungen speichern"
+                title="Änderungen speichern"
+              >
+                <SaveIcon />
+              </button>
+            )
           ) : (
             <span
               className="inline-flex h-8 w-8 items-center justify-center rounded-[10px] border border-white/8 text-white/20"
@@ -104,7 +119,11 @@ export default function RevierRowActions({
             <>
               <button
                 type="button"
-                onClick={() => setIsDeleteConfirmOpen(true)}
+                onClick={() =>
+                  isDemo
+                    ? setIsReadOnlyModalOpen(true)
+                    : setIsDeleteConfirmOpen(true)
+                }
                 className="inline-flex h-8 w-8 items-center justify-center rounded-[10px] border border-white/10 bg-white/5 text-white/72 hover:border-rose-300/20 hover:bg-rose-300/10 hover:text-rose-200"
                 aria-label="Revier dauerhaft löschen"
                 title="Revier dauerhaft löschen"
@@ -146,6 +165,33 @@ export default function RevierRowActions({
                               Löschen
                             </button>
                           </form>
+                        </div>
+                      </div>
+                    </div>,
+                    document.body
+                  )
+                : null}
+
+              {mounted && isReadOnlyModalOpen
+                ? createPortal(
+                    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+                      <div className="w-full max-w-md rounded-[20px] border border-white/10 bg-[#102018] p-6 shadow-2xl">
+                        <h3 className="text-lg font-semibold text-white">
+                          Demo-Modus
+                        </h3>
+                        <p className="mt-2 text-sm text-white/70">
+                          Das ist ein Demo-Account. Datensätze können weder
+                          entfernt noch hinzugefügt oder geändert werden.
+                        </p>
+
+                        <div className="mt-5 flex items-center justify-end gap-3">
+                          <button
+                            type="button"
+                            onClick={() => setIsReadOnlyModalOpen(false)}
+                            className="rounded-[10px] border border-white/10 bg-white/5 px-4 py-2 text-sm text-white/78 hover:bg-white/8 hover:text-white"
+                          >
+                            Verstanden
+                          </button>
                         </div>
                       </div>
                     </div>,

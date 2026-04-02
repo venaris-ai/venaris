@@ -1,4 +1,4 @@
-// src/app/cameras/events/[id]/AssetGrid.tsx #3
+// src/app/cameras/events/[id]/AssetGrid.tsx #4
 "use client";
 
 import { useState } from "react";
@@ -49,11 +49,24 @@ function badgeClasses(a: AssetItem) {
   return "border-amber-300/20 bg-amber-300/10 text-amber-200";
 }
 
-export default function AssetGrid({ initialAssets }: { initialAssets: AssetItem[] }) {
+export default function AssetGrid({
+  initialAssets,
+  isDemo = false,
+}: {
+  initialAssets: AssetItem[];
+  isDemo?: boolean;
+}) {
   const [assets, setAssets] = useState<AssetItem[]>(initialAssets);
   const [busyId, setBusyId] = useState<string | null>(null);
 
   async function setOverride(assetId: string, next: boolean | null) {
+    if (isDemo) {
+      alert(
+        "Das ist ein Demo-Account. Datensätze können weder entfernt noch hinzugefügt oder geändert werden."
+      );
+      return;
+    }
+
     const prev = assets;
     setAssets((p) =>
       p.map((a) => (a.id === assetId ? { ...a, relevantUser: next } : a))
@@ -73,7 +86,12 @@ export default function AssetGrid({ initialAssets }: { initialAssets: AssetItem[
       }
     } catch (e) {
       setAssets(prev);
-      alert(`Konnte Relevanz nicht speichern: ${(e as any)?.message ?? String(e)}`);
+      const message = String((e as any)?.message ?? e);
+      alert(
+        message.includes("Demo mode is read-only")
+          ? "Demo-Modus: Änderungen sind deaktiviert."
+          : `Konnte Relevanz nicht speichern: ${message}`
+      );
     } finally {
       setBusyId(null);
     }
@@ -129,6 +147,7 @@ export default function AssetGrid({ initialAssets }: { initialAssets: AssetItem[
                     ].join(" ")}
                     disabled={isBusy}
                     onClick={() => setOverride(a.id, true)}
+                    title={isDemo ? "Demo-Modus: Änderungen sind deaktiviert." : ""}
                   >
                     Mark relevant
                   </button>
@@ -142,6 +161,7 @@ export default function AssetGrid({ initialAssets }: { initialAssets: AssetItem[
                     ].join(" ")}
                     disabled={isBusy}
                     onClick={() => setOverride(a.id, false)}
+                    title={isDemo ? "Demo-Modus: Änderungen sind deaktiviert." : ""}
                   >
                     Mark irrelevant
                   </button>
@@ -156,7 +176,11 @@ export default function AssetGrid({ initialAssets }: { initialAssets: AssetItem[
                   ].join(" ")}
                   disabled={isBusy}
                   onClick={() => setOverride(a.id, null)}
-                  title="Override entfernen, zurück zu Auto"
+                  title={
+                    isDemo
+                      ? "Demo-Modus: Änderungen sind deaktiviert."
+                      : "Override entfernen, zurück zu Auto"
+                  }
                 >
                   Reset (Auto)
                 </button>

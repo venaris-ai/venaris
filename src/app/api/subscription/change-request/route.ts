@@ -1,6 +1,6 @@
-// src/app/api/subscription/change-request/route.ts #1
+// src/app/api/subscription/change-request/route.ts #3
 import { NextRequest, NextResponse } from "next/server";
-import { requireActiveOrganization } from "@/lib/auth";
+import { assertNotDemoWrite, requireOrganizationRole } from "@/lib/auth";
 import { supabaseServer } from "@/lib/supabaseServer";
 
 type PlanKey = "starter" | "pro" | "enterprise";
@@ -43,16 +43,10 @@ function deriveRequestType(
 
 export async function POST(req: NextRequest) {
   try {
-    const ctx = await requireActiveOrganization();
+    const ctx = await requireOrganizationRole(["owner"]);
+    assertNotDemoWrite(ctx);
+
     const { user, activeMembership } = ctx;
-
-    if (!["owner", "admin"].includes(activeMembership.role)) {
-      return NextResponse.json(
-        { error: "insufficient permissions" },
-        { status: 403 }
-      );
-    }
-
     const organization = activeMembership.organizations;
 
     if (!organization) {

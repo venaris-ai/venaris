@@ -1,19 +1,20 @@
-// src/app/api/asset-relevant/route.ts #2
+// src/app/api/asset-relevant/route.ts #3
 export const runtime = "nodejs";
 
 import { NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabaseServer";
-import { requireOrganizationRole } from "@/lib/auth";
+import { assertNotDemoWrite, requireOrganizationRole } from "@/lib/auth";
 
 export async function POST(req: Request) {
   try {
-    const { activeMembership } = await requireOrganizationRole([
+    const ctx = await requireOrganizationRole([
       "owner",
       "admin",
       "member",
     ]);
+    assertNotDemoWrite(ctx);
 
-    const activeOrganization = activeMembership.organizations;
+    const activeOrganization = ctx.activeMembership.organizations;
 
     if (!activeOrganization) {
       return NextResponse.json(

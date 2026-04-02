@@ -1,4 +1,4 @@
-// src/app/orga/reviere/RevierRowControls.tsx #3
+// src/app/orga/reviere/RevierRowControls.tsx #4
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
@@ -19,19 +19,20 @@ export default function RevierRowControls({
   initialAreaHa,
   initialStatus,
   saveAction,
+  isDemo = false,
 }: {
   revierId: string;
   initialName: string;
   initialAreaHa: number;
   initialStatus: RevierStatus;
   saveAction: (formData: FormData) => void | Promise<void>;
+  isDemo?: boolean;
 }) {
   const [name, setName] = useState(initialName);
   const [areaHa, setAreaHa] = useState(String(initialAreaHa));
   const [status, setStatus] = useState<RevierStatus>(initialStatus);
 
   const formId = useMemo(() => `revier-controls-${revierId}`, [revierId]);
-
   const dirty =
     name !== initialName ||
     areaHa !== String(initialAreaHa) ||
@@ -46,7 +47,7 @@ export default function RevierRowControls({
 
   return (
     <>
-      <td className="px-6 py-4">
+      <td className="px-6 py-4 text-white/68 whitespace-nowrap">
         <form id={formId} action={saveAction}>
           <input type="hidden" name="revier_id" value={revierId} />
           <input type="hidden" name="name" value={name} />
@@ -56,21 +57,20 @@ export default function RevierRowControls({
           <input
             value={name}
             onChange={(e) => setName(e.target.value)}
-            className="w-full min-w-[220px] rounded-[10px] border border-white/10 bg-white/5 px-2.5 py-1.5 text-sm text-white outline-none placeholder:text-white/35"
-            aria-label="Reviername"
+            disabled={isDemo}
+            className="w-full rounded-[10px] border border-white/10 bg-white/5 px-2.5 py-1.5 text-sm text-white outline-none disabled:bg-white/5 disabled:text-white/35"
+            title={isDemo ? "Demo-Modus: Änderungen sind deaktiviert." : ""}
           />
         </form>
       </td>
 
       <td className="px-6 py-4 text-white/68 whitespace-nowrap">
         <input
-          type="number"
-          min={1}
-          step={1}
           value={areaHa}
           onChange={(e) => setAreaHa(e.target.value)}
-          className="w-24 rounded-[10px] border border-white/10 bg-white/5 px-2.5 py-1.5 text-sm text-white outline-none"
-          aria-label="Fläche in ha"
+          disabled={isDemo}
+          className="w-24 rounded-[10px] border border-white/10 bg-white/5 px-2.5 py-1.5 text-sm text-white outline-none disabled:bg-white/5 disabled:text-white/35"
+          title={isDemo ? "Demo-Modus: Änderungen sind deaktiviert." : ""}
         />
       </td>
 
@@ -78,8 +78,9 @@ export default function RevierRowControls({
         <select
           value={status}
           onChange={(e) => setStatus(e.target.value as RevierStatus)}
-          className="rounded-[10px] border border-white/10 bg-white/5 px-2.5 py-1.5 text-sm text-white outline-none"
-          aria-label="Status"
+          disabled={isDemo}
+          className="rounded-[10px] border border-white/10 bg-white/5 px-2.5 py-1.5 text-sm text-white outline-none disabled:bg-white/5 disabled:text-white/35"
+          title={isDemo ? "Demo-Modus: Änderungen sind deaktiviert." : ""}
         >
           <option value="active" className="bg-[#102018] text-white">
             Active

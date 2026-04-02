@@ -1,8 +1,8 @@
-// src/app/api/cameras/create/route.ts #4
+// src/app/api/cameras/create/route.ts #4b
 import { NextRequest, NextResponse } from "next/server";
 import crypto from "node:crypto";
 import { supabaseServer } from "@/lib/supabaseServer";
-import { requireOrganizationRole } from "@/lib/auth";
+import { assertNotDemoWrite, requireOrganizationRole } from "@/lib/auth";
 import { canCreateCamera } from "@/lib/billing/subscriptionPolicy";
 
 type Vendor =
@@ -168,8 +168,14 @@ async function provisionFtpOnHetzner(params: {
 export async function POST(req: NextRequest) {
   try {
     const body = (await req.json()) as Partial<Payload>;
-    const { activeMembership } = await requireOrganizationRole(["owner", "admin"]);
-    const activeOrganization = activeMembership.organizations;
+
+const ctx = await requireOrganizationRole(["owner", "admin"]);
+assertNotDemoWrite(ctx);
+
+const { activeMembership } = ctx;
+const activeOrganization = activeMembership.organizations;
+
+
 
     if (!activeOrganization) {
       return NextResponse.json(

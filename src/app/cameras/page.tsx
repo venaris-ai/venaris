@@ -1,4 +1,4 @@
-// src/app/cameras/page.tsx #6
+// src/app/cameras/page.tsx #7
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
@@ -89,6 +89,23 @@ function statusBadgeTone(status?: string | null) {
   return "border-white/10 bg-white/5 text-white/72";
 }
 
+function normalizeApiErrorMessage(message: string) {
+  if (message.includes("Demo mode is read-only")) {
+    return "Demo-Modus: Änderungen sind deaktiviert.";
+  }
+  return message;
+}
+
+async function parseApiResponse(res: Response) {
+  const text = await res.text();
+
+  try {
+    return JSON.parse(text);
+  } catch {
+    return { rawText: text };
+  }
+}
+
 function StatCard({
   title,
   value,
@@ -157,10 +174,12 @@ export default function CamerasPage() {
       : "/api/camera-health";
 
     const res = await fetch(url, { cache: "no-store" });
-    const json = await res.json();
+    const json = await parseApiResponse(res);
 
     if (!res.ok) {
-      setMsg(json.error || `HTTP ${res.status}`);
+      setMsg(
+        normalizeApiErrorMessage(json.error || json.rawText || `HTTP ${res.status}`)
+      );
       return;
     }
 
@@ -187,10 +206,12 @@ export default function CamerasPage() {
       const res = await fetch(`/api/assets?${params.toString()}`, {
         cache: "no-store",
       });
-      const json = await res.json();
+      const json = await parseApiResponse(res);
 
       if (!res.ok) {
-        setMsg(json.error || `HTTP ${res.status}`);
+        setMsg(
+          normalizeApiErrorMessage(json.error || json.rawText || `HTTP ${res.status}`)
+        );
         setAssets([]);
         setUrls({});
         return;
@@ -215,10 +236,12 @@ export default function CamerasPage() {
       const res = await fetch(`/api/ingest-batches?${params.toString()}`, {
         cache: "no-store",
       });
-      const json = await res.json();
+      const json = await parseApiResponse(res);
 
       if (!res.ok) {
-        setMsg(json.error || `HTTP ${res.status}`);
+        setMsg(
+          normalizeApiErrorMessage(json.error || json.rawText || `HTTP ${res.status}`)
+        );
         setBatches([]);
         return;
       }
@@ -276,11 +299,14 @@ export default function CamerasPage() {
         body: fd,
       });
 
-      const text = await res.text();
-      const json = JSON.parse(text);
+      const json = await parseApiResponse(res);
 
       if (!res.ok || !json.ok) {
-        throw new Error(json.error || `HTTP ${res.status}`);
+        throw new Error(
+          normalizeApiErrorMessage(
+            json.error || json.details || json.rawText || `HTTP ${res.status}`
+          )
+        );
       }
 
       setFile(null);
@@ -305,9 +331,11 @@ export default function CamerasPage() {
       body: JSON.stringify({ assetId, relevant: nextRelevant }),
     });
 
-    const json = await res.json().catch(() => null);
+    const json = await parseApiResponse(res);
     if (!res.ok) {
-      setMsg(json?.error || `HTTP ${res.status}`);
+      setMsg(
+        normalizeApiErrorMessage(json?.error || json?.rawText || `HTTP ${res.status}`)
+      );
       return;
     }
 

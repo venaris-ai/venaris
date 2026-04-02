@@ -1,5 +1,6 @@
-// src/app/orga/account/page.tsx #3
+// src/app/orga/account/page.tsx #4
 import { redirect } from "next/navigation";
+import { redirectIfDemoWrite } from "@/lib/auth";
 import { requirePathAccess } from "@/lib/authz";
 import { supabaseServer } from "@/lib/supabaseServer";
 import SubmitButton from "@/components/SubmitButton";
@@ -55,6 +56,7 @@ async function saveOrganizationAccount(formData: FormData) {
   "use server";
 
   const ctx = await requirePathAccess("/orga/account");
+  redirectIfDemoWrite(ctx, "/orga/account?demo_read_only=1");
 
   if (!ctx.activeMembership) {
     throw new Error("Active organization context required");
@@ -136,10 +138,11 @@ function StatCard({
 export default async function OrgaAccountPage({
   searchParams,
 }: {
-  searchParams?: Promise<{ saved?: string }>;
+  searchParams?: Promise<{ saved?: string; demo_read_only?: string }>;
 }) {
   const params = (await searchParams) ?? {};
   const saved = params.saved === "1";
+  const demoReadOnly = params.demo_read_only === "1";
 
   const ctx = await requirePathAccess("/orga/account");
 
@@ -148,6 +151,7 @@ export default async function OrgaAccountPage({
   }
 
   const organization = ctx.activeMembership.organizations;
+  const isDemo = ctx.isDemo;
 
   if (!organization) {
     throw new Error("Active organization not found");
@@ -207,6 +211,14 @@ export default async function OrgaAccountPage({
         </div>
       </section>
 
+      {demoReadOnly ? (
+        <section className="rounded-[24px] border border-amber-300/20 bg-amber-300/10 p-4">
+          <p className="text-sm text-amber-100">
+            Demo-Modus: Änderungen sind deaktiviert.
+          </p>
+        </section>
+      ) : null}
+
       {saved ? (
         <section className="rounded-[24px] border border-emerald-300/20 bg-emerald-300/10 p-4">
           <p className="text-sm text-emerald-100">
@@ -257,7 +269,9 @@ export default async function OrgaAccountPage({
                   type="text"
                   required
                   defaultValue={org.name}
-                  className="w-full rounded-[10px] border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none placeholder:text-white/35"
+                  disabled={isDemo}
+                  title={isDemo ? "Demo-Modus: Änderungen sind deaktiviert." : ""}
+                  className="w-full rounded-[10px] border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none placeholder:text-white/35 disabled:bg-white/5 disabled:text-white/35"
                 />
               </div>
 
@@ -273,7 +287,9 @@ export default async function OrgaAccountPage({
                   name="legal_name"
                   type="text"
                   defaultValue={org.legal_name ?? ""}
-                  className="w-full rounded-[10px] border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none placeholder:text-white/35"
+                  disabled={isDemo}
+                  title={isDemo ? "Demo-Modus: Änderungen sind deaktiviert." : ""}
+                  className="w-full rounded-[10px] border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none placeholder:text-white/35 disabled:bg-white/5 disabled:text-white/35"
                 />
               </div>
 
@@ -289,7 +305,9 @@ export default async function OrgaAccountPage({
                   name="legal_form"
                   type="text"
                   defaultValue={org.legal_form ?? ""}
-                  className="w-full rounded-[10px] border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none placeholder:text-white/35"
+                  disabled={isDemo}
+                  title={isDemo ? "Demo-Modus: Änderungen sind deaktiviert." : ""}
+                  className="w-full rounded-[10px] border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none placeholder:text-white/35 disabled:bg-white/5 disabled:text-white/35"
                   placeholder="z. B. GmbH"
                 />
               </div>
@@ -306,7 +324,9 @@ export default async function OrgaAccountPage({
                   name="contact_person"
                   type="text"
                   defaultValue={org.contact_person ?? ""}
-                  className="w-full rounded-[10px] border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none placeholder:text-white/35"
+                  disabled={isDemo}
+                  title={isDemo ? "Demo-Modus: Änderungen sind deaktiviert." : ""}
+                  className="w-full rounded-[10px] border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none placeholder:text-white/35 disabled:bg-white/5 disabled:text-white/35"
                 />
               </div>
 
@@ -322,7 +342,9 @@ export default async function OrgaAccountPage({
                   name="billing_email"
                   type="email"
                   defaultValue={org.billing_email ?? ""}
-                  className="w-full rounded-[10px] border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none placeholder:text-white/35"
+                  disabled={isDemo}
+                  title={isDemo ? "Demo-Modus: Änderungen sind deaktiviert." : ""}
+                  className="w-full rounded-[10px] border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none placeholder:text-white/35 disabled:bg-white/5 disabled:text-white/35"
                 />
               </div>
 
@@ -338,7 +360,9 @@ export default async function OrgaAccountPage({
                   name="customer_reference"
                   type="text"
                   defaultValue={org.customer_reference ?? ""}
-                  className="w-full rounded-[10px] border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none placeholder:text-white/35"
+                  disabled={isDemo}
+                  title={isDemo ? "Demo-Modus: Änderungen sind deaktiviert." : ""}
+                  className="w-full rounded-[10px] border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none placeholder:text-white/35 disabled:bg-white/5 disabled:text-white/35"
                 />
               </div>
 
@@ -354,7 +378,9 @@ export default async function OrgaAccountPage({
                   name="billing_street"
                   type="text"
                   defaultValue={org.billing_street ?? ""}
-                  className="w-full rounded-[10px] border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none placeholder:text-white/35"
+                  disabled={isDemo}
+                  title={isDemo ? "Demo-Modus: Änderungen sind deaktiviert." : ""}
+                  className="w-full rounded-[10px] border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none placeholder:text-white/35 disabled:bg-white/5 disabled:text-white/35"
                 />
               </div>
 
@@ -370,7 +396,9 @@ export default async function OrgaAccountPage({
                   name="billing_postal_code"
                   type="text"
                   defaultValue={org.billing_postal_code ?? ""}
-                  className="w-full rounded-[10px] border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none placeholder:text-white/35"
+                  disabled={isDemo}
+                  title={isDemo ? "Demo-Modus: Änderungen sind deaktiviert." : ""}
+                  className="w-full rounded-[10px] border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none placeholder:text-white/35 disabled:bg-white/5 disabled:text-white/35"
                 />
               </div>
 
@@ -386,7 +414,9 @@ export default async function OrgaAccountPage({
                   name="billing_city"
                   type="text"
                   defaultValue={org.billing_city ?? ""}
-                  className="w-full rounded-[10px] border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none placeholder:text-white/35"
+                  disabled={isDemo}
+                  title={isDemo ? "Demo-Modus: Änderungen sind deaktiviert." : ""}
+                  className="w-full rounded-[10px] border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none placeholder:text-white/35 disabled:bg-white/5 disabled:text-white/35"
                 />
               </div>
 
@@ -402,7 +432,9 @@ export default async function OrgaAccountPage({
                   name="billing_country"
                   type="text"
                   defaultValue={org.billing_country ?? "DE"}
-                  className="w-full rounded-[10px] border border-white/10 bg-white/5 px-3 py-2 text-sm uppercase text-white outline-none placeholder:text-white/35"
+                  disabled={isDemo}
+                  title={isDemo ? "Demo-Modus: Änderungen sind deaktiviert." : ""}
+                  className="w-full rounded-[10px] border border-white/10 bg-white/5 px-3 py-2 text-sm uppercase text-white outline-none placeholder:text-white/35 disabled:bg-white/5 disabled:text-white/35"
                 />
               </div>
 
@@ -415,7 +447,9 @@ export default async function OrgaAccountPage({
                   name="vat_id"
                   type="text"
                   defaultValue={org.vat_id ?? ""}
-                  className="w-full rounded-[10px] border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none placeholder:text-white/35"
+                  disabled={isDemo}
+                  title={isDemo ? "Demo-Modus: Änderungen sind deaktiviert." : ""}
+                  className="w-full rounded-[10px] border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none placeholder:text-white/35 disabled:bg-white/5 disabled:text-white/35"
                 />
               </div>
             </div>
@@ -429,13 +463,15 @@ export default async function OrgaAccountPage({
                 name="notes"
                 rows={5}
                 defaultValue={org.notes ?? ""}
-                className="w-full rounded-[10px] border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none placeholder:text-white/35"
+                disabled={isDemo}
+                title={isDemo ? "Demo-Modus: Änderungen sind deaktiviert." : ""}
+                className="w-full rounded-[10px] border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none placeholder:text-white/35 disabled:bg-white/5 disabled:text-white/35"
               />
             </div>
 
             <div className="flex flex-wrap items-center gap-3">
               <SubmitButton
-                idleLabel="Änderungen speichern"
+                idleLabel={isDemo ? "Demo-Modus" : "Änderungen speichern"}
                 pendingLabel="Speichert..."
               />
             </div>

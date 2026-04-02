@@ -14,6 +14,7 @@ import {
 type Props = {
   role?: AppRole | null;
   email?: string | null;
+  isDemo?: boolean;
 };
 
 function getSectionItems(pathname: string): NavItem[] {
@@ -32,7 +33,7 @@ function getSectionItems(pathname: string): NavItem[] {
   return [];
 }
 
-export default function SectionNav({ role, email }: Props) {
+export default function SectionNav({ role, email, isDemo }: Props) {
   const pathname = usePathname();
 
   const items = getSectionItems(pathname).filter((item) =>
@@ -40,6 +41,7 @@ export default function SectionNav({ role, email }: Props) {
       pathname: item.href,
       role,
       email,
+      isDemo,
     })
   );
 

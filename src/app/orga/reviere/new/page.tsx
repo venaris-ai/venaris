@@ -1,7 +1,8 @@
-// src/app/orga/reviere/new/page.tsx #5
+// src/app/orga/reviere/new/page.tsx #7
 import Link from "next/link";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { redirectIfDemoWrite } from "@/lib/auth";
 import { requirePathAccess } from "@/lib/authz";
 import { supabaseServer } from "@/lib/supabaseServer";
 import SubmitButton from "@/components/SubmitButton";
@@ -10,6 +11,7 @@ async function createRevier(formData: FormData) {
   "use server";
 
   const ctx = await requirePathAccess("/orga/reviere/new");
+  redirectIfDemoWrite(ctx, "/orga/reviere/new?demo_read_only=1");
 
   if (!ctx.activeMembership) {
     throw new Error("Active organization context required");
@@ -65,8 +67,16 @@ async function createRevier(formData: FormData) {
   redirect("/orga/reviere?created=1");
 }
 
-export default async function NewRevierPage() {
-  await requirePathAccess("/orga/reviere/new");
+export default async function NewRevierPage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ demo_read_only?: string }>;
+}) {
+  const params = (await searchParams) ?? {};
+  const demoReadOnly = params.demo_read_only === "1";
+
+  const ctx = await requirePathAccess("/orga/reviere/new");
+  const isDemo = ctx.isDemo;
 
   return (
     <main className="space-y-8">
@@ -86,6 +96,14 @@ export default async function NewRevierPage() {
         </div>
       </section>
 
+      {demoReadOnly ? (
+        <section className="rounded-[24px] border border-amber-300/20 bg-amber-300/10 p-4">
+          <p className="text-sm text-amber-100">
+            Demo-Modus: Änderungen sind deaktiviert.
+          </p>
+        </section>
+      ) : null}
+
       <section className="rounded-[28px] border border-white/10 bg-white/5 p-6 backdrop-blur-sm">
         <form action={createRevier} className="space-y-6">
           <div className="grid gap-4 md:grid-cols-2">
@@ -101,8 +119,10 @@ export default async function NewRevierPage() {
                 name="name"
                 type="text"
                 required
-                className="w-full rounded-[10px] border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none ring-0 placeholder:text-white/35"
+                disabled={isDemo}
+                className="w-full rounded-[10px] border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none ring-0 placeholder:text-white/35 disabled:bg-white/5 disabled:text-white/35"
                 placeholder="z. B. Demo-Nord"
+                title={isDemo ? "Demo-Modus: Änderungen sind deaktiviert." : ""}
               />
             </div>
 
@@ -120,8 +140,10 @@ export default async function NewRevierPage() {
                 min="1"
                 step="1"
                 required
-                className="w-full rounded-[10px] border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none ring-0 placeholder:text-white/35"
+                disabled={isDemo}
+                className="w-full rounded-[10px] border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none ring-0 placeholder:text-white/35 disabled:bg-white/5 disabled:text-white/35"
                 placeholder="z. B. 250"
+                title={isDemo ? "Demo-Modus: Änderungen sind deaktiviert." : ""}
               />
             </div>
 
@@ -136,7 +158,9 @@ export default async function NewRevierPage() {
                 id="status"
                 name="status"
                 defaultValue="active"
-                className="w-full rounded-[10px] border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none ring-0"
+                disabled={isDemo}
+                className="w-full rounded-[10px] border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none ring-0 disabled:bg-white/5 disabled:text-white/35"
+                title={isDemo ? "Demo-Modus: Änderungen sind deaktiviert." : ""}
               >
                 <option value="active" className="bg-[#102018] text-white">
                   Active
@@ -153,7 +177,7 @@ export default async function NewRevierPage() {
 
           <div className="flex flex-wrap items-center gap-3">
             <SubmitButton
-              idleLabel="Revier speichern"
+              idleLabel={isDemo ? "Demo-Modus" : "Revier speichern"}
               pendingLabel="Speichert..."
             />
 

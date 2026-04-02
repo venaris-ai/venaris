@@ -1,4 +1,4 @@
-// src/app/orga/members/MemberRowControls.tsx #6
+// src/app/orga/members/MemberRowControls.tsx #7
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
@@ -22,6 +22,7 @@ export default function MemberRowControls({
   canEditStatus,
   allowOwnerOption,
   saveAction,
+  isDemo = false,
 }: {
   userId: string;
   initialRole: MemberRole;
@@ -30,6 +31,7 @@ export default function MemberRowControls({
   canEditStatus: boolean;
   allowOwnerOption: boolean;
   saveAction: (formData: FormData) => void | Promise<void>;
+  isDemo?: boolean;
 }) {
   const [role, setRole] = useState<MemberRole>(initialRole);
   const [status, setStatus] = useState<MemberStatus>(initialStatus);
@@ -55,9 +57,15 @@ export default function MemberRowControls({
           <select
             value={role}
             onChange={(e) => setRole(e.target.value as MemberRole)}
-            disabled={!canEditRole}
+            disabled={!canEditRole || isDemo}
             className="rounded-[10px] border border-white/10 bg-white/5 px-2.5 py-1.5 text-sm text-white outline-none disabled:bg-white/5 disabled:text-white/35"
-            title={!canEditRole ? "Rolle kann für dieses Mitglied nicht geändert werden." : ""}
+            title={
+              isDemo
+                ? "Demo-Modus: Änderungen sind deaktiviert."
+                : !canEditRole
+                  ? "Rolle kann für dieses Mitglied nicht geändert werden."
+                  : ""
+            }
           >
             <option value="viewer" className="bg-[#102018] text-white">
               Viewer
@@ -81,9 +89,15 @@ export default function MemberRowControls({
         <select
           value={status}
           onChange={(e) => setStatus(e.target.value as MemberStatus)}
-          disabled={!canEditStatus}
+          disabled={!canEditStatus || isDemo}
           className="rounded-[10px] border border-white/10 bg-white/5 px-2.5 py-1.5 text-sm text-white outline-none disabled:bg-white/5 disabled:text-white/35"
-          title={!canEditStatus ? "Status kann für dieses Mitglied nicht geändert werden." : ""}
+          title={
+            isDemo
+              ? "Demo-Modus: Änderungen sind deaktiviert."
+              : !canEditStatus
+                ? "Status kann für dieses Mitglied nicht geändert werden."
+                : ""
+          }
         >
           <option value="active" className="bg-[#102018] text-white">
             Active

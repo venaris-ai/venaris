@@ -1,4 +1,4 @@
-// src/app/cameras/import/page.tsx #3
+// src/app/cameras/import/page.tsx #4
 "use client";
 
 import { useEffect, useRef, useState } from "react";
@@ -11,9 +11,17 @@ type CameraRow = {
   manualLabel: string | null;
 };
 
+function normalizeApiErrorMessage(message: string) {
+  if (message.includes("Demo mode is read-only")) {
+    return "Demo-Modus: Änderungen sind deaktiviert.";
+  }
+  return message;
+}
+
 export default function CamerasImportPage() {
   const searchParams = useSearchParams();
   const revierParam = searchParams.get("revier");
+  const isDemo = searchParams.get("demo") === "1";
 
   const [cameras, setCameras] = useState<CameraRow[]>([]);
   const [cameraId, setCameraId] = useState("");
@@ -36,7 +44,7 @@ export default function CamerasImportPage() {
     const json = await res.json();
 
     if (!res.ok) {
-      setMsg(json.error || `HTTP ${res.status}`);
+      setMsg(normalizeApiErrorMessage(json.error || `HTTP ${res.status}`));
       return;
     }
 
@@ -62,6 +70,12 @@ export default function CamerasImportPage() {
   }
 
   function onPickFiles(e: React.ChangeEvent<HTMLInputElement>) {
+    if (isDemo) {
+      setMsg("Demo-Modus: Änderungen sind deaktiviert.");
+      e.target.value = "";
+      return;
+    }
+
     const picked = Array.from(e.target.files ?? []);
     if (picked.length) addFiles(picked);
     e.target.value = "";
@@ -69,6 +83,11 @@ export default function CamerasImportPage() {
 
   async function startImport() {
     setMsg("");
+
+    if (isDemo) {
+      setMsg("Demo-Modus: Änderungen sind deaktiviert.");
+      return;
+    }
 
     if (!cameraId) {
       setMsg("Bitte eine manuelle Kamera auswählen.");
@@ -99,7 +118,9 @@ export default function CamerasImportPage() {
       const json = await res.json().catch(() => ({}));
 
       if (!res.ok || !json.ok) {
-        throw new Error(json.error || json.details || `HTTP ${res.status}`);
+        throw new Error(
+          normalizeApiErrorMessage(json.error || json.details || `HTTP ${res.status}`)
+        );
       }
 
       setFiles([]);
@@ -109,7 +130,7 @@ export default function CamerasImportPage() {
         }, batchId=${json.batchId?.slice(0, 8) ?? "?"}…`
       );
     } catch (e: any) {
-      setMsg(`❌ ${e.message}`);
+      setMsg(`❌ ${normalizeApiErrorMessage(e.message)}`);
     } finally {
       setBusy(false);
       setDragOver(false);
@@ -120,11 +141,16 @@ export default function CamerasImportPage() {
     e.preventDefault();
     setDragOver(false);
 
+    if (isDemo) {
+      setMsg("Demo-Modus: Änderungen sind deaktiviert.");
+      return;
+    }
+
     const dropped = Array.from(e.dataTransfer.files ?? []);
     if (dropped.length) addFiles(dropped);
   }
 
-  const canImport = !!cameraId && files.length > 0 && !busy;
+  const canImport = !!cameraId && files.length > 0 && !busy && !isDemo;
 
   return (
     <main className="space-y-8">
@@ -140,13 +166,23 @@ export default function CamerasImportPage() {
         </div>
       </section>
 
+      {isDemo ? (
+        <section className="rounded-[24px] border border-amber-300/20 bg-amber-300/10 p-4">
+          <p className="text-sm text-amber-100">
+            Demo-Modus: Änderungen sind deaktiviert.
+          </p>
+        </section>
+      ) : null}
+
       <section className="rounded-[28px] border border-white/10 bg-white/5 p-5 backdrop-blur-sm space-y-5">
         <div className="space-y-2">
           <label className="text-sm font-medium text-white">Ziel-Kamera</label>
           <select
-            className="w-full rounded-[10px] border border-white/10 bg-white/5 p-2 text-white outline-none"
+            className="w-full rounded-[10px] border border-white/10 bg-white/5 p-2 text-white outline-none disabled:bg-white/5 disabled:text-white/35"
             value={cameraId}
             onChange={(e) => setCameraId(e.target.value)}
+            disabled={isDemo}
+            title={isDemo ? "Demo-Modus: Änderungen sind deaktiviert." : ""}
           >
             {cameras.length === 0 && (
               <option value="" className="bg-[#102018] text-white">
@@ -171,14 +207,15 @@ export default function CamerasImportPage() {
             dragOver
               ? "border-amber-300/30 bg-white/8"
               : "border-white/10 bg-white/5",
+            isDemo ? "opacity-70" : "",
           ].join(" ")}
           onDragEnter={(e) => {
             e.preventDefault();
-            setDragOver(true);
+            if (!isDemo) setDragOver(true);
           }}
           onDragOver={(e) => {
             e.preventDefault();
-            setDragOver(true);
+            if (!isDemo) setDragOver(true);
           }}
           onDragLeave={() => setDragOver(false)}
           onDrop={onDrop}
@@ -193,8 +230,16 @@ export default function CamerasImportPage() {
 
             <button
               type="button"
-              className="rounded-[10px] border border-white/10 bg-white/5 px-4 py-2 text-sm text-white/78 hover:border-amber-300/20 hover:bg-white/8 hover:text-white"
-              onClick={() => fileInputRef.current?.click()}
+              className="rounded-[10px] border border-white/10 bg-white/5 px-4 py-2 text-sm text-white/78 hover:border-amber-300/20 hover:bg-white/8 hover:text-white disabled:opacity-60"
+              onClick={() => {
+                if (isDemo) {
+                  setMsg("Demo-Modus: Änderungen sind deaktiviert.");
+                  return;
+                }
+                fileInputRef.current?.click();
+              }}
+              disabled={isDemo}
+              title={isDemo ? "Demo-Modus: Änderungen sind deaktiviert." : ""}
             >
               Bilder oder ZIP auswählen…
             </button>
@@ -229,8 +274,15 @@ export default function CamerasImportPage() {
             <button
               type="button"
               className="rounded-[10px] border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/78 hover:border-white/15 hover:bg-white/8 hover:text-white disabled:opacity-60"
-              onClick={() => setFiles([])}
-              disabled={busy || files.length === 0}
+              onClick={() => {
+                if (isDemo) {
+                  setMsg("Demo-Modus: Änderungen sind deaktiviert.");
+                  return;
+                }
+                setFiles([]);
+              }}
+              disabled={busy || files.length === 0 || isDemo}
+              title={isDemo ? "Demo-Modus: Änderungen sind deaktiviert." : ""}
             >
               Auswahl löschen
             </button>
@@ -240,8 +292,9 @@ export default function CamerasImportPage() {
               onClick={startImport}
               disabled={!canImport}
               className="rounded-[10px] bg-[#c9952e] px-4 py-2 text-sm text-[#102018] disabled:opacity-60"
+              title={isDemo ? "Demo-Modus: Änderungen sind deaktiviert." : ""}
             >
-              {busy ? "Import läuft…" : "Import starten"}
+              {busy ? "Import läuft…" : isDemo ? "Demo-Modus" : "Import starten"}
             </button>
           </div>
         </div>

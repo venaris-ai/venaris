@@ -1,4 +1,4 @@
-// src/lib/auth.ts
+// src/lib/auth.ts #3
 import { redirect } from "next/navigation";
 import { supabaseServer } from "@/lib/supabaseServer";
 import { supabaseAuthServer } from "@/lib/supabaseAuthServer";
@@ -10,6 +10,7 @@ type OrganizationRow = {
   id: string;
   name: string;
   slug: string;
+  is_demo: boolean;
 };
 
 type MembershipRow = {
@@ -60,7 +61,8 @@ export async function getMembershipsForUser(userId: string) {
       organizations (
         id,
         name,
-        slug
+        slug,
+        is_demo
       )
     `
     )
@@ -103,6 +105,8 @@ export async function requireActiveOrganization() {
     throw new Error("Active organization not found");
   }
 
+  const isDemo = Boolean(activeOrganization.is_demo);
+
   return {
     user,
     memberships: memberships.map((membership) => ({
@@ -113,6 +117,8 @@ export async function requireActiveOrganization() {
       ...activeMembership,
       organizations: activeOrganization,
     },
+    activeOrganization,
+    isDemo,
   };
 }
 
@@ -143,6 +149,8 @@ export async function getOptionalActiveOrganization() {
     return null;
   }
 
+  const isDemo = Boolean(activeOrganization.is_demo);
+
   return {
     user,
     memberships: memberships.map((membership) => ({
@@ -153,7 +161,24 @@ export async function getOptionalActiveOrganization() {
       ...activeMembership,
       organizations: activeOrganization,
     },
+    activeOrganization,
+    isDemo,
   };
+}
+
+export function assertNotDemoWrite(ctx: { isDemo: boolean }) {
+  if (ctx.isDemo) {
+    throw new Error("Demo mode is read-only");
+  }
+}
+
+export function redirectIfDemoWrite(
+  ctx: { isDemo: boolean },
+  target = "/?demo_read_only=1"
+) {
+  if (ctx.isDemo) {
+    redirect(target);
+  }
 }
 
 export async function requireOrganizationRole(

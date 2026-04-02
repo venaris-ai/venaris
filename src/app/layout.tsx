@@ -1,4 +1,4 @@
-// src/app/layout.tsx #9
+// src/app/layout.tsx #11
 import "./globals.css";
 import MainNav from "@/components/MainNav";
 import SectionNav from "@/components/SectionNav";
@@ -68,10 +68,7 @@ function blockedText(status: SubscriptionStatus) {
   }
 }
 
-async function HeaderBrand() {
-  const ctx = await getOptionalActiveOrganization();
-  const email = ctx?.user.email ?? null;
-
+function HeaderBrand({ email }: { email: string | null }) {
   return (
     <div className="font-semibold tracking-[0.18em] text-white">
       VENARIS
@@ -98,6 +95,7 @@ export default async function RootLayout({
   const organization = ctx?.activeMembership.organizations ?? null;
   const role = ctx?.activeMembership.role ?? null;
   const email = ctx?.user.email ?? null;
+  const isDemo = ctx?.isDemo ?? false;
 
   if (organization) {
     const nowIso = new Date().toISOString();
@@ -224,6 +222,7 @@ export default async function RootLayout({
                     (memberCountResult.count ?? 0) + (inviteCountResult.count ?? 0)
                   }
                   currentStatusLabel={resolved.effectiveStatus}
+                  isDemo={isDemo}
                   existingOpenRequest={null}
                 />
               </div>
@@ -239,7 +238,7 @@ export default async function RootLayout({
       <div className="mx-auto max-w-5xl px-6 py-3">
         <div className="flex items-end justify-between gap-6">
           <div className="min-w-0">
-            <HeaderBrand />
+            <HeaderBrand email={email} />
             <div className="mt-2">
               <ContextBar />
             </div>
@@ -251,7 +250,7 @@ export default async function RootLayout({
               <LogoutButton />
             </div>
 
-            <SectionNav role={role} email={email} />
+            <SectionNav role={role} email={email} isDemo={isDemo} />
           </div>
         </div>
       </div>

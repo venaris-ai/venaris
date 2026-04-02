@@ -1,4 +1,4 @@
-// src/components/PlanSelectionCards.tsx #2
+// src/components/PlanSelectionCards.tsx #3
 "use client";
 
 import { useMemo, useState } from "react";
@@ -13,6 +13,7 @@ type Props = {
   currentCameraCount: number;
   currentMemberUsage: number;
   currentStatusLabel?: string;
+  isDemo?: boolean;
   existingOpenRequest?: {
     requestedPlanKey: PlanKey;
     requestType: "upgrade" | "downgrade" | "change";
@@ -83,6 +84,13 @@ function isPlanSelectable(params: {
   };
 }
 
+function normalizeApiErrorMessage(message: string) {
+  if (message.includes("Demo mode is read-only")) {
+    return "Demo-Modus: Änderungen sind deaktiviert.";
+  }
+  return message;
+}
+
 export default function PlanSelectionCards({
   currentPlanKey,
   billingCycle,
@@ -90,6 +98,7 @@ export default function PlanSelectionCards({
   currentCameraCount,
   currentMemberUsage,
   currentStatusLabel,
+  isDemo = false,
   existingOpenRequest = null,
 }: Props) {
   const [loadingPlanKey, setLoadingPlanKey] = useState<PlanKey | null>(null);
@@ -150,6 +159,11 @@ export default function PlanSelectionCards({
   );
 
   async function choosePlan(planKey: PlanKey) {
+    if (isDemo) {
+      setError("Demo-Modus: Änderungen sind deaktiviert.");
+      return;
+    }
+
     setLoadingPlanKey(planKey);
     setError("");
 
@@ -167,7 +181,11 @@ export default function PlanSelectionCards({
       const data = await response.json();
 
       if (!response.ok) {
-        setError(data.error ?? "Anfrage konnte nicht erstellt werden.");
+        setError(
+          normalizeApiErrorMessage(
+            data.error ?? data.details ?? "Anfrage konnte nicht erstellt werden."
+          )
+        );
         setLoadingPlanKey(null);
         return;
       }
@@ -178,13 +196,23 @@ export default function PlanSelectionCards({
       });
       setLoadingPlanKey(null);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Unbekannter Fehler");
+      setError(
+        normalizeApiErrorMessage(
+          e instanceof Error ? e.message : "Unbekannter Fehler"
+        )
+      );
       setLoadingPlanKey(null);
     }
   }
 
   return (
     <div className="space-y-4">
+      {isDemo ? (
+        <div className="rounded-[24px] border border-amber-300/20 bg-amber-300/10 p-4 text-sm text-amber-100">
+          Demo-Modus: Änderungen sind deaktiviert.
+        </div>
+      ) : null}
+
       {pendingRequest ? (
         <div className="rounded-[24px] border border-emerald-300/20 bg-emerald-300/10 p-4 text-sm text-emerald-100">
           Anfrage erfasst:{" "}
@@ -202,7 +230,7 @@ export default function PlanSelectionCards({
 
       <div className="grid gap-4 md:grid-cols-3">
         {cards.map(({ planKey, plan, eligibility, isCurrent, helperText }) => {
-          const disabled = !eligibility.allowed || !!pendingRequest;
+          const disabled = !eligibility.allowed || !!pendingRequest || isDemo;
           const loading = loadingPlanKey === planKey;
 
           return (
@@ -253,9 +281,14 @@ export default function PlanSelectionCards({
                 type="button"
                 disabled={disabled || loading}
                 onClick={() => choosePlan(planKey)}
+                title={isDemo ? "Demo-Modus: Änderungen sind deaktiviert." : ""}
                 className="mt-4 inline-flex w-full items-center justify-center rounded-[12px] bg-[#c9952e] px-4 py-2 text-sm font-medium text-[#102018] disabled:cursor-not-allowed disabled:opacity-50"
               >
-                {loading ? "Wird angefragt..." : "Plan auswählen"}
+                {loading
+                  ? "Wird angefragt..."
+                  : isDemo
+                    ? "Demo-Modus"
+                    : "Plan auswählen"}
               </button>
             </div>
           );

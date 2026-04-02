@@ -1,7 +1,8 @@
-// src/app/orga/reviere/page.tsx #7
+// src/app/orga/reviere/page.tsx #9
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
+import { redirectIfDemoWrite } from "@/lib/auth";
 import { requirePathAccess } from "@/lib/authz";
 import { supabaseServer } from "@/lib/supabaseServer";
 import RevierRowControls from "./RevierRowControls";
@@ -49,6 +50,7 @@ async function saveRevierChanges(formData: FormData) {
   "use server";
 
   const ctx = await requirePathAccess("/orga/reviere");
+  redirectIfDemoWrite(ctx, "/orga/reviere?demo_read_only=1");
 
   if (!ctx.activeMembership) {
     throw new Error("Active organization context required");
@@ -131,6 +133,7 @@ async function deleteRevier(formData: FormData) {
   "use server";
 
   const ctx = await requirePathAccess("/orga/reviere");
+  redirectIfDemoWrite(ctx, "/orga/reviere?demo_read_only=1");
 
   if (!ctx.activeMembership) {
     throw new Error("Active organization context required");
@@ -198,12 +201,18 @@ function StatCard({
 export default async function OrgaRevierePage({
   searchParams,
 }: {
-  searchParams?: Promise<{ created?: string; updated?: string; deleted?: string }>;
+  searchParams?: Promise<{
+    created?: string;
+    updated?: string;
+    deleted?: string;
+    demo_read_only?: string;
+  }>;
 }) {
   const params = (await searchParams) ?? {};
   const created = params.created === "1";
   const updated = params.updated === "1";
   const deleted = params.deleted === "1";
+  const demoReadOnly = params.demo_read_only === "1";
 
   const ctx = await requirePathAccess("/orga/reviere");
 
@@ -212,6 +221,7 @@ export default async function OrgaRevierePage({
   }
 
   const organization = ctx.activeMembership.organizations;
+  const isDemo = ctx.isDemo;
 
   if (!organization) {
     throw new Error("Active organization not found");
@@ -253,6 +263,14 @@ export default async function OrgaRevierePage({
           </p>
         </div>
       </section>
+
+      {demoReadOnly ? (
+        <section className="rounded-[24px] border border-amber-300/20 bg-amber-300/10 p-4">
+          <p className="text-sm text-amber-100">
+            Demo-Modus: Änderungen sind deaktiviert.
+          </p>
+        </section>
+      ) : null}
 
       {created ? (
         <section className="rounded-[24px] border border-emerald-300/20 bg-emerald-300/10 p-4">
@@ -356,12 +374,14 @@ export default async function OrgaRevierePage({
                       initialAreaHa={revier.area_ha ?? 1}
                       initialStatus={revier.status}
                       saveAction={saveRevierChanges}
+                      isDemo={isDemo}
                     />
 
                     <RevierRowActions
                       revierId={revier.id}
                       canDelete={!revier.is_default}
                       deleteAction={deleteRevier}
+                      isDemo={isDemo}
                     />
                   </tr>
                 ))}

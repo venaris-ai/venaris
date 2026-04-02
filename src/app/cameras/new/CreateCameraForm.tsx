@@ -1,4 +1,4 @@
-// src/app/cameras/new/CreateCameraForm.tsx #7
+// src/app/cameras/new/CreateCameraForm.tsx #8
 "use client";
 
 import { useMemo, useState } from "react";
@@ -29,6 +29,7 @@ type Props = {
   cameraPolicy: SubscriptionActionPolicy;
   effectiveStatus: SubscriptionStatus;
   rawStatus: SubscriptionStatus;
+  isDemo?: boolean;
 };
 
 type CreateResponse = {
@@ -149,6 +150,7 @@ export default function CreateCameraForm({
   cameraPolicy,
   effectiveStatus,
   rawStatus,
+  isDemo = false,
 }: Props) {
   const organizationId = organization.id;
 
@@ -175,6 +177,7 @@ export default function CreateCameraForm({
   const [error, setError] = useState("");
   const [result, setResult] = useState<CreateResponse | null>(null);
   const [copyMsg, setCopyMsg] = useState("");
+  const [showDemoModal, setShowDemoModal] = useState(false);
 
   const usagePercent =
     maxCameras > 0 ? Math.min((currentCameraCount / maxCameras) * 100, 100) : 0;
@@ -182,6 +185,11 @@ export default function CreateCameraForm({
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
+
+    if (isDemo) {
+      setShowDemoModal(true);
+      return;
+    }
 
     if (!cameraPolicy.allowed) {
       setError(cameraPolicy.message);
@@ -255,6 +263,7 @@ export default function CreateCameraForm({
 
   const camera = result?.camera ?? null;
   const ftpProvisioning = result?.ftpProvisioning ?? null;
+  const formDisabled = isDemo || !cameraPolicy.allowed;
 
   return (
     <div className="space-y-6">
@@ -290,6 +299,14 @@ export default function CreateCameraForm({
         ) : null}
       </section>
 
+      {isDemo ? (
+        <section className="rounded-[24px] border border-amber-300/20 bg-amber-300/10 p-4">
+          <p className="text-sm text-amber-100">
+            Demo-Modus: Änderungen sind deaktiviert.
+          </p>
+        </section>
+      ) : null}
+
       <form
         onSubmit={onSubmit}
         className="rounded-[28px] border border-white/10 bg-white/5 p-6 backdrop-blur-sm"
@@ -307,10 +324,11 @@ export default function CreateCameraForm({
             <input
               value={cameraName}
               onChange={(e) => setCameraName(e.target.value)}
-              className="w-full rounded-[14px] border border-white/10 bg-white/5 px-3 py-2 text-white outline-none placeholder:text-white/35"
+              className="w-full rounded-[14px] border border-white/10 bg-white/5 px-3 py-2 text-white outline-none placeholder:text-white/35 disabled:bg-white/5 disabled:text-white/35"
               placeholder="e.g. Reolink North Edge"
               required
-              disabled={!cameraPolicy.allowed}
+              disabled={formDisabled}
+              title={isDemo ? "Demo-Modus: Änderungen sind deaktiviert." : ""}
             />
           </div>
 
@@ -319,9 +337,10 @@ export default function CreateCameraForm({
             <select
               value={method}
               onChange={(e) => setMethod(e.target.value as "smtp" | "ftp" | "manual")}
-              className="w-full rounded-[14px] border border-white/10 bg-white/5 px-3 py-2 text-white outline-none"
+              className="w-full rounded-[14px] border border-white/10 bg-white/5 px-3 py-2 text-white outline-none disabled:bg-white/5 disabled:text-white/35"
               required
-              disabled={!cameraPolicy.allowed}
+              disabled={formDisabled}
+              title={isDemo ? "Demo-Modus: Änderungen sind deaktiviert." : ""}
             >
               {METHODS.map((m) => (
                 <option key={m.value} value={m.value} className="bg-[#102018] text-white">
@@ -336,9 +355,10 @@ export default function CreateCameraForm({
             <select
               value={vendor}
               onChange={(e) => setVendor(e.target.value as (typeof VENDORS)[number])}
-              className="w-full rounded-[14px] border border-white/10 bg-white/5 px-3 py-2 text-white outline-none"
+              className="w-full rounded-[14px] border border-white/10 bg-white/5 px-3 py-2 text-white outline-none disabled:bg-white/5 disabled:text-white/35"
               required
-              disabled={!cameraPolicy.allowed}
+              disabled={formDisabled}
+              title={isDemo ? "Demo-Modus: Änderungen sind deaktiviert." : ""}
             >
               {VENDORS.map((v) => (
                 <option key={v} value={v} className="bg-[#102018] text-white">
@@ -353,9 +373,10 @@ export default function CreateCameraForm({
             <select
               value={revierId}
               onChange={(e) => setRevierId(e.target.value)}
-              className="w-full rounded-[14px] border border-white/10 bg-white/5 px-3 py-2 text-white outline-none"
+              className="w-full rounded-[14px] border border-white/10 bg-white/5 px-3 py-2 text-white outline-none disabled:bg-white/5 disabled:text-white/35"
               required
-              disabled={!cameraPolicy.allowed || filteredReviers.length === 0}
+              disabled={formDisabled || filteredReviers.length === 0}
+              title={isDemo ? "Demo-Modus: Änderungen sind deaktiviert." : ""}
             >
               {filteredReviers.map((revier) => (
                 <option key={revier.id} value={revier.id} className="bg-[#102018] text-white">
@@ -372,9 +393,10 @@ export default function CreateCameraForm({
             <input
               value={locationName}
               onChange={(e) => setLocationName(e.target.value)}
-              className="w-full rounded-[14px] border border-white/10 bg-white/5 px-3 py-2 text-white outline-none placeholder:text-white/35"
+              className="w-full rounded-[14px] border border-white/10 bg-white/5 px-3 py-2 text-white outline-none placeholder:text-white/35 disabled:bg-white/5 disabled:text-white/35"
               placeholder="e.g. Forest edge west"
-              disabled={!cameraPolicy.allowed}
+              disabled={formDisabled}
+              title={isDemo ? "Demo-Modus: Änderungen sind deaktiviert." : ""}
             />
           </div>
 
@@ -387,9 +409,10 @@ export default function CreateCameraForm({
               step="any"
               value={latitude}
               onChange={(e) => setLatitude(e.target.value)}
-              className="w-full rounded-[14px] border border-white/10 bg-white/5 px-3 py-2 text-white outline-none placeholder:text-white/35"
+              className="w-full rounded-[14px] border border-white/10 bg-white/5 px-3 py-2 text-white outline-none placeholder:text-white/35 disabled:bg-white/5 disabled:text-white/35"
               placeholder="52.123456"
-              disabled={!cameraPolicy.allowed}
+              disabled={formDisabled}
+              title={isDemo ? "Demo-Modus: Änderungen sind deaktiviert." : ""}
             />
           </div>
 
@@ -402,9 +425,10 @@ export default function CreateCameraForm({
               step="any"
               value={longitude}
               onChange={(e) => setLongitude(e.target.value)}
-              className="w-full rounded-[14px] border border-white/10 bg-white/5 px-3 py-2 text-white outline-none placeholder:text-white/35"
+              className="w-full rounded-[14px] border border-white/10 bg-white/5 px-3 py-2 text-white outline-none placeholder:text-white/35 disabled:bg-white/5 disabled:text-white/35"
               placeholder="8.123456"
-              disabled={!cameraPolicy.allowed}
+              disabled={formDisabled}
+              title={isDemo ? "Demo-Modus: Änderungen sind deaktiviert." : ""}
             />
           </div>
 
@@ -419,9 +443,10 @@ export default function CreateCameraForm({
               step={1}
               value={directionDeg}
               onChange={(e) => setDirectionDeg(e.target.value)}
-              className="w-full rounded-[14px] border border-white/10 bg-white/5 px-3 py-2 text-white outline-none placeholder:text-white/35"
+              className="w-full rounded-[14px] border border-white/10 bg-white/5 px-3 py-2 text-white outline-none placeholder:text-white/35 disabled:bg-white/5 disabled:text-white/35"
               placeholder="180"
-              disabled={!cameraPolicy.allowed}
+              disabled={formDisabled}
+              title={isDemo ? "Demo-Modus: Änderungen sind deaktiviert." : ""}
             />
           </div>
 
@@ -430,9 +455,10 @@ export default function CreateCameraForm({
             <textarea
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
-              className="min-h-[100px] w-full rounded-[14px] border border-white/10 bg-white/5 px-3 py-2 text-white outline-none placeholder:text-white/35"
+              className="min-h-[100px] w-full rounded-[14px] border border-white/10 bg-white/5 px-3 py-2 text-white outline-none placeholder:text-white/35 disabled:bg-white/5 disabled:text-white/35"
               placeholder="Optional setup notes"
-              disabled={!cameraPolicy.allowed}
+              disabled={formDisabled}
+              title={isDemo ? "Demo-Modus: Änderungen sind deaktiviert." : ""}
             />
           </div>
         </div>
@@ -449,14 +475,38 @@ export default function CreateCameraForm({
             disabled={loading || !cameraPolicy.allowed || filteredReviers.length === 0}
             className="rounded-[14px] bg-[#c9952e] px-4 py-2 text-sm font-medium text-[#102018] disabled:opacity-50"
           >
-            {!cameraPolicy.allowed
-              ? "Kameraanlage gesperrt"
-              : loading
-                ? "Creating..."
-                : "Create Camera"}
+            {isDemo
+              ? "Demo-Modus"
+              : !cameraPolicy.allowed
+                ? "Kameraanlage gesperrt"
+                : loading
+                  ? "Creating..."
+                  : "Create Camera"}
           </button>
         </div>
       </form>
+
+      {showDemoModal ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-md rounded-[20px] border border-white/10 bg-[#102018] p-6 shadow-2xl">
+            <h3 className="text-lg font-semibold text-white">Demo-Modus</h3>
+            <p className="mt-2 text-sm text-white/70">
+              Das ist ein Demo-Account. Datensätze können weder entfernt noch
+              hinzugefügt oder geändert werden.
+            </p>
+
+            <div className="mt-5 flex items-center justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setShowDemoModal(false)}
+                className="rounded-[10px] border border-white/10 bg-white/5 px-4 py-2 text-sm text-white/78 hover:bg-white/8 hover:text-white"
+              >
+                Verstanden
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {camera ? (
         <div className="space-y-5 rounded-[28px] border border-white/10 bg-white/5 p-6 backdrop-blur-sm">

@@ -1,9 +1,12 @@
-// src/app/orga/members/invite/page.tsx #9
+// src/app/orga/members/invite/page.tsx #11
 import Link from "next/link";
 import { randomBytes } from "crypto";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
+
 import { requirePathAccess } from "@/lib/authz";
+import { redirectIfDemoWrite } from "@/lib/auth";
+
 import { supabaseServer } from "@/lib/supabaseServer";
 import { sendInviteEmail } from "@/lib/email/sendInviteEmail";
 import SubmitButton from "@/components/SubmitButton";
@@ -24,6 +27,7 @@ async function createInvite(formData: FormData) {
   "use server";
 
   const ctx = await requirePathAccess("/orga/members/invite");
+  redirectIfDemoWrite(ctx, "/orga/members/invite?demo_read_only=1");
 
   if (!ctx.activeMembership) {
     throw new Error("Active organization context required");
@@ -212,7 +216,14 @@ const roleDescriptions = [
   },
 ];
 
-export default async function InviteMemberPage() {
+export default async function InviteMemberPage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ demo_read_only?: string }>;
+}) {
+  const params = (await searchParams) ?? {};
+  const demoReadOnly = params.demo_read_only === "1";
+
   const ctx = await requirePathAccess("/orga/members/invite");
 
   if (!ctx.activeMembership) {
@@ -220,6 +231,7 @@ export default async function InviteMemberPage() {
   }
 
   const organization = ctx.activeMembership.organizations;
+  const isDemo = ctx.isDemo;
 
   if (!organization) {
     throw new Error("Active organization not found");
@@ -303,6 +315,14 @@ export default async function InviteMemberPage() {
         </div>
       </section>
 
+      {demoReadOnly ? (
+        <section className="rounded-[24px] border border-amber-300/20 bg-amber-300/10 p-4">
+          <p className="text-sm text-amber-100">
+            Demo-Modus: Änderungen sind deaktiviert.
+          </p>
+        </section>
+      ) : null}
+
       <section
         className={`rounded-[28px] border p-5 backdrop-blur-sm ${
           invitePolicy.allowed
@@ -380,7 +400,7 @@ export default async function InviteMemberPage() {
                   name="email"
                   type="email"
                   required
-                  disabled={!invitePolicy.allowed}
+                  disabled={!invitePolicy.allowed || isDemo}
                   className="w-full rounded-[10px] border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none placeholder:text-white/35"
                   placeholder="name@example.com"
                 />
@@ -397,7 +417,7 @@ export default async function InviteMemberPage() {
                   id="role"
                   name="role"
                   defaultValue="member"
-                  disabled={!invitePolicy.allowed}
+                  disabled={!invitePolicy.allowed || isDemo}
                   className="w-full rounded-[10px] border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none"
                 >
                   <option value="member" className="bg-[#102018] text-white">
@@ -430,7 +450,7 @@ export default async function InviteMemberPage() {
                   max="90"
                   step="1"
                   defaultValue="14"
-                  disabled={!invitePolicy.allowed}
+                  disabled={!invitePolicy.allowed || isDemo}
                   className="w-full rounded-[10px] border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none"
                 />
               </div>
@@ -438,7 +458,13 @@ export default async function InviteMemberPage() {
 
             <div className="flex flex-wrap items-center gap-3">
               <SubmitButton
-                idleLabel={invitePolicy.allowed ? "Einladung anlegen" : "Einladung gesperrt"}
+                idleLabel={
+                  !invitePolicy.allowed
+                    ? "Einladung gesperrt"
+                    : isDemo
+                      ? "Demo-Modus"
+                      : "Einladung anlegen"
+                }
                 pendingLabel="Speichert..."
               />
 
@@ -455,8 +481,9 @@ export default async function InviteMemberPage() {
         <aside className="rounded-[28px] border border-amber-300/20 bg-amber-300/10 p-6 backdrop-blur-sm">
           <h2 className="text-lg font-medium text-amber-100">Wichtiger Hinweis</h2>
           <p className="mt-2 text-sm leading-6 text-amber-100/80">
-            Neue Einladungen werden per E-Mail verschickt. Der Empfänger kann
-            danach seinen Account anlegen und die Einladung direkt annehmen.
+            {isDemo
+              ? "Das ist ein Demo-Account. Datensätze können weder entfernt noch hinzugefügt oder geändert werden."
+              : "Neue Einladungen werden per E-Mail verschickt. Der Empfänger kann danach seinen Account anlegen und die Einladung direkt annehmen."}
           </p>
         </aside>
       </section>

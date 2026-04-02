@@ -1,11 +1,11 @@
-// src/app/api/upload/route.ts
+// src/app/api/upload/route.ts #2
 export const runtime = "nodejs";
 
 import { NextResponse } from "next/server";
 import JSZip from "jszip";
 import { supabaseServer } from "@/lib/supabaseServer";
 import { ingestFiles, safeJsonParse } from "@/lib/ingestCore";
-import { requireOrganizationRole } from "@/lib/auth";
+import { assertNotDemoWrite, requireOrganizationRole } from "@/lib/auth";
 
 const MAX_FILES = 500; // MVP Guard
 const MAX_ZIP_BYTES = 150 * 1024 * 1024; // 150MB Guard
@@ -72,7 +72,10 @@ async function extractImagesFromZip(zipFile: File): Promise<File[]> {
 
 export async function POST(req: Request) {
   try {
-    const { activeMembership } = await requireOrganizationRole(["owner", "admin", "member"]);
+    const ctx = await requireOrganizationRole(["owner", "admin", "member"]);
+    assertNotDemoWrite(ctx);
+
+    const { activeMembership } = ctx;
     const activeOrganization = activeMembership.organizations;
 
     if (!activeOrganization) {

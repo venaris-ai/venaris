@@ -1,7 +1,8 @@
-// src/app/cameras/health/page.tsx #7
+// src/app/cameras/health/page.tsx #8
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
+import { redirectIfDemoWrite } from "@/lib/auth";
 import { requirePathAccess } from "@/lib/authz";
 import { supabaseServer } from "@/lib/supabaseServer";
 import { canCreateCamera } from "@/lib/billing/subscriptionPolicy";
@@ -16,6 +17,7 @@ type SearchParams = {
   revier?: string;
   changed?: string;
   removed?: string;
+  demo_read_only?: string;
 };
 
 type RevierRow = {
@@ -145,12 +147,14 @@ function buildReturnUrl(params: {
   revier?: string | null;
   changed?: boolean;
   removed?: boolean;
+  demoReadOnly?: boolean;
 }) {
   const search = new URLSearchParams();
 
   if (params.revier) search.set("revier", params.revier);
   if (params.changed) search.set("changed", "1");
   if (params.removed) search.set("removed", "1");
+  if (params.demoReadOnly) search.set("demo_read_only", "1");
 
   const query = search.toString();
   return query ? `/cameras/health?${query}` : "/cameras/health";
@@ -180,6 +184,7 @@ async function saveCameraStatus(formData: FormData) {
   "use server";
 
   const ctx = await requirePathAccess("/cameras/health");
+  redirectIfDemoWrite(ctx, buildReturnUrl({ demoReadOnly: true }));
 
   if (!ctx.activeMembership) {
     throw new Error("Active organization context required");
@@ -298,6 +303,7 @@ async function removeCamera(formData: FormData) {
   "use server";
 
   const ctx = await requirePathAccess("/cameras/health");
+  redirectIfDemoWrite(ctx, buildReturnUrl({ demoReadOnly: true }));
 
   if (!ctx.activeMembership) {
     throw new Error("Active organization context required");
@@ -400,6 +406,7 @@ export default async function CamerasHealthPage(props: {
   const activeOrganization = ctx.activeMembership.organizations;
   const actorRole = ctx.activeMembership.role;
   const canManageCameras = actorRole === "owner" || actorRole === "admin";
+  const isDemo = ctx.isDemo;
 
   const searchParams = props?.searchParams
     ? await Promise.resolve(props.searchParams)
@@ -408,6 +415,7 @@ export default async function CamerasHealthPage(props: {
   const rawRevier = searchParams?.revier;
   const changed = searchParams?.changed === "1";
   const removed = searchParams?.removed === "1";
+  const demoReadOnly = searchParams?.demo_read_only === "1";
 
   if (!activeOrganization) {
     return (
@@ -565,6 +573,14 @@ export default async function CamerasHealthPage(props: {
           </div>
         </section>
 
+        {demoReadOnly ? (
+          <section className="rounded-[24px] border border-amber-300/20 bg-amber-300/10 p-4">
+            <p className="text-sm text-amber-100">
+              Demo-Modus: Änderungen sind deaktiviert.
+            </p>
+          </section>
+        ) : null}
+
         {changed ? (
           <section className="rounded-[24px] border border-emerald-300/20 bg-emerald-300/10 p-4">
             <p className="text-sm text-emerald-100">Kamera-Status wurde gespeichert.</p>
@@ -695,6 +711,14 @@ export default async function CamerasHealthPage(props: {
         </div>
       </section>
 
+      {demoReadOnly ? (
+        <section className="rounded-[24px] border border-amber-300/20 bg-amber-300/10 p-4">
+          <p className="text-sm text-amber-100">
+            Demo-Modus: Änderungen sind deaktiviert.
+          </p>
+        </section>
+      ) : null}
+
       {changed ? (
         <section className="rounded-[24px] border border-emerald-300/20 bg-emerald-300/10 p-4">
           <p className="text-sm text-emerald-100">Kamera-Status wurde gespeichert.</p>
@@ -788,6 +812,7 @@ export default async function CamerasHealthPage(props: {
                     canManage={canManageCameras}
                     returnRevier={rawRevier ?? ""}
                     saveAction={saveCameraStatus}
+                    isDemo={isDemo}
                   />
 
                   <td className="px-6 py-4 text-white/68 whitespace-nowrap">
@@ -799,6 +824,7 @@ export default async function CamerasHealthPage(props: {
                     canManage={canManageCameras}
                     removeAction={removeCamera}
                     returnRevier={rawRevier ?? ""}
+                    isDemo={isDemo}
                   />
                 </tr>
               ))}

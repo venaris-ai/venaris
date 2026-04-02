@@ -1,4 +1,4 @@
-// src/app/cameras/new/page.tsx #8
+// src/app/cameras/new/page.tsx #9
 import { requirePathAccess } from "@/lib/authz";
 import { supabaseServer } from "@/lib/supabaseServer";
 import {
@@ -38,6 +38,7 @@ export default async function NewCameraPage() {
   }
 
   const activeOrganization = ctx.activeMembership.organizations;
+  const isDemo = ctx.isDemo;
 
   if (!activeOrganization) {
     throw new Error("Active organization not found");
@@ -122,6 +123,7 @@ export default async function NewCameraPage() {
         cameraPolicy={cameraPolicy}
         effectiveStatus={resolvedState.effectiveStatus}
         rawStatus={subscriptionResult.data.status}
+        isDemo={isDemo}
       />
     </main>
   );

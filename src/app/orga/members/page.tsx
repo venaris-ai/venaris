@@ -1,7 +1,8 @@
-// src/app/orga/members/page.tsx #14b
+// src/app/orga/members/page.tsx #17
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
+import { redirectIfDemoWrite } from "@/lib/auth";
 import { requirePathAccess } from "@/lib/authz";
 import { supabaseServer } from "@/lib/supabaseServer";
 import { sendInviteEmail } from "@/lib/email/sendInviteEmail";
@@ -115,6 +116,7 @@ async function saveMemberChanges(formData: FormData) {
   "use server";
 
   const ctx = await requirePathAccess("/orga/members");
+  redirectIfDemoWrite(ctx, "/orga/members?demo_read_only=1");
 
   if (!ctx.activeMembership) {
     throw new Error("Active organization context required");
@@ -208,6 +210,7 @@ async function removeMember(formData: FormData) {
   "use server";
 
   const ctx = await requirePathAccess("/orga/members");
+  redirectIfDemoWrite(ctx, "/orga/members?demo_read_only=1");
 
   if (!ctx.activeMembership) {
     throw new Error("Active organization context required");
@@ -275,16 +278,11 @@ async function removeMember(formData: FormData) {
   redirect("/orga/members?removed=1");
 }
 
-
-
-
-
-
-
 async function resendInvite(formData: FormData) {
   "use server";
 
   const ctx = await requirePathAccess("/orga/members");
+  redirectIfDemoWrite(ctx, "/orga/members?demo_read_only=1");
 
   if (!ctx.activeMembership) {
     throw new Error("Active organization context required");
@@ -402,6 +400,7 @@ async function revokeInvite(formData: FormData) {
   "use server";
 
   const ctx = await requirePathAccess("/orga/members");
+  redirectIfDemoWrite(ctx, "/orga/members?demo_read_only=1");
 
   if (!ctx.activeMembership) {
     throw new Error("Active organization context required");
@@ -464,6 +463,7 @@ export default async function OrgaMembersPage({
     revoked?: string;
     changed?: string;
     removed?: string;
+    demo_read_only?: string;
   }>;
 }) {
   const params = (await searchParams) ?? {};
@@ -472,6 +472,7 @@ export default async function OrgaMembersPage({
   const revoked = params.revoked === "1";
   const changed = params.changed === "1";
   const removed = params.removed === "1";
+  const demoReadOnly = params.demo_read_only === "1";
 
   const ctx = await requirePathAccess("/orga/members");
 
@@ -482,6 +483,7 @@ export default async function OrgaMembersPage({
   const organization = ctx.activeMembership.organizations;
   const actorRole = ctx.activeMembership.role;
   const actorUserId = ctx.user.id;
+  const isDemo = ctx.isDemo;
 
   if (!organization) {
     throw new Error("Active organization not found");
@@ -561,6 +563,14 @@ export default async function OrgaMembersPage({
           </p>
         </div>
       </section>
+
+      {demoReadOnly ? (
+        <section className="rounded-[24px] border border-amber-300/20 bg-amber-300/10 p-4">
+          <p className="text-sm text-amber-100">
+            Demo-Modus: Änderungen sind deaktiviert.
+          </p>
+        </section>
+      ) : null}
 
       {invited ? (
         <section className="rounded-[24px] border border-emerald-300/20 bg-emerald-300/10 p-4">
@@ -714,6 +724,7 @@ export default async function OrgaMembersPage({
                         canEditStatus={canEditStatus}
                         allowOwnerOption={actorRole === "owner"}
                         saveAction={saveMemberChanges}
+                        isDemo={isDemo}
                       />
 
                       <td className="px-6 py-4 text-white/68 whitespace-nowrap">
@@ -732,6 +743,7 @@ export default async function OrgaMembersPage({
                         canEditStatus={canEditStatus}
                         canRemove={canRemove}
                         removeAction={removeMember}
+                        isDemo={isDemo}
                       />
                     </tr>
                   );

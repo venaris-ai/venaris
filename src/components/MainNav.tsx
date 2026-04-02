@@ -1,4 +1,4 @@
-// src/components/MainNav.tsx #3
+// src/components/MainNav.tsx #4
 import Link from "next/link";
 import {
   MAIN_NAV_ITEMS,
@@ -7,12 +7,13 @@ import {
 } from "@/lib/authz";
 
 export default async function MainNav() {
-  const { role, email } = await getOptionalAccessContext();
+  const { role, email, isDemo } = await getOptionalAccessContext();
 
   const items = filterNavItemsByAccess({
     items: MAIN_NAV_ITEMS,
     role,
     email,
+    isDemo,
   });
 
   if (items.length === 0) {

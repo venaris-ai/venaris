@@ -1,4 +1,4 @@
-// src/lib/authz.ts #5
+// src/lib/authz.ts #6
 import { redirect } from "next/navigation";
 import {
   getOptionalActiveOrganization,
@@ -41,12 +41,14 @@ export async function getOptionalAccessContext() {
     return {
       role: null,
       email: null,
+      isDemo: false,
     };
   }
 
   return {
     role: ctx.activeMembership.role as AppRole,
     email: ctx.user.email ?? null,
+    isDemo: ctx.isDemo,
   };
 }
 
@@ -58,7 +60,7 @@ export async function requirePathAccess(pathname: string) {
   }
 
   if (rule.public) {
-    return { user: null, activeMembership: null };
+    return { user: null, activeMembership: null, activeOrganization: null, isDemo: false };
   }
 
   if (rule.allowedEmails?.length) {
@@ -69,7 +71,7 @@ export async function requirePathAccess(pathname: string) {
       redirect("/access-denied");
     }
 
-    return { user, activeMembership: null };
+    return { user, activeMembership: null, activeOrganization: null, isDemo: false };
   }
 
   const ctx = await requireActiveOrganization();
@@ -79,6 +81,7 @@ export async function requirePathAccess(pathname: string) {
       pathname,
       role: ctx.activeMembership.role as AppRole,
       email: ctx.user.email ?? null,
+      isDemo: ctx.isDemo,
     })
   ) {
     redirect("/access-denied");
