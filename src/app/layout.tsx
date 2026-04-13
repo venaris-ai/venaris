@@ -1,10 +1,11 @@
-// src/app/layout.tsx #11
+// src/app/layout.tsx #12
 import "./globals.css";
 import MainNav from "@/components/MainNav";
 import SectionNav from "@/components/SectionNav";
 import ContextBar from "@/components/ContextBar";
 import LogoutButton from "@/components/LogoutButton";
 import AppShellGate from "@/components/AppShellGate";
+import DemoSessionGuard from "@/components/DemoSessionGuard";
 import { getOptionalActiveOrganization } from "@/lib/auth";
 import { supabaseServer } from "@/lib/supabaseServer";
 import PlanSelectionCards from "@/components/PlanSelectionCards";
@@ -260,6 +261,7 @@ export default async function RootLayout({
   return (
     <html lang="de">
       <body>
+        {isDemo ? <DemoSessionGuard /> : null}
         <AppShellGate blocked={blocked} blockedPage={blockedPage} header={header}>
           {children}
         </AppShellGate>

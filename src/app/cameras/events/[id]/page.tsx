@@ -5,6 +5,7 @@ import Link from "next/link";
 import { supabaseServer } from "@/lib/supabaseServer";
 import AssetGrid from "./AssetGrid";
 import { requirePathAccess } from "@/lib/authz";
+import { resolveAssetPreviewUrl } from "@/lib/demoAssetResolver";
 import {
   resolveRevierScope,
   type RevierOption,
@@ -257,15 +258,21 @@ export default async function CameraEventDetailPage(props: {
     if (!assetsDataErr && assetsData) assets = assetsData;
   }
 
-  const signedUrlsByAssetId: Record<string, string> = {};
-  for (const a of assets) {
-    if (!a.storage_path) continue;
-    const { data: signed } = await supabase.storage
-      .from("camera-assets")
-      .createSignedUrl(a.storage_path, 60 * 20);
 
-    if (signed?.signedUrl) signedUrlsByAssetId[a.id] = signed.signedUrl;
-  }
+const signedUrlsByAssetId: Record<string, string> = {};
+for (const a of assets) {
+  const url = await resolveAssetPreviewUrl({
+    asset: {
+      id: a.id,
+      camera_id: a.camera_id,
+      storage_path: a.storage_path,
+    },
+    isDemo: Boolean(activeOrganization.is_demo),
+  });
+
+  if (url) signedUrlsByAssetId[a.id] = url;
+}
+
 
   const initialAssets = assets.map((a) => ({
     id: a.id,

@@ -1,9 +1,10 @@
-// src/app/api/asset-url/route.ts #2
+// src/app/api/asset-url/route.ts #3
 export const runtime = "nodejs";
 
 import { NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabaseServer";
 import { requireOrganizationRole } from "@/lib/auth";
+import { resolveAssetPreviewUrl } from "@/lib/demoAssetResolver";
 
 function isStorageObjectMissing(message: string | undefined) {
   const value = (message ?? "").toLowerCase();
@@ -42,7 +43,7 @@ export async function GET(req: Request) {
 
     const { data: asset, error: assetError } = await supabase
       .from("assets")
-      .select("storage_path, camera_id")
+      .select("id, storage_path, camera_id")
       .eq("storage_path", path)
       .maybeSingle();
 
@@ -68,32 +69,35 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: "not allowed" }, { status: 403 });
     }
 
-    const { data, error } = await supabase.storage
-      .from("camera-assets")
-      .createSignedUrl(asset.storage_path, 60 * 10);
+    const url = await resolveAssetPreviewUrl({
+      asset: {
+        id: asset.id,
+        camera_id: asset.camera_id,
+        storage_path: asset.storage_path,
+      },
+      isDemo: Boolean(activeOrganization.is_demo),
+    });
 
-    if (error) {
-      if (isStorageObjectMissing(error.message)) {
-        return NextResponse.json(
-          { error: "storage object not found" },
-          { status: 404 }
-        );
-      }
-
-      return NextResponse.json({ error: error.message }, { status: 500 });
-    }
-
-    if (!data?.signedUrl) {
+    if (!url) {
       return NextResponse.json(
-        { error: "signed url missing" },
-        { status: 500 }
+        { error: "storage object not found" },
+        { status: 404 }
       );
     }
 
-    return NextResponse.json({ url: data.signedUrl });
+    return NextResponse.json({ url });
   } catch (e: any) {
+    const message = e?.message ?? String(e);
+
+    if (isStorageObjectMissing(message)) {
+      return NextResponse.json(
+        { error: "storage object not found" },
+        { status: 404 }
+      );
+    }
+
     return NextResponse.json(
-      { error: "asset_url_failed", details: e?.message ?? String(e) },
+      { error: "asset_url_failed", details: message },
       { status: 500 }
     );
   }
