@@ -1,4 +1,4 @@
-// src/app/cameras/page.tsx #7
+// src/app/cameras/page.tsx #9
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
@@ -40,21 +40,6 @@ function healthEmoji(status?: string) {
   if (status === "stale") return "🟡";
   if (status === "offline") return "🔴";
   return "⚪";
-}
-
-function relevanceLabel(a: AssetRow) {
-  if (a.relevant_user === true) return { text: "✅ relevant (manuell)" };
-  if (a.relevant_user === false) return { text: "🚫 irrelevant (manuell)" };
-
-  if (a.empty === true) {
-    const pct =
-      typeof a.empty_confidence === "number"
-        ? ` (${Math.round(a.empty_confidence * 100)}%)`
-        : "";
-    return { text: `🚫 leer erkannt${pct}` };
-  }
-
-  return { text: "✅ relevant" };
 }
 
 function formatAgo(ts: string | null | undefined) {
@@ -131,8 +116,6 @@ export default function CamerasPage() {
   const revierParam = searchParams.get("revier");
 
   const [cameraId, setCameraId] = useState<string>("");
-  const [file, setFile] = useState<File | null>(null);
-
   const [cameras, setCameras] = useState<CameraRow[]>([]);
   const [assets, setAssets] = useState<AssetRow[]>([]);
   const [batches, setBatches] = useState<BatchRow[]>([]);
@@ -144,7 +127,6 @@ export default function CamerasPage() {
   const [loadingInitial, setLoadingInitial] = useState(false);
   const [loadingAssets, setLoadingAssets] = useState(false);
   const [loadingBatches, setLoadingBatches] = useState(false);
-  const [uploading, setUploading] = useState(false);
 
   const assetLimit = 8;
   const batchLimit = 8;
@@ -274,90 +256,19 @@ export default function CamerasPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cameraId, onlyRelevant, revierParam]);
 
-  async function upload() {
-    setMsg("");
-
-    if (!file) {
-      setMsg("Bitte Bild auswählen.");
-      return;
-    }
-
-    if (!cameraId) {
-      setMsg("Bitte Kamera auswählen.");
-      return;
-    }
-
-    setUploading(true);
-
-    try {
-      const fd = new FormData();
-      fd.append("file", file);
-      fd.append("cameraId", cameraId);
-
-      const res = await fetch("/api/upload", {
-        method: "POST",
-        body: fd,
-      });
-
-      const json = await parseApiResponse(res);
-
-      if (!res.ok || !json.ok) {
-        throw new Error(
-          normalizeApiErrorMessage(
-            json.error || json.details || json.rawText || `HTTP ${res.status}`
-          )
-        );
-      }
-
-      setFile(null);
-      setMsg(
-        `✅ Upload ok · accepted=${json.accepted ?? "?"} · skippedDup=${
-          json.skippedDuplicates ?? "?"
-        }`
-      );
-      await Promise.all([loadAssets(), loadBatches(), loadCameras()]);
-    } catch (e: any) {
-      setMsg(`❌ ${e.message}`);
-    } finally {
-      setUploading(false);
-    }
-  }
-
-  async function setRelevant(assetId: string, nextRelevant: boolean) {
-    setMsg("");
-    const res = await fetch("/api/asset-relevant", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ assetId, relevant: nextRelevant }),
-    });
-
-    const json = await parseApiResponse(res);
-    if (!res.ok) {
-      setMsg(
-        normalizeApiErrorMessage(json?.error || json?.rawText || `HTTP ${res.status}`)
-      );
-      return;
-    }
-
-    await loadAssets();
-  }
-
   const cameraOptions = useMemo(() => {
     return [
       { id: "", label: "Alle Kameras" },
       ...cameras.map((c) => ({
         id: c.id,
-        label: `${healthEmoji(c.health_status)} ${c.name}${
-          c.import_method ? ` · ${c.import_method}` : ""
-        }`,
+        label: `${healthEmoji(c.health_status)} ${c.name}`,
       })),
     ];
   }, [cameras]);
 
-  const selectedCamera = useMemo(
-    () => cameras.find((c) => c.id === cameraId) ?? null,
-    [cameras, cameraId]
-  );
+  const cameraNameById = useMemo(() => {
+    return Object.fromEntries(cameras.map((c) => [c.id, c.name]));
+  }, [cameras]);
 
   const healthCounts = useMemo(() => {
     return cameras.reduce(
@@ -391,8 +302,7 @@ export default function CamerasPage() {
             Cameras
           </h1>
           <p className="mt-2 max-w-3xl text-sm text-white/68">
-            Operative Übersicht über Kamera-Health, aktuelle Assets, Ingest und
-            Quick Upload.
+            Operative Übersicht über Kamera-Health, aktuelle Bilder und Ingest.
           </p>
         </div>
       </section>
@@ -425,20 +335,24 @@ export default function CamerasPage() {
         />
       </section>
 
-      <section className="grid gap-4 xl:grid-cols-2">
-        <section className="rounded-[28px] border border-white/10 bg-white/5 p-6 backdrop-blur-sm">
-          <div>
-            <h2 className="text-lg font-medium text-white">Arbeitskontext</h2>
-            <p className="mt-1 text-sm text-white/65">
-              Steuere hier den Scope für Assets und Ingest-Batches.
-            </p>
-          </div>
+      {attentionCount > 0 ? (
+        <section className="rounded-[28px] border border-amber-300/20 bg-amber-300/10 p-6 backdrop-blur-sm">
+          <h2 className="text-lg font-medium text-amber-100">Attention</h2>
+          <p className="mt-2 text-sm leading-6 text-amber-100/85">
+            {healthCounts.stale} stale und {healthCounts.offline} offline Kameras
+            benötigen Aufmerksamkeit.
+          </p>
+        </section>
+      ) : null}
 
-          <div className="mt-6 space-y-5">
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-white">Kamera</label>
+      <section className="rounded-[22px] border border-white/10 bg-white/5 px-4 py-4 backdrop-blur-sm">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div className="text-sm font-medium text-white">Kamerafilter</div>
+
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center lg:justify-end">
+            <div className="min-w-[280px]">
               <select
-                className="w-full rounded-full border border-white/10 bg-white/5 p-2 text-white outline-none backdrop-blur-sm"
+                className="w-full rounded-full border border-white/10 bg-white/5 px-3 py-2 text-white outline-none backdrop-blur-sm"
                 value={cameraId}
                 onChange={(e) => setCameraId(e.target.value)}
               >
@@ -452,14 +366,9 @@ export default function CamerasPage() {
                   </option>
                 ))}
               </select>
-              <div className="text-xs text-white/45">
-                {selectedCamera
-                  ? `Aktuell ausgewählt: ${selectedCamera.name}`
-                  : "Aktuell: alle Kameras"}
-              </div>
             </div>
 
-            <label className="flex items-center gap-2 text-sm text-white/78">
+            <label className="flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/78">
               <input
                 type="checkbox"
                 checked={onlyRelevant}
@@ -469,57 +378,8 @@ export default function CamerasPage() {
               Nur relevante Assets
             </label>
           </div>
-        </section>
-
-        <section className="rounded-[28px] border border-white/10 bg-white/5 p-6 backdrop-blur-sm">
-          <div>
-            <h2 className="text-lg font-medium text-white">Quick Upload</h2>
-            <p className="mt-1 text-sm text-white/65">
-              Einzelbild direkt an die ausgewählte Kamera senden.
-            </p>
-          </div>
-
-          <div className="mt-6 flex flex-wrap items-center gap-3">
-            <label className="inline-block cursor-pointer rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-white/78 backdrop-blur-sm hover:border-amber-300/20 hover:bg-white/8 hover:text-white">
-              Bild auswählen
-              <input
-                className="hidden"
-                type="file"
-                accept="image/*"
-                onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-              />
-            </label>
-
-            <button
-              onClick={upload}
-              disabled={uploading || !cameraId || !file}
-              className="rounded-full bg-[#c9952e] px-4 py-2 text-sm text-[#102018] disabled:opacity-60"
-            >
-              {uploading ? "Uploading…" : "Upload"}
-            </button>
-          </div>
-
-          <div className="mt-3 text-xs text-white/45">
-            Upload funktioniert nur mit ausgewählter Kamera.
-          </div>
-
-          {file ? (
-            <div className="mt-3 text-sm text-white/72">
-              Ausgewählt: <span className="font-medium text-white">{file.name}</span>
-            </div>
-          ) : null}
-        </section>
+        </div>
       </section>
-
-      {attentionCount > 0 ? (
-        <section className="rounded-[28px] border border-amber-300/20 bg-amber-300/10 p-6 backdrop-blur-sm">
-          <h2 className="text-lg font-medium text-amber-100">Attention</h2>
-          <p className="mt-2 text-sm leading-6 text-amber-100/85">
-            {healthCounts.stale} stale und {healthCounts.offline} offline Kameras
-            benötigen Aufmerksamkeit.
-          </p>
-        </section>
-      ) : null}
 
       {msg ? (
         <div className="rounded-[28px] border border-white/10 bg-white/5 px-4 py-3 text-sm text-white/78 backdrop-blur-sm">
@@ -593,45 +453,41 @@ export default function CamerasPage() {
           </div>
 
           <div className="space-y-4">
-            {assets.map((a) => {
-              const rel = relevanceLabel(a);
-              const showRelevant = a.relevant_effective === true;
-
-              return (
-                <div
-                  key={a.id}
-                  className="rounded-[20px] border border-white/10 bg-white/5 p-4 text-sm"
-                >
-                  <div className="font-mono text-xs text-white/45">{a.id}</div>
-                  <div className="mt-1 break-all text-xs text-white/60">
-                    {a.storage_path}
-                  </div>
-                  <div className="mt-1 text-xs text-white/45">
-                    {a.status} · {formatAgo(a.created_at)}
+            {assets.map((a) => (
+              <div
+                key={a.id}
+                className="rounded-[20px] border border-white/10 bg-white/5 p-4 text-sm"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <div className="font-medium text-white">
+                      {cameraNameById[a.camera_id] ?? "Kamera"}
+                    </div>
+                    <div className="mt-1 text-xs text-white/45">
+                      {formatDateTime(a.created_at)} · {formatAgo(a.created_at)}
+                    </div>
                   </div>
 
-                  <div className="mt-2 flex flex-wrap items-center gap-3">
-                    <span className="text-xs text-white/78">{rel.text}</span>
-                    <button
-                      onClick={() => setRelevant(a.id, !showRelevant)}
-                      className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-white/78 hover:border-amber-300/20 hover:bg-white/8 hover:text-white"
-                    >
-                      {showRelevant
-                        ? "Als irrelevant markieren"
-                        : "Als relevant markieren"}
-                    </button>
-                  </div>
-
-                  {urls[a.id] ? (
-                    <img
-                      src={urls[a.id]}
-                      alt="asset"
-                      className="mt-3 w-full max-w-md rounded-[16px] border border-white/10"
-                    />
-                  ) : null}
+                  <span
+                    className={`inline-flex rounded-full border px-2.5 py-0.5 text-xs font-medium ${
+                      a.relevant_effective
+                        ? "border-emerald-300/25 bg-emerald-300/10 text-emerald-200"
+                        : "border-white/10 bg-white/5 text-white/72"
+                    }`}
+                  >
+                    {a.relevant_effective ? "Relevant" : "Nicht relevant"}
+                  </span>
                 </div>
-              );
-            })}
+
+                {urls[a.id] ? (
+                  <img
+                    src={urls[a.id]}
+                    alt="asset"
+                    className="mt-3 w-full max-w-md rounded-[16px] border border-white/10"
+                  />
+                ) : null}
+              </div>
+            ))}
 
             {assets.length === 0 ? (
               <div className="text-sm text-white/68">

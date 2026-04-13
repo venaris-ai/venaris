@@ -1,9 +1,11 @@
-// src/app/cameras/events/[id]/page.tsx #4
+// src/app/cameras/events/[id]/page.tsx #10
 export const runtime = "nodejs";
 
 import Link from "next/link";
 import { supabaseServer } from "@/lib/supabaseServer";
 import AssetGrid from "./AssetGrid";
+import EventHeroPanel from "./EventHeroPanel";
+import EventDetailControls from "./EventDetailControls";
 import { requirePathAccess } from "@/lib/authz";
 import { resolveAssetPreviewUrl } from "@/lib/demoAssetResolver";
 import {
@@ -18,6 +20,23 @@ type SearchParams = {
 type RevierRow = {
   id: string;
   name: string;
+};
+
+type AssetViewItem = {
+  id: string;
+  previewUrl?: string;
+  timestampLabel: string;
+  storagePath?: string;
+  relevant: boolean;
+  relevantUser: boolean | null;
+  empty?: boolean | null;
+  emptyConfidence?: number | null;
+};
+
+type DetectionTopRow = {
+  species: string | null;
+  species_user: string | null;
+  score: number | null;
 };
 
 function fmt(ts: string | null) {
@@ -38,10 +57,10 @@ function scoreBadge(score: number | null) {
   return "low";
 }
 
-function buildEventsBackHref(revier?: string) {
-  if (!revier) return "/cameras/events";
+function buildBackHref(revier?: string) {
+  if (!revier) return "/cameras/ingest";
   const params = new URLSearchParams({ revier });
-  return `/cameras/events?${params.toString()}`;
+  return `/cameras/ingest?${params.toString()}`;
 }
 
 export default async function CameraEventDetailPage(props: {
@@ -56,7 +75,7 @@ export default async function CameraEventDetailPage(props: {
 
   const eventId: string | undefined = params?.id;
   const rawRevier = searchParams?.revier;
-  const backHref = buildEventsBackHref(rawRevier);
+  const backHref = buildBackHref(rawRevier);
 
   if (!eventId) {
     return (
@@ -241,9 +260,7 @@ export default async function CameraEventDetailPage(props: {
     .select("asset_id")
     .eq("event_id", eventId);
 
-  const assetIds = (eventAssets ?? [])
-    .map((x: any) => x.asset_id)
-    .filter(Boolean);
+  const assetIds = (eventAssets ?? []).map((x: any) => x.asset_id).filter(Boolean);
 
   let assets: any[] = [];
   if (!assetsErr && assetIds.length > 0) {
@@ -253,50 +270,59 @@ export default async function CameraEventDetailPage(props: {
         "id,camera_id,storage_path,created_at,captured_at,status,relevant,relevant_user,empty,empty_confidence"
       )
       .in("id", assetIds)
-      .order("created_at", { ascending: false });
+      .order("captured_at", { ascending: true, nullsFirst: false })
+      .order("created_at", { ascending: true });
 
     if (!assetsDataErr && assetsData) assets = assetsData;
   }
 
+  const signedUrlsByAssetId: Record<string, string> = {};
+  for (const a of assets) {
+    const url = await resolveAssetPreviewUrl({
+      asset: {
+        id: a.id,
+        camera_id: a.camera_id,
+        storage_path: a.storage_path,
+      },
+      isDemo: Boolean(activeOrganization.is_demo),
+    });
 
-const signedUrlsByAssetId: Record<string, string> = {};
-for (const a of assets) {
-  const url = await resolveAssetPreviewUrl({
-    asset: {
-      id: a.id,
-      camera_id: a.camera_id,
-      storage_path: a.storage_path,
-    },
-    isDemo: Boolean(activeOrganization.is_demo),
-  });
+    if (url) signedUrlsByAssetId[a.id] = url;
+  }
 
-  if (url) signedUrlsByAssetId[a.id] = url;
-}
-
-
-  const initialAssets = assets.map((a) => ({
+  const initialAssets: AssetViewItem[] = assets.map((a) => ({
     id: a.id,
     previewUrl: signedUrlsByAssetId[a.id],
     timestampLabel: fmt(a.captured_at ?? a.created_at),
     storagePath: a.storage_path,
-
-relevant: a.relevant,
-relevantUser: a.relevant_user ?? null,
-empty: a.empty ?? null,
-emptyConfidence: a.empty_confidence ?? null,
-
-
+    relevant: a.relevant,
+    relevantUser: a.relevant_user ?? null,
+    empty: a.empty ?? null,
+    emptyConfidence: a.empty_confidence ?? null,
   }));
+
+  const heroAsset = initialAssets[0] ?? null;
+  const additionalAssets = initialAssets.slice(1);
+
+  let heroDetection: DetectionTopRow | null = null;
+  if (heroAsset) {
+    const { data: detectionData } = await supabase
+      .from("detections")
+      .select("species,species_user,score")
+      .eq("asset_id", heroAsset.id)
+      .eq("label", "animal")
+      .order("score", { ascending: false })
+      .limit(1)
+      .returns<DetectionTopRow[]>();
+
+    heroDetection = detectionData?.[0] ?? null;
+  }
 
   const cameraLabel = camera?.name
     ? `${camera.name}${camera.location_name ? ` (${camera.location_name})` : ""}`
-    : event.camera_id;
+    : "Unbenannte Kamera";
 
-  const topLabel = event.top_species
-    ? `${prettySpecies(event.top_species)}${
-        event.top_count ? ` (${event.top_count})` : ""
-      }`
-    : "—";
+  const topSpeciesLabel = prettySpecies(event.top_species);
 
   return (
     <main className="space-y-8">
@@ -306,7 +332,7 @@ emptyConfidence: a.empty_confidence ?? null,
             <div className="text-xs font-medium uppercase tracking-[0.22em] text-amber-200/80">
               Event
             </div>
-            <h1 className="mt-3 text-3xl font-semibold text-white">Event</h1>
+            <h1 className="mt-3 text-3xl font-semibold text-white">{topSpeciesLabel}</h1>
             <p className="mt-2 text-sm text-white/68">
               Zeitraum: {fmt(event.start_at)} – {fmt(event.end_at)}
             </p>
@@ -321,40 +347,69 @@ emptyConfidence: a.empty_confidence ?? null,
         </div>
       </section>
 
-      <div className="rounded-[28px] border border-white/10 bg-white/5 p-5 backdrop-blur-sm">
-        <div className="grid gap-3 md:grid-cols-2">
-          <div className="text-sm text-white/72">
-            <span className="font-medium text-white">Kamera:</span> {cameraLabel}
+      <section className="grid gap-6 lg:grid-cols-[minmax(0,1.45fr)_380px]">
+        <div>
+          <EventHeroPanel asset={heroAsset} totalCount={initialAssets.length} />
+        </div>
+
+        <aside className="space-y-4 rounded-[28px] border border-white/10 bg-white/5 p-5 backdrop-blur-sm">
+          <EventDetailControls
+            assetId={heroAsset?.id ?? null}
+            initialRelevantAuto={heroAsset?.relevant ?? null}
+            initialRelevantUser={heroAsset?.relevantUser ?? null}
+            initialSpeciesAuto={heroDetection?.species ?? null}
+            initialSpeciesUser={heroDetection?.species_user ?? null}
+            isDemo={Boolean(activeOrganization.is_demo)}
+          />
+
+          <div className="rounded-[20px] border border-white/10 bg-white/5 p-4">
+            <div className="text-xs text-white/45">Wahrscheinlichkeit</div>
+            <div className="mt-1 text-sm font-medium text-white">
+              {typeof event.relevance_score === "number"
+                ? `${Math.round(event.relevance_score * 100)}% · ${scoreBadge(
+                    event.relevance_score
+                  )}`
+                : "—"}
+            </div>
           </div>
 
-          <div className="text-sm text-white/72">
-            <span className="font-medium text-white">Assets im Event:</span> {assets.length}
+          <div className="rounded-[20px] border border-white/10 bg-white/5 p-4">
+            <div className="text-xs text-white/45">Kamera</div>
+            <div className="mt-1 text-sm font-medium text-white">{cameraLabel}</div>
           </div>
 
-          <div className="text-sm text-white/72">
-            <span className="font-medium text-white">Top Species:</span> {topLabel}
+          <div className="rounded-[20px] border border-white/10 bg-white/5 p-4">
+            <div className="text-xs text-white/45">Zeitpunkt</div>
+            <div className="mt-1 text-sm font-medium text-white">
+              {heroAsset?.timestampLabel ?? fmt(event.start_at)}
+            </div>
           </div>
+        </aside>
+      </section>
 
-          <div className="text-sm text-white/72">
-            <span className="font-medium text-white">Relevance Score:</span>{" "}
-            {typeof event.relevance_score === "number"
-              ? `${event.relevance_score.toFixed(3)} · ${scoreBadge(event.relevance_score)}`
-              : "—"}
+      <section className="space-y-3">
+        <div className="flex items-end justify-between gap-4">
+          <div>
+            <h2 className="text-xl font-medium text-white">Weitere Aufnahmen</h2>
+            <p className="mt-1 text-sm text-white/62">
+              Weitere Bilder dieses Events. Relevanz kann hier weiterhin geprüft und
+              überschrieben werden.
+            </p>
           </div>
         </div>
-      </div>
 
-      <div>
-        <h2 className="text-xl font-medium text-white">Assets</h2>
-
-        {assets.length === 0 ? (
-          <div className="mt-3 rounded-[24px] border border-white/10 bg-white/5 p-4 text-sm text-white/68">
+        {initialAssets.length === 0 ? (
+          <div className="rounded-[24px] border border-white/10 bg-white/5 p-4 text-sm text-white/68">
             Keine Assets gefunden (event_assets leer oder Asset-IDs fehlen).
           </div>
+        ) : additionalAssets.length === 0 ? (
+          <div className="rounded-[24px] border border-white/10 bg-white/5 p-4 text-sm text-white/68">
+            Für dieses Event gibt es keine weiteren Aufnahmen.
+          </div>
         ) : (
-          <AssetGrid initialAssets={initialAssets} />
+          <AssetGrid initialAssets={additionalAssets} />
         )}
-      </div>
+      </section>
     </main>
   );
 }

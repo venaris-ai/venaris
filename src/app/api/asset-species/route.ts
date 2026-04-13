@@ -1,0 +1,152 @@
+// src/app/api/asset-species/route.ts #1
+export const runtime = "nodejs";
+
+import { NextResponse } from "next/server";
+import { supabaseServer } from "@/lib/supabaseServer";
+import { assertNotDemoWrite, requireOrganizationRole } from "@/lib/auth";
+
+const ALLOWED_SPECIES = [
+  "roe_deer",
+  "wild_boar",
+  "red_deer",
+  "fallow_deer",
+  "mouflon",
+  "fox",
+  "wolf",
+  "badger",
+  "raccoon",
+  "raccoon_dog",
+  "hare",
+  "rabbit",
+  "pheasant",
+  "crow",
+  "other",
+] as const;
+
+type SpeciesValue = (typeof ALLOWED_SPECIES)[number];
+
+function isAllowedSpecies(value: unknown): value is SpeciesValue {
+  return typeof value === "string" && ALLOWED_SPECIES.includes(value as SpeciesValue);
+}
+
+export async function POST(req: Request) {
+  try {
+    const ctx = await requireOrganizationRole(["owner", "admin", "member"]);
+    assertNotDemoWrite(ctx);
+
+    const activeOrganization = ctx.activeMembership.organizations;
+
+    if (!activeOrganization) {
+      return NextResponse.json(
+        { error: "active organization not found" },
+        { status: 400 }
+      );
+    }
+
+    const supabase = supabaseServer();
+    const body = await req.json().catch(() => null);
+
+    const assetId = body?.assetId as string | undefined;
+    const species = body?.species as string | null | undefined;
+
+    if (!assetId || species === undefined) {
+      return NextResponse.json(
+        { error: "assetId and species required" },
+        { status: 400 }
+      );
+    }
+
+    if (species !== null && !isAllowedSpecies(species)) {
+      return NextResponse.json(
+        { error: "species must be null or a valid taxonomy species" },
+        { status: 400 }
+      );
+    }
+
+    const { data: asset, error: assetError } = await supabase
+      .from("assets")
+      .select("id, camera_id")
+      .eq("id", assetId)
+      .maybeSingle();
+
+    if (assetError) {
+      return NextResponse.json({ error: assetError.message }, { status: 500 });
+    }
+
+    if (!asset) {
+      return NextResponse.json({ error: "asset not found" }, { status: 404 });
+    }
+
+    const { data: camera, error: cameraError } = await supabase
+      .from("cameras")
+      .select("organization_id")
+      .eq("id", asset.camera_id)
+      .maybeSingle();
+
+    if (cameraError) {
+      return NextResponse.json({ error: cameraError.message }, { status: 500 });
+    }
+
+    if (!camera || camera.organization_id !== activeOrganization.id) {
+      return NextResponse.json({ error: "not allowed" }, { status: 403 });
+    }
+
+    const { data: animalDetections, error: detectionsError } = await supabase
+      .from("detections")
+      .select("id")
+      .eq("asset_id", assetId)
+      .eq("label", "animal");
+
+    if (detectionsError) {
+      return NextResponse.json({ error: detectionsError.message }, { status: 500 });
+    }
+
+    if ((animalDetections ?? []).length === 0) {
+      return NextResponse.json(
+        { error: "no animal detections found for asset" },
+        { status: 400 }
+      );
+    }
+
+    const detectionIds = (animalDetections ?? []).map((row) => row.id);
+
+    const { error: updateError } = await supabase
+      .from("detections")
+      .update({ species_user: species })
+      .in("id", detectionIds);
+
+    if (updateError) {
+      return NextResponse.json({ error: updateError.message }, { status: 500 });
+    }
+
+    const { data: eventRows, error: eventRowsError } = await supabase
+      .from("event_assets")
+      .select("event_id")
+      .eq("asset_id", assetId);
+
+    if (eventRowsError) {
+      return NextResponse.json({ error: eventRowsError.message }, { status: 500 });
+    }
+
+    const eventIds = Array.from(
+      new Set((eventRows ?? []).map((row) => row.event_id).filter(Boolean))
+    );
+
+    for (const eventId of eventIds) {
+      const { error: rpcError } = await supabase.rpc("update_event_aggregation", {
+        p_event_id: eventId,
+      });
+
+      if (rpcError) {
+        return NextResponse.json({ error: rpcError.message }, { status: 500 });
+      }
+    }
+
+    return NextResponse.json({ ok: true });
+  } catch (e: any) {
+    return NextResponse.json(
+      { error: "asset_species_api_crashed", details: e?.message ?? String(e) },
+      { status: 500 }
+    );
+  }
+}

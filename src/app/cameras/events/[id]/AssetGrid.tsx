@@ -1,4 +1,4 @@
-// src/app/cameras/events/[id]/AssetGrid.tsx #4
+// src/app/cameras/events/[id]/AssetGrid.tsx #5
 "use client";
 
 import { useState } from "react";
@@ -98,7 +98,7 @@ export default function AssetGrid({
   }
 
   return (
-    <div className="mt-3 grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+    <div className="mt-3 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
       {assets.map((a) => {
         const isBusy = busyId === a.id;
         const eff = effectiveRelevant(a);
@@ -187,13 +187,12 @@ export default function AssetGrid({
               )}
 
               <span className="ml-auto text-xs text-white/55">
-                Effective: <span className="font-medium text-white">{eff ? "relevant" : "irrelevant"}</span>
+                Effective:{" "}
+                <span className="font-medium text-white">
+                  {eff ? "relevant" : "irrelevant"}
+                </span>
               </span>
             </div>
-
-            {a.storagePath && (
-              <div className="mt-2 break-all text-xs text-white/55">{a.storagePath}</div>
-            )}
           </div>
         );
       })}

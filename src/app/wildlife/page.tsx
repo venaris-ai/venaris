@@ -1,4 +1,4 @@
-// src/app/wildlife/page.tsx #2
+// src/app/wildlife/page.tsx #2b
 export const runtime = "nodejs";
 
 import Link from "next/link";
@@ -785,7 +785,7 @@ export default async function WildlifePage(props: {
               Jüngste Wildlife-Events im aktuellen Revier-Scope.
             </p>
           </div>
-          <ActionLink href="/cameras/events" label="Zu Events" />
+          <ActionLink href="/cameras/ingest" label="Zu Ingest" />
         </div>
 
         <div className="space-y-3">

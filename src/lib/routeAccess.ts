@@ -1,4 +1,4 @@
-// src/lib/routeAccess.ts #2
+// src/lib/routeAccess.ts #3
 export type AppRole = "owner" | "admin" | "member" | "viewer";
 export type RouteMatch = "exact" | "startsWith";
 
@@ -68,10 +68,9 @@ export const SECTION_NAV_ITEMS = {
   cameras: [
     { href: "/cameras", label: "Overview", match: "exact" },
     { href: "/cameras/new", label: "New", match: "exact" },
-    { href: "/cameras/health", label: "Health", match: "exact" },
-    { href: "/cameras/events", label: "Events", match: "startsWith" },
-    { href: "/cameras/import", label: "Import", match: "exact" },
     { href: "/cameras/ingest", label: "Ingest", match: "exact" },
+    { href: "/cameras/import", label: "Import", match: "exact" },
+    { href: "/cameras/health", label: "Health", match: "exact" },
   ] satisfies NavItem[],
 
   orga: [
@@ -124,6 +123,10 @@ export function pathMatches(pathname: string, rule: RouteAccessRule | NavItem) {
 }
 
 export function isNavItemActive(pathname: string, item: NavItem) {
+  if (item.href === "/cameras/ingest") {
+    return pathname === "/cameras/ingest" || pathname.startsWith("/cameras/events/");
+  }
+
   if (item.match === "startsWith") {
     return pathname.startsWith(item.href);
   }

@@ -1,4 +1,4 @@
-// src/app/wildlife/activity/page.tsx #2b
+// src/app/wildlife/activity/page.tsx #2c
 export const runtime = "nodejs";
 
 import Link from "next/link";
@@ -553,12 +553,14 @@ export default async function WildlifeActivityPage(props: {
             </p>
           </div>
 
-          <Link
-            href="/cameras/events"
-            className="rounded-[10px] border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/78 hover:border-amber-300/20 hover:bg-white/8 hover:text-white"
-          >
-            Zu Events
-          </Link>
+<Link
+  href="/cameras/ingest"
+  className="rounded-[10px] border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/78 hover:border-amber-300/20 hover:bg-white/8 hover:text-white"
+>
+  Zu Ingest
+</Link>
+
+
         </div>
 
         <div className="space-y-3">

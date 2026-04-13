@@ -1,6 +1,7 @@
-// src/app/cameras/ingest/page.tsx #4
+// src/app/cameras/ingest/page.tsx #6
 export const dynamic = "force-dynamic";
 
+import Link from "next/link";
 import { requirePathAccess } from "@/lib/authz";
 import { supabaseServer } from "@/lib/supabaseServer";
 import {
@@ -25,43 +26,73 @@ type BatchDb = {
   file_count: number | null;
   status: string | null;
   error_summary: string | null;
-  meta: Record<string, unknown> | null;
   cameras:
     | {
         id: string;
-        name: string;
+        name: string | null;
       }[]
     | null;
 };
 
 type Batch = {
   id: string;
-  camera_id: string;
-  received_at: string;
+  cameraId: string;
+  cameraName: string | null;
+  receivedAt: string;
   source: string | null;
-  file_count: number | null;
+  fileCount: number | null;
   status: string | null;
-  error_summary: string | null;
-  meta: Record<string, unknown> | null;
-  camera:
-    | {
-        id: string;
-        name: string;
-      }
-    | null;
+  errorSummary: string | null;
+};
+
+type AssetRow = {
+  id: string;
+  ingest_batch_id: string | null;
+};
+
+type EventAssetRow = {
+  event_id: string;
+  asset_id: string;
+};
+
+type EventFeedRow = {
+  id: string;
+  camera_id: string;
+  start_at: string | null;
+  end_at: string | null;
+  asset_count: number | null;
+  top_species: string | null;
+  top_count: number | null;
+  relevance_score: number | null;
+};
+
+type IngestEventRow = {
+  eventId: string;
+  batchId: string;
+  cameraName: string | null;
+  receivedAt: string;
+  source: string | null;
+  ingestStatus: string | null;
+  errorSummary: string | null;
+  fileCount: number | null;
+  startAt: string | null;
+  endAt: string | null;
+  assetCount: number;
+  topSpecies: string | null;
+  topCount: number | null;
+  relevanceScore: number | null;
 };
 
 function normalizeBatch(row: BatchDb): Batch {
   return {
     id: row.id,
-    camera_id: row.camera_id,
-    received_at: row.received_at,
+    cameraId: row.camera_id,
+    cameraName: row.cameras?.[0]?.name ?? null,
+    receivedAt: row.received_at,
     source: row.source,
-    file_count: row.file_count,
+    fileCount: row.file_count,
     status: row.status,
-    error_summary: row.error_summary,
-    meta: row.meta,
-    camera: row.cameras?.[0] ?? null,
+    errorSummary: row.error_summary,
   };
 }
 
@@ -88,11 +119,6 @@ function Badge({
       {children}
     </span>
   );
-}
-
-function isTerminalErr(status?: string | null) {
-  const s = (status || "").toLowerCase();
-  return s === "failed" || s === "error";
 }
 
 function statusTone(status?: string | null) {
@@ -126,18 +152,41 @@ function sourceTone(source?: string | null) {
 
 function errorTone(status?: string | null, error?: string | null) {
   if (!error) return "muted" as const;
-  if (isTerminalErr(status)) return "err" as const;
+  if (statusTone(status) === "err") return "err" as const;
   return "warn" as const;
 }
 
-function formatUtcTimestamp(value?: string | null) {
-  if (!value) return "-";
+function formatDateTime(value?: string | null) {
+  if (!value) return "—";
 
   const d = new Date(value);
 
-  if (Number.isNaN(d.getTime())) return "-";
+  if (Number.isNaN(d.getTime())) return "—";
 
-  return d.toISOString().replace("T", " ").slice(0, 19) + " UTC";
+  return d.toLocaleString("de-DE");
+}
+
+function prettySpecies(value?: string | null) {
+  if (!value) return "—";
+  return value.replaceAll("_", " ");
+}
+
+function resultLabel(row: IngestEventRow) {
+  if (!row.topSpecies) return "—";
+  return prettySpecies(row.topSpecies);
+}
+
+function formatProbability(value?: number | null) {
+  if (typeof value !== "number") return "—";
+  return `${Math.round(value * 100)}%`;
+}
+
+function sortRows(rows: IngestEventRow[]) {
+  return [...rows].sort((a, b) => {
+    const aTs = new Date(a.endAt ?? a.startAt ?? a.receivedAt).getTime();
+    const bTs = new Date(b.endAt ?? b.startAt ?? b.receivedAt).getTime();
+    return bTs - aTs;
+  });
 }
 
 export default async function CamerasIngestPage(props: {
@@ -161,7 +210,7 @@ export default async function CamerasIngestPage(props: {
 
   const supabase = supabaseServer();
 
-  let items: Batch[] = [];
+  let items: IngestEventRow[] = [];
   let apiError: string | null = null;
   let scopeLabel = "Alle aktiven Reviere";
 
@@ -208,7 +257,7 @@ export default async function CamerasIngestPage(props: {
         const allowedCameraIds = (cameras ?? []).map((camera) => camera.id);
 
         if (allowedCameraIds.length > 0) {
-          const { data, error } = await supabase
+          const { data: batchData, error: batchError } = await supabase
             .from("ingest_batches")
             .select(
               `
@@ -219,7 +268,6 @@ export default async function CamerasIngestPage(props: {
               file_count,
               status,
               error_summary,
-              meta,
               cameras ( id, name )
               `
             )
@@ -227,10 +275,113 @@ export default async function CamerasIngestPage(props: {
             .order("received_at", { ascending: false })
             .limit(50);
 
-          if (error) {
-            apiError = error.message;
+          if (batchError) {
+            apiError = batchError.message;
           } else {
-            items = ((data ?? []) as BatchDb[]).map(normalizeBatch);
+            const batches = ((batchData ?? []) as BatchDb[]).map(normalizeBatch);
+            const batchIds = batches.map((batch) => batch.id);
+
+            if (batchIds.length > 0) {
+              const { data: assetsData, error: assetsError } = await supabase
+                .from("assets")
+                .select("id,ingest_batch_id")
+                .in("ingest_batch_id", batchIds);
+
+              if (assetsError) {
+                apiError = assetsError.message;
+              } else {
+                const assets = (assetsData ?? []) as AssetRow[];
+                const assetIds = assets.map((asset) => asset.id);
+
+                if (assetIds.length > 0) {
+                  const { data: eventAssetsData, error: eventAssetsError } =
+                    await supabase
+                      .from("event_assets")
+                      .select("event_id,asset_id")
+                      .in("asset_id", assetIds);
+
+                  if (eventAssetsError) {
+                    apiError = eventAssetsError.message;
+                  } else {
+                    const eventAssets = (eventAssetsData ?? []) as EventAssetRow[];
+                    const eventIds = Array.from(
+                      new Set(eventAssets.map((row) => row.event_id).filter(Boolean))
+                    );
+
+                    if (eventIds.length > 0) {
+                      const { data: eventsData, error: eventsError } = await supabase
+                        .from("event_feed")
+                        .select(
+                          "id,camera_id,start_at,end_at,asset_count,top_species,top_count,relevance_score"
+                        )
+                        .in("id", eventIds);
+
+                      if (eventsError) {
+                        apiError = eventsError.message;
+                      } else {
+                        const events = (eventsData ?? []) as EventFeedRow[];
+
+                        const batchById = new Map(
+                          batches.map((batch) => [batch.id, batch] as const)
+                        );
+                        const batchIdByAssetId = new Map<string, string>();
+                        const eventIdsByBatchId = new Map<string, Set<string>>();
+                        const eventById = new Map(
+                          events.map((event) => [event.id, event] as const)
+                        );
+
+                        for (const asset of assets) {
+                          if (!asset.ingest_batch_id) continue;
+                          batchIdByAssetId.set(asset.id, asset.ingest_batch_id);
+                        }
+
+                        for (const row of eventAssets) {
+                          const batchId = batchIdByAssetId.get(row.asset_id);
+                          if (!batchId) continue;
+
+                          if (!eventIdsByBatchId.has(batchId)) {
+                            eventIdsByBatchId.set(batchId, new Set<string>());
+                          }
+
+                          eventIdsByBatchId.get(batchId)?.add(row.event_id);
+                        }
+
+                        const resolvedRows: IngestEventRow[] = [];
+
+                        for (const [batchId, ids] of eventIdsByBatchId.entries()) {
+                          const batch = batchById.get(batchId);
+                          if (!batch) continue;
+
+                          for (const eventId of ids) {
+                            const event = eventById.get(eventId);
+                            if (!event) continue;
+
+                            resolvedRows.push({
+                              eventId: event.id,
+                              batchId: batch.id,
+                              cameraName: batch.cameraName,
+                              receivedAt: batch.receivedAt,
+                              source: batch.source,
+                              ingestStatus: batch.status,
+                              errorSummary: batch.errorSummary,
+                              fileCount: batch.fileCount,
+                              startAt: event.start_at,
+                              endAt: event.end_at,
+                              assetCount: event.asset_count ?? 0,
+                              topSpecies: event.top_species,
+                              topCount: event.top_count,
+                              relevanceScore: event.relevance_score,
+                            });
+                          }
+                        }
+
+                        items = sortRows(resolvedRows);
+                      }
+                    }
+                  }
+                }
+              }
+            }
           }
         }
       }
@@ -243,27 +394,18 @@ export default async function CamerasIngestPage(props: {
         <div className="flex items-start justify-between gap-4">
           <div>
             <div className="text-xs font-medium uppercase tracking-[0.22em] text-amber-200/80">
-              Ingest Monitoring
+              Ingest
             </div>
             <h1 className="mt-3 text-3xl font-semibold tracking-tight text-white">
-              Ingest Monitoring
+              Ingest
             </h1>
             <p className="mt-2 text-sm text-white/68">
-              Überblick über die letzten Ingest-Batches der aktiven Organisation.
+              Bereinigte Übersicht der verarbeiteten Eingänge im aktuellen Scope.
             </p>
           </div>
 
-          <div className="flex items-center gap-2">
-            <div className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-white/72">
-              {scopeLabel}
-            </div>
-            <a
-              href="/cameras/ingest"
-              className="rounded-full border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/78 hover:border-amber-300/20 hover:bg-white/8 hover:text-white"
-              title="Reload page"
-            >
-              Refresh
-            </a>
+          <div className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-white/72">
+            {scopeLabel}
           </div>
         </div>
       </section>
@@ -272,65 +414,79 @@ export default async function CamerasIngestPage(props: {
         <table className="w-full text-sm">
           <thead className="border-b border-white/8 bg-white/5 text-left text-white/55">
             <tr>
-              <th className="px-3 py-2">Time</th>
-              <th className="px-3 py-2">Source</th>
-              <th className="px-3 py-2">Camera</th>
-              <th className="px-3 py-2">Files</th>
+              <th className="px-3 py-2">Zeit</th>
+              <th className="px-3 py-2">Kamera</th>
+              <th className="px-3 py-2">Kanal</th>
+              <th className="px-3 py-2">Ergebnis</th>
+              <th className="px-3 py-2">Wahr</th>
               <th className="px-3 py-2">Status</th>
-              <th className="px-3 py-2">Info / Error</th>
-              <th className="px-3 py-2">Batch</th>
+              <th className="px-3 py-2">Details</th>
             </tr>
           </thead>
           <tbody>
             {items.length === 0 ? (
               <tr>
                 <td className="px-3 py-6 text-white/45" colSpan={7}>
-                  No ingest batches yet.
+                  Noch keine verarbeiteten Eingänge mit Event vorhanden.
                 </td>
               </tr>
             ) : (
-              items.map((batch) => {
-                const stTone = statusTone(batch.status);
-                const srcTone = sourceTone(batch.source);
-                const errTone = errorTone(batch.status, batch.error_summary);
+              items.map((row) => {
+                const stTone = statusTone(row.ingestStatus);
+                const srcTone = sourceTone(row.source);
+                const errTone = errorTone(row.ingestStatus, row.errorSummary);
 
-                const errClass =
+                const errorClass =
                   errTone === "err"
-                    ? "font-medium text-rose-200"
+                    ? "text-rose-200"
                     : errTone === "warn"
-                      ? "font-medium text-amber-200"
-                      : "text-white/35";
+                      ? "text-amber-200"
+                      : "text-white/72";
 
                 return (
-                  <tr key={batch.id} className="border-b border-white/8 last:border-b-0">
-                    <td className="whitespace-nowrap px-3 py-2 text-white/72">
-                      {formatUtcTimestamp(batch.received_at)}
+                  <tr
+                    key={`${row.batchId}:${row.eventId}`}
+                    className="border-b border-white/8 last:border-b-0"
+                  >
+                    <td className="px-3 py-3 text-white/72 whitespace-nowrap">
+                      <div>{formatDateTime(row.startAt ?? row.receivedAt)}</div>
+                      {row.endAt && row.endAt !== row.startAt ? (
+                        <div className="text-xs text-white/45">
+                          bis {formatDateTime(row.endAt)}
+                        </div>
+                      ) : null}
                     </td>
 
-                    <td className="px-3 py-2">
-                      <Badge tone={srcTone}>{batch.source || "-"}</Badge>
+                    <td className="px-3 py-3 text-white">
+                      {row.cameraName?.trim() || "Unbenannte Kamera"}
                     </td>
 
-                    <td className="px-3 py-2 text-white">
-                      {batch.camera?.name || batch.camera_id || "-"}
+                    <td className="px-3 py-3">
+                      <Badge tone={srcTone}>{row.source || "—"}</Badge>
                     </td>
 
-                    <td className="px-3 py-2 text-white/72">{batch.file_count ?? "-"}</td>
-
-                    <td className="px-3 py-2">
-                      <Badge tone={stTone}>{batch.status || "-"}</Badge>
+                    <td className="px-3 py-3">
+                      <div className="font-medium text-white">{resultLabel(row)}</div>
+                      {row.errorSummary ? (
+                        <div className={`mt-1 text-xs ${errorClass}`}>{row.errorSummary}</div>
+                      ) : null}
                     </td>
 
-                    <td className={`px-3 py-2 ${errClass}`}>
-                      {batch.error_summary ? (
-                        batch.error_summary
-                      ) : (
-                        <span className="text-white/35">-</span>
-                      )}
+                    <td className="px-3 py-3 text-white/72 whitespace-nowrap">
+                      {formatProbability(row.relevanceScore)}
                     </td>
 
-                    <td className="px-3 py-2 font-mono text-xs text-white/55">
-                      {batch.id.slice(0, 8)}…
+                    <td className="px-3 py-3">
+                      <Badge tone={stTone}>{row.ingestStatus || "—"}</Badge>
+                    </td>
+
+                    <td className="px-3 py-3">
+                      <Link
+                        href={`/cameras/events/${row.eventId}`}
+                        className="text-amber-200 underline underline-offset-4 hover:text-amber-100"
+                      >
+                        Details anzeigen
+                      </Link>
                     </td>
                   </tr>
                 );
