@@ -1,8 +1,10 @@
-// src/app/invite/accept/page.tsx #7
+// src/app/invite/accept/page.tsx #8b
 import { getOptionalUser } from "@/lib/auth";
 import { supabaseServer } from "@/lib/supabaseServer";
 import InviteAcceptForm from "./InviteAcceptForm";
 import AcceptExistingInviteButton from "./AcceptExistingInviteButton";
+
+type AppLanguage = "de" | "en";
 
 type InviteRow = {
   id: string;
@@ -13,6 +15,7 @@ type InviteRow = {
   invited_at: string;
   accepted_at: string | null;
   expires_at: string | null;
+  language: AppLanguage;
   organizations: {
     id: string;
     name: string;
@@ -28,9 +31,9 @@ function formatRole(role: string) {
   return role;
 }
 
-function formatDateTime(value: string | null) {
+function formatDateTime(value: string | null, language: AppLanguage) {
   if (!value) return "—";
-  return new Intl.DateTimeFormat("de-DE", {
+  return new Intl.DateTimeFormat(language === "en" ? "en-GB" : "de-DE", {
     dateStyle: "medium",
     timeStyle: "short",
   }).format(new Date(value));
@@ -39,6 +42,80 @@ function formatDateTime(value: string | null) {
 function isExpired(expiresAt: string | null) {
   if (!expiresAt) return false;
   return new Date(expiresAt).getTime() < Date.now();
+}
+
+function t(language: AppLanguage) {
+  return language === "en"
+    ? {
+        sectionEyebrow: "Invite",
+        pageTitle: "Accept invitation",
+        pageText:
+          "Set your password first and then join the invited organization.",
+        missingTitle: "Invitation not found",
+        missingText: "The invitation link does not contain a valid token.",
+        notFoundText: "No invitation was found for this link.",
+        detailsTitle: "Invitation details",
+        orgLabel: "Organization",
+        emailLabel: "Invited email",
+        roleLabel: "Role",
+        statusLabel: "Status",
+        invitedAtLabel: "Invited at",
+        expiresAtLabel: "Expires at",
+        expiredTitle: "Invitation expired",
+        expiredText:
+          "This invitation is no longer valid. Please request a new invitation.",
+        invalidTitle: "Invitation is no longer open",
+        invalidText:
+          "This invitation already has the status",
+        setPasswordTitle: "Set password",
+        setPasswordText:
+          "Please set your password first. Your account will then be created, the invitation accepted and you will be signed in.",
+        passwordHintTitle: "Password note",
+        passwordHintText: "Your password must be at least 8 characters long.",
+        wrongUserTitle: "Wrong user signed in",
+        wrongUserTextA: "This invitation is for",
+        wrongUserTextB: "but you are currently signed in as",
+        wrongUserTextC:
+          "Please sign in with the invited email address.",
+        alreadyLoggedInTitle: "Already signed in",
+        alreadyLoggedInText:
+          "You are already signed in with the invited email address and can accept this invitation now.",
+      }
+    : {
+        sectionEyebrow: "Invite",
+        pageTitle: "Einladung annehmen",
+        pageText:
+          "Lege zuerst Dein Passwort fest und trete dann der eingeladenen Organisation bei.",
+        missingTitle: "Einladung nicht gefunden",
+        missingText: "Der Einladungslink enthält keinen gültigen Token.",
+        notFoundText: "Zu diesem Link wurde keine Einladung gefunden.",
+        detailsTitle: "Einladungsdetails",
+        orgLabel: "Organisation",
+        emailLabel: "Eingeladene E-Mail",
+        roleLabel: "Rolle",
+        statusLabel: "Status",
+        invitedAtLabel: "Invited at",
+        expiresAtLabel: "Expires at",
+        expiredTitle: "Einladung abgelaufen",
+        expiredText:
+          "Diese Einladung ist nicht mehr gültig. Bitte fordere eine neue Einladung an.",
+        invalidTitle: "Einladung nicht mehr offen",
+        invalidText:
+          "Diese Einladung hat bereits den Status",
+        setPasswordTitle: "Passwort festlegen",
+        setPasswordText:
+          "Bitte zuerst ein Passwort festlegen. Danach wird Dein Account angelegt, die Einladung angenommen und Du wirst eingeloggt.",
+        passwordHintTitle: "Passworthinweis",
+        passwordHintText: "Das Passwort muss mindestens 8 Zeichen lang sein.",
+        wrongUserTitle: "Falscher Benutzer eingeloggt",
+        wrongUserTextA: "Diese Einladung ist für",
+        wrongUserTextB: "Aktuell bist Du aber als",
+        wrongUserTextC:
+          "Bitte logge Dich mit der eingeladenen E-Mail-Adresse ein.",
+        alreadyLoggedInTitle: "Bereits eingeloggt",
+        alreadyLoggedInText:
+          "Du bist bereits mit der eingeladenen E-Mail-Adresse eingeloggt und kannst diese Einladung jetzt annehmen.",
+      };
 }
 
 export default async function InviteAcceptPage({
@@ -52,14 +129,16 @@ export default async function InviteAcceptPage({
   const user = await getOptionalUser();
 
   if (!token) {
+    const text = t("de");
+
     return (
       <main className="mx-auto max-w-2xl px-6 py-12">
         <div className="rounded-[28px] border border-rose-300/20 bg-rose-300/10 p-6 backdrop-blur-sm">
           <h1 className="text-2xl font-semibold tracking-tight text-rose-100">
-            Einladung nicht gefunden
+            {text.missingTitle}
           </h1>
           <p className="mt-2 text-sm leading-6 text-rose-100/85">
-            Der Einladungslink enthält keinen gültigen Token.
+            {text.missingText}
           </p>
         </div>
       </main>
@@ -80,6 +159,7 @@ export default async function InviteAcceptPage({
       invited_at,
       accepted_at,
       expires_at,
+      language,
       organizations (
         id,
         name,
@@ -97,19 +177,24 @@ export default async function InviteAcceptPage({
   const invite = (data ?? null) as InviteRow | null;
 
   if (!invite) {
+    const text = t("de");
+
     return (
       <main className="mx-auto max-w-2xl px-6 py-12">
         <div className="rounded-[28px] border border-rose-300/20 bg-rose-300/10 p-6 backdrop-blur-sm">
           <h1 className="text-2xl font-semibold tracking-tight text-rose-100">
-            Einladung nicht gefunden
+            {text.missingTitle}
           </h1>
           <p className="mt-2 text-sm leading-6 text-rose-100/85">
-            Zu diesem Link wurde keine Einladung gefunden.
+            {text.notFoundText}
           </p>
         </div>
       </main>
     );
   }
+
+  const language = invite.language === "en" ? "en" : "de";
+  const text = t(language);
 
   const expired = isExpired(invite.expires_at);
   const invalidStatus =
@@ -135,55 +220,52 @@ export default async function InviteAcceptPage({
       <section className="rounded-[32px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(201,149,46,0.16),transparent_24%),linear-gradient(135deg,rgba(255,255,255,0.06),rgba(255,255,255,0.03))] p-6 backdrop-blur-sm">
         <div>
           <div className="text-xs font-medium uppercase tracking-[0.22em] text-amber-200/80">
-            Invite
+            {text.sectionEyebrow}
           </div>
           <h1 className="mt-3 text-3xl font-semibold tracking-tight text-white">
-            Einladung annehmen
+            {text.pageTitle}
           </h1>
-          <p className="mt-2 text-sm text-white/68">
-            Lege zuerst Dein Passwort fest und trete dann der eingeladenen
-            Organisation bei.
-          </p>
+          <p className="mt-2 text-sm text-white/68">{text.pageText}</p>
         </div>
       </section>
 
       <section className="rounded-[28px] border border-white/10 bg-white/5 p-6 backdrop-blur-sm">
-        <h2 className="text-lg font-medium text-white">Einladungsdetails</h2>
+        <h2 className="text-lg font-medium text-white">{text.detailsTitle}</h2>
 
         <dl className="mt-4 divide-y divide-white/8">
           <div className="grid gap-2 py-3 md:grid-cols-[220px_minmax(0,1fr)]">
-            <dt className="text-sm font-medium text-white/45">Organisation</dt>
+            <dt className="text-sm font-medium text-white/45">{text.orgLabel}</dt>
             <dd className="text-sm text-white">
               {invite.organizations?.name ?? "—"}
             </dd>
           </div>
 
           <div className="grid gap-2 py-3 md:grid-cols-[220px_minmax(0,1fr)]">
-            <dt className="text-sm font-medium text-white/45">Eingeladene E-Mail</dt>
+            <dt className="text-sm font-medium text-white/45">{text.emailLabel}</dt>
             <dd className="text-sm text-white">{invite.email}</dd>
           </div>
 
           <div className="grid gap-2 py-3 md:grid-cols-[220px_minmax(0,1fr)]">
-            <dt className="text-sm font-medium text-white/45">Rolle</dt>
+            <dt className="text-sm font-medium text-white/45">{text.roleLabel}</dt>
             <dd className="text-sm text-white">{formatRole(invite.role)}</dd>
           </div>
 
           <div className="grid gap-2 py-3 md:grid-cols-[220px_minmax(0,1fr)]">
-            <dt className="text-sm font-medium text-white/45">Status</dt>
+            <dt className="text-sm font-medium text-white/45">{text.statusLabel}</dt>
             <dd className="text-sm text-white">{invite.status}</dd>
           </div>
 
           <div className="grid gap-2 py-3 md:grid-cols-[220px_minmax(0,1fr)]">
-            <dt className="text-sm font-medium text-white/45">Invited at</dt>
+            <dt className="text-sm font-medium text-white/45">{text.invitedAtLabel}</dt>
             <dd className="text-sm text-white">
-              {formatDateTime(invite.invited_at)}
+              {formatDateTime(invite.invited_at, language)}
             </dd>
           </div>
 
           <div className="grid gap-2 py-3 md:grid-cols-[220px_minmax(0,1fr)]">
-            <dt className="text-sm font-medium text-white/45">Expires at</dt>
+            <dt className="text-sm font-medium text-white/45">{text.expiresAtLabel}</dt>
             <dd className="text-sm text-white">
-              {formatDateTime(invite.expires_at)}
+              {formatDateTime(invite.expires_at, language)}
             </dd>
           </div>
         </dl>
@@ -191,10 +273,9 @@ export default async function InviteAcceptPage({
 
       {expired ? (
         <section className="rounded-[28px] border border-rose-300/20 bg-rose-300/10 p-6 backdrop-blur-sm">
-          <h2 className="text-lg font-medium text-rose-100">Einladung abgelaufen</h2>
+          <h2 className="text-lg font-medium text-rose-100">{text.expiredTitle}</h2>
           <p className="mt-2 text-sm leading-6 text-rose-100/85">
-            Diese Einladung ist nicht mehr gültig. Bitte fordere eine neue
-            Einladung an.
+            {text.expiredText}
           </p>
         </section>
       ) : null}
@@ -202,11 +283,11 @@ export default async function InviteAcceptPage({
       {invalidStatus ? (
         <section className="rounded-[28px] border border-amber-300/20 bg-amber-300/10 p-6 backdrop-blur-sm">
           <h2 className="text-lg font-medium text-amber-100">
-            Einladung nicht mehr offen
+            {text.invalidTitle}
           </h2>
           <p className="mt-2 text-sm leading-6 text-amber-100/85">
-            Diese Einladung hat bereits den Status <strong>{invite.status}</strong>{" "}
-            und kann nicht erneut angenommen werden.
+            {text.invalidText} <strong>{invite.status}</strong>{" "}
+            {language === "en" ? "and cannot be accepted again." : "und kann nicht erneut angenommen werden."}
           </p>
         </section>
       ) : null}
@@ -214,21 +295,26 @@ export default async function InviteAcceptPage({
       {!expired && !invalidStatus && !user ? (
         <>
           <section className="rounded-[28px] border border-white/10 bg-white/5 p-6 backdrop-blur-sm">
-            <h2 className="text-lg font-medium text-white">Passwort festlegen</h2>
+            <h2 className="text-lg font-medium text-white">{text.setPasswordTitle}</h2>
             <p className="mt-2 text-sm leading-6 text-white/68">
-              Bitte zuerst ein Passwort festlegen. Danach wird Dein Account
-              angelegt, die Einladung angenommen und Du wirst eingeloggt.
+              {text.setPasswordText}
             </p>
 
             <div className="mt-6">
-              <InviteAcceptForm token={token} inviteEmail={invite.email} />
+              <InviteAcceptForm
+                token={token}
+                inviteEmail={invite.email}
+                language={language}
+              />
             </div>
           </section>
 
           <section className="rounded-[28px] border border-amber-300/20 bg-amber-300/10 p-6 backdrop-blur-sm">
-            <h2 className="text-lg font-medium text-amber-100">Passworthinweis</h2>
+            <h2 className="text-lg font-medium text-amber-100">
+              {text.passwordHintTitle}
+            </h2>
             <p className="mt-2 text-sm leading-6 text-amber-100/85">
-              Das Passwort muss mindestens 8 Zeichen lang sein.
+              {text.passwordHintText}
             </p>
           </section>
         </>
@@ -237,28 +323,28 @@ export default async function InviteAcceptPage({
       {!expired && !invalidStatus && user && !emailMatches ? (
         <section className="rounded-[28px] border border-rose-300/20 bg-rose-300/10 p-6 backdrop-blur-sm">
           <h2 className="text-lg font-medium text-rose-100">
-            Falscher Benutzer eingeloggt
+            {text.wrongUserTitle}
           </h2>
           <p className="mt-2 text-sm leading-6 text-rose-100/85">
-            Diese Einladung ist für <strong>{invite.email}</strong>. Aktuell
-            bist Du aber als <strong>{currentEmail ?? "unbekannt"}</strong>{" "}
-            eingeloggt.
+            {text.wrongUserTextA} <strong>{invite.email}</strong>.{" "}
+            {text.wrongUserTextB} <strong>{currentEmail ?? "unknown"}</strong>.
           </p>
           <p className="mt-2 text-sm leading-6 text-rose-100/85">
-            Bitte logge Dich mit der eingeladenen E-Mail-Adresse ein.
+            {text.wrongUserTextC}
           </p>
         </section>
       ) : null}
 
       {!expired && !invalidStatus && user && emailMatches ? (
         <section className="rounded-[28px] border border-white/10 bg-white/5 p-6 backdrop-blur-sm">
-          <h2 className="text-lg font-medium text-white">Bereits eingeloggt</h2>
+          <h2 className="text-lg font-medium text-white">
+            {text.alreadyLoggedInTitle}
+          </h2>
           <p className="mt-2 text-sm leading-6 text-white/68">
-            Du bist bereits mit der eingeladenen E-Mail-Adresse eingeloggt und
-            kannst diese Einladung jetzt annehmen.
+            {text.alreadyLoggedInText}
           </p>
 
-          <AcceptExistingInviteButton token={token} />
+          <AcceptExistingInviteButton token={token} language={language} />
         </section>
       ) : null}
     </main>

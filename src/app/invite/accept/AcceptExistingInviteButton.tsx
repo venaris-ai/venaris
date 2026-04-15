@@ -1,15 +1,36 @@
-// src/app/invite/accept/AcceptExistingInviteButton.tsx #2
+// src/app/invite/accept/AcceptExistingInviteButton.tsx #3
 "use client";
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 
+type AppLanguage = "de" | "en";
+
 type Props = {
   token: string;
+  language: AppLanguage;
 };
 
-export default function AcceptExistingInviteButton({ token }: Props) {
+function t(language: AppLanguage) {
+  return language === "en"
+    ? {
+        acceptFailed: "Invitation could not be accepted.",
+        loading: "Accepting...",
+        idle: "Accept invitation",
+      }
+    : {
+        acceptFailed: "Einladung konnte nicht angenommen werden.",
+        loading: "Nimmt an...",
+        idle: "Einladung annehmen",
+      };
+}
+
+export default function AcceptExistingInviteButton({
+  token,
+  language,
+}: Props) {
   const router = useRouter();
+  const text = t(language);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -30,7 +51,7 @@ export default function AcceptExistingInviteButton({ token }: Props) {
     setLoading(false);
 
     if (!response.ok || !payload?.ok) {
-      setError(payload?.error ?? "Einladung konnte nicht angenommen werden.");
+      setError(payload?.error ?? text.acceptFailed);
       return;
     }
 
@@ -52,7 +73,7 @@ export default function AcceptExistingInviteButton({ token }: Props) {
         disabled={loading}
         className="rounded-[10px] bg-[#c9952e] px-4 py-2 text-sm text-[#102018] disabled:opacity-50"
       >
-        {loading ? "Nimmt an..." : "Einladung annehmen"}
+        {loading ? text.loading : text.idle}
       </button>
     </div>
   );

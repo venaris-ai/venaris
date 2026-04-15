@@ -1,8 +1,12 @@
-// src/app/api/invites/accept/route.ts #3
+// src/app/api/invites/accept/route.ts #4
 import { NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
 import { supabaseServer } from "@/lib/supabaseServer";
 import { supabaseAuthServer } from "@/lib/supabaseAuthServer";
+
+type AppLanguage = "de" | "en";
+
+const LOCALE_COOKIE = "venaris_locale";
 
 type InviteRow = {
   id: string;
@@ -13,11 +17,16 @@ type InviteRow = {
   expires_at: string | null;
   accepted_at: string | null;
   organization_id: string;
+  language: AppLanguage;
 };
 
 function isExpired(expiresAt: string | null) {
   if (!expiresAt) return false;
   return new Date(expiresAt).getTime() < Date.now();
+}
+
+function normalizeLanguage(value: string | null | undefined): AppLanguage {
+  return value === "en" ? "en" : "de";
 }
 
 export async function POST(request: Request) {
@@ -57,7 +66,9 @@ export async function POST(request: Request) {
 
     const inviteResult = await supabase
       .from("organization_invites")
-      .select("id,email,role,status,token,expires_at,accepted_at,organization_id")
+      .select(
+        "id,email,role,status,token,expires_at,accepted_at,organization_id,language"
+      )
       .eq("token", token)
       .maybeSingle();
 
@@ -158,6 +169,26 @@ export async function POST(request: Request) {
       }
     }
 
+    const upsertProfileResult = await supabase
+      .from("profiles")
+      .upsert(
+        {
+          id: user.id,
+          preferred_language: normalizeLanguage(invite.language),
+        },
+        { onConflict: "id" }
+      );
+
+    if (upsertProfileResult.error) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: `Failed to update profile language: ${upsertProfileResult.error.message}`,
+        },
+        { status: 500 }
+      );
+    }
+
     const updateInviteResult = await supabase
       .from("organization_invites")
       .update({
@@ -177,7 +208,17 @@ export async function POST(request: Request) {
     revalidatePath("/orga/members");
     revalidatePath("/", "layout");
 
-    return NextResponse.json({ ok: true });
+    const response = NextResponse.json({ ok: true });
+
+    response.cookies.set(LOCALE_COOKIE, normalizeLanguage(invite.language), {
+      sameSite: "lax",
+      secure: process.env.NODE_ENV === "production",
+      path: "/",
+      domain: ".venaris.io",
+      maxAge: 60 * 60 * 24 * 365,
+    });
+
+    return response;
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Unknown invite accept error";
