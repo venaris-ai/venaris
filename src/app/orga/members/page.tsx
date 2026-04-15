@@ -1,4 +1,4 @@
-// src/app/orga/members/page.tsx #17
+// src/app/orga/members/page.tsx #18
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
@@ -11,6 +11,7 @@ import MemberRowActions from "./MemberRowActions";
 
 type MemberRole = "owner" | "admin" | "member" | "viewer";
 type MemberStatus = "active" | "disabled";
+type AppLanguage = "de" | "en";
 
 type MemberRow = {
   user_id: string;
@@ -34,6 +35,7 @@ type InviteRow = {
   email_sent_at: string | null;
   email_error: string | null;
   token: string;
+  language: AppLanguage;
 };
 
 type AuthUserInfo = {
@@ -303,7 +305,7 @@ async function resendInvite(formData: FormData) {
 
   const { data, error } = await supabase
     .from("organization_invites")
-    .select("id,email,role,status,expires_at,token,organization_id")
+    .select("id,email,role,status,expires_at,token,organization_id,language")
     .eq("id", inviteId)
     .eq("organization_id", organization.id)
     .eq("status", "pending")
@@ -322,6 +324,7 @@ async function resendInvite(formData: FormData) {
         expires_at: string | null;
         token: string;
         organization_id: string;
+        language: AppLanguage;
       }
     | null;
 
@@ -343,6 +346,7 @@ async function resendInvite(formData: FormData) {
       role: invite.role,
       token: invite.token,
       expiresAt: invite.expires_at,
+      language: invite.language,
     });
   } catch (mailError) {
     const message =
@@ -505,7 +509,7 @@ export default async function OrgaMembersPage({
   const { data: inviteData, error: inviteError } = await supabase
     .from("organization_invites")
     .select(
-      "id,email,role,status,invited_at,accepted_at,expires_at,provider,provider_message_id,email_sent_at,email_error,token"
+      "id,email,role,status,invited_at,accepted_at,expires_at,provider,provider_message_id,email_sent_at,email_error,token,language"
     )
     .eq("organization_id", organization.id)
     .eq("status", "pending")
