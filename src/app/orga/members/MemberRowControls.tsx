@@ -1,10 +1,11 @@
-// src/app/orga/members/MemberRowControls.tsx #7
+// src/app/orga/members/MemberRowControls.tsx #8
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
 
 type MemberRole = "owner" | "admin" | "member" | "viewer";
 type MemberStatus = "active" | "disabled";
+type AppLanguage = "de" | "en";
 
 function emitDirtyState(userId: string, dirty: boolean) {
   window.dispatchEvent(
@@ -18,8 +19,10 @@ export default function MemberRowControls({
   userId,
   initialRole,
   initialStatus,
+  initialLanguage,
   canEditRole,
   canEditStatus,
+  canEditLanguage,
   allowOwnerOption,
   saveAction,
   isDemo = false,
@@ -27,17 +30,21 @@ export default function MemberRowControls({
   userId: string;
   initialRole: MemberRole;
   initialStatus: MemberStatus;
+  initialLanguage: AppLanguage;
   canEditRole: boolean;
   canEditStatus: boolean;
+  canEditLanguage: boolean;
   allowOwnerOption: boolean;
   saveAction: (formData: FormData) => void | Promise<void>;
   isDemo?: boolean;
 }) {
   const [role, setRole] = useState<MemberRole>(initialRole);
   const [status, setStatus] = useState<MemberStatus>(initialStatus);
+  const [language, setLanguage] = useState<AppLanguage>(initialLanguage);
 
   const formId = useMemo(() => `member-controls-${userId}`, [userId]);
-  const dirty = role !== initialRole || status !== initialStatus;
+  const dirty =
+    role !== initialRole || status !== initialStatus || language !== initialLanguage;
 
   useEffect(() => {
     emitDirtyState(userId, dirty);
@@ -53,6 +60,7 @@ export default function MemberRowControls({
           <input type="hidden" name="user_id" value={userId} />
           <input type="hidden" name="role" value={role} />
           <input type="hidden" name="status" value={status} />
+          <input type="hidden" name="language" value={language} />
 
           <select
             value={role}
@@ -104,6 +112,29 @@ export default function MemberRowControls({
           </option>
           <option value="disabled" className="bg-[#102018] text-white">
             Disabled
+          </option>
+        </select>
+      </td>
+
+      <td className="px-6 py-4 text-white/68 whitespace-nowrap">
+        <select
+          value={language}
+          onChange={(e) => setLanguage(e.target.value as AppLanguage)}
+          disabled={!canEditLanguage || isDemo}
+          className="rounded-[10px] border border-white/10 bg-white/5 px-2.5 py-1.5 text-sm text-white outline-none disabled:bg-white/5 disabled:text-white/35"
+          title={
+            isDemo
+              ? "Demo-Modus: Änderungen sind deaktiviert."
+              : !canEditLanguage
+                ? "Sprache kann für dieses Mitglied nicht geändert werden."
+                : ""
+          }
+        >
+          <option value="de" className="bg-[#102018] text-white">
+            Deutsch
+          </option>
+          <option value="en" className="bg-[#102018] text-white">
+            English
           </option>
         </select>
       </td>

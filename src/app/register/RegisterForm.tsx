@@ -1,13 +1,78 @@
-// src/app/register/RegisterForm.tsx #2
+// src/app/register/RegisterForm.tsx #4
 "use client";
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
 
-export default function RegisterForm() {
+type AppLanguage = "de" | "en";
+
+function t(language: AppLanguage) {
+  return language === "en"
+    ? {
+        orgNameLabel: "Organization name",
+        orgNamePlaceholder: "e.g. Hunting Club Woodland",
+        languageLabel: "Language",
+        languageDe: "Deutsch",
+        languageEn: "English",
+        emailLabel: "Email",
+        passwordLabel: "Password",
+        passwordHint: "Please choose a password with at least 8 characters.",
+        passwordRepeatLabel: "Repeat password",
+        submitIdle: "Create account",
+        submitLoading: "Creating account...",
+        orgNameRequired: "Please enter an organization name.",
+        orgNameTooShort: "The organization name is too short.",
+        emailRequired: "Please enter an email address.",
+        passwordRequired: "Please enter a password.",
+        passwordTooShort: "The password must be at least 8 characters long.",
+        passwordRepeatRequired: "Please repeat the password.",
+        passwordMismatch: "Password and confirmation do not match.",
+        invalidLanguage: "Please choose a valid language.",
+        alreadyRegistered:
+          "An account already exists for this email address. Please sign in or use password reset.",
+        registerFailed: "Registration failed.",
+        activateOrgFailed:
+          "Account was created, but the organization could not be activated.",
+      }
+    : {
+        orgNameLabel: "Organisationsname",
+        orgNamePlaceholder: "z. B. Hegering Musterwald",
+        languageLabel: "Sprache",
+        languageDe: "Deutsch",
+        languageEn: "English",
+        emailLabel: "E-Mail",
+        passwordLabel: "Passwort",
+        passwordHint: "Bitte ein Passwort mit mindestens 8 Zeichen festlegen.",
+        passwordRepeatLabel: "Passwort wiederholen",
+        submitIdle: "Konto erstellen",
+        submitLoading: "Creating account...",
+        orgNameRequired: "Bitte einen Organisationsnamen eingeben.",
+        orgNameTooShort: "Der Organisationsname ist zu kurz.",
+        emailRequired: "Bitte eine E-Mail-Adresse eingeben.",
+        passwordRequired: "Bitte ein Passwort eingeben.",
+        passwordTooShort: "Das Passwort muss mindestens 8 Zeichen lang sein.",
+        passwordRepeatRequired: "Bitte das Passwort wiederholen.",
+        passwordMismatch: "Passwort und Wiederholung stimmen nicht überein.",
+        invalidLanguage: "Bitte eine gültige Sprache auswählen.",
+        alreadyRegistered:
+          "Für diese E-Mail existiert bereits ein Konto. Bitte melde Dich an oder nutze Passwort vergessen.",
+        registerFailed: "Registrierung fehlgeschlagen.",
+        activateOrgFailed:
+          "Konto wurde erstellt, aber die Organisation konnte nicht aktiviert werden.",
+      };
+}
+
+export default function RegisterForm({
+  initialLanguage,
+}: {
+  initialLanguage: AppLanguage;
+}) {
   const router = useRouter();
   const supabase = supabaseBrowser();
+
+  const [language, setLanguage] = useState<AppLanguage>(initialLanguage);
+  const text = t(language);
 
   const [organizationName, setOrganizationName] = useState("");
   const [email, setEmail] = useState("");
@@ -26,58 +91,68 @@ export default function RegisterForm() {
 
     if (!orgName) {
       setLoading(false);
-      setError("Bitte einen Organisationsnamen eingeben.");
+      setError(text.orgNameRequired);
       return;
     }
 
     if (orgName.length < 2) {
       setLoading(false);
-      setError("Der Organisationsname ist zu kurz.");
+      setError(text.orgNameTooShort);
+      return;
+    }
+
+    if (!["de", "en"].includes(language)) {
+      setLoading(false);
+      setError(text.invalidLanguage);
       return;
     }
 
     if (!userEmail) {
       setLoading(false);
-      setError("Bitte eine E-Mail-Adresse eingeben.");
+      setError(text.emailRequired);
       return;
     }
 
     if (!password) {
       setLoading(false);
-      setError("Bitte ein Passwort eingeben.");
+      setError(text.passwordRequired);
       return;
     }
 
     if (password.length < 8) {
       setLoading(false);
-      setError("Das Passwort muss mindestens 8 Zeichen lang sein.");
+      setError(text.passwordTooShort);
       return;
     }
 
     if (!passwordRepeat) {
       setLoading(false);
-      setError("Bitte das Passwort wiederholen.");
+      setError(text.passwordRepeatRequired);
       return;
     }
 
     if (password !== passwordRepeat) {
       setLoading(false);
-      setError("Passwort und Wiederholung stimmen nicht überein.");
+      setError(text.passwordMismatch);
       return;
     }
 
     const signUpResult = await supabase.auth.signUp({
       email: userEmail,
       password,
+      options: {
+        data: {
+          preferred_language: language,
+          language,
+        },
+      },
     });
 
     if (signUpResult.error) {
       setLoading(false);
 
       if (signUpResult.error.message.includes("registered")) {
-        setError(
-          "Für diese E-Mail existiert bereits ein Konto. Bitte melde Dich an oder nutze Passwort vergessen."
-        );
+        setError(text.alreadyRegistered);
         return;
       }
 
@@ -97,7 +172,7 @@ export default function RegisterForm() {
 
     if (!registerResponse.ok) {
       setLoading(false);
-      setError(registerData.error ?? "Registrierung fehlgeschlagen.");
+      setError(registerData.error ?? text.registerFailed);
       return;
     }
 
@@ -113,9 +188,7 @@ export default function RegisterForm() {
 
     if (!activeOrgResponse.ok) {
       setLoading(false);
-      setError(
-        "Konto wurde erstellt, aber die Organisation konnte nicht aktiviert werden."
-      );
+      setError(text.activateOrgFailed);
       return;
     }
 
@@ -134,20 +207,40 @@ export default function RegisterForm() {
 
       <div>
         <label className="mb-1 block text-sm font-medium text-white">
-          Organisationsname
+          {text.orgNameLabel}
         </label>
         <input
           type="text"
           value={organizationName}
           onChange={(e) => setOrganizationName(e.target.value)}
           className="w-full rounded-[14px] border border-white/10 bg-white/5 px-3 py-2 text-white outline-none placeholder:text-white/35"
-          placeholder="z. B. Revier Musterwald"
+          placeholder={text.orgNamePlaceholder}
           required
         />
       </div>
 
       <div>
-        <label className="mb-1 block text-sm font-medium text-white">E-Mail</label>
+        <label className="mb-1 block text-sm font-medium text-white">
+          {text.languageLabel}
+        </label>
+        <select
+          value={language}
+          onChange={(e) => setLanguage(e.target.value as AppLanguage)}
+          className="w-full rounded-[14px] border border-white/10 bg-white/5 px-3 py-2 text-white outline-none"
+        >
+          <option value="de" className="bg-[#102018] text-white">
+            {text.languageDe}
+          </option>
+          <option value="en" className="bg-[#102018] text-white">
+            {text.languageEn}
+          </option>
+        </select>
+      </div>
+
+      <div>
+        <label className="mb-1 block text-sm font-medium text-white">
+          {text.emailLabel}
+        </label>
         <input
           type="email"
           value={email}
@@ -158,7 +251,9 @@ export default function RegisterForm() {
       </div>
 
       <div>
-        <label className="mb-1 block text-sm font-medium text-white">Passwort</label>
+        <label className="mb-1 block text-sm font-medium text-white">
+          {text.passwordLabel}
+        </label>
         <input
           type="password"
           value={password}
@@ -166,14 +261,12 @@ export default function RegisterForm() {
           className="w-full rounded-[14px] border border-white/10 bg-white/5 px-3 py-2 text-white outline-none placeholder:text-white/35"
           required
         />
-        <p className="mt-2 text-xs text-white/45">
-          Bitte ein Passwort mit mindestens 8 Zeichen festlegen.
-        </p>
+        <p className="mt-2 text-xs text-white/45">{text.passwordHint}</p>
       </div>
 
       <div>
         <label className="mb-1 block text-sm font-medium text-white">
-          Passwort wiederholen
+          {text.passwordRepeatLabel}
         </label>
         <input
           type="password"
@@ -189,7 +282,7 @@ export default function RegisterForm() {
         disabled={loading}
         className="w-full rounded-[14px] bg-[#c9952e] px-4 py-2 text-sm font-medium text-[#102018] disabled:opacity-50"
       >
-        {loading ? "Creating account..." : "Konto erstellen"}
+        {loading ? text.submitLoading : text.submitIdle}
       </button>
     </form>
   );

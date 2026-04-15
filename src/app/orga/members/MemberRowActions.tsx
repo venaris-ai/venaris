@@ -1,4 +1,4 @@
-// src/app/orga/members/MemberRowActions.tsx #5
+// src/app/orga/members/MemberRowActions.tsx #6
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
@@ -52,6 +52,7 @@ export default function MemberRowActions({
   userId,
   canEditRole,
   canEditStatus,
+  canEditLanguage,
   canRemove,
   removeAction,
   isDemo = false,
@@ -61,6 +62,7 @@ export default function MemberRowActions({
   initialStatus?: MemberStatus;
   canEditRole: boolean;
   canEditStatus: boolean;
+  canEditLanguage: boolean;
   canRemove: boolean;
   removeAction: (formData: FormData) => void | Promise<void>;
   isDemo?: boolean;
@@ -70,7 +72,7 @@ export default function MemberRowActions({
   const [isReadOnlyModalOpen, setIsReadOnlyModalOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
   const formId = useMemo(() => `member-controls-${userId}`, [userId]);
-  const canEverSave = canEditRole || canEditStatus;
+  const canEverSave = canEditRole || canEditStatus || canEditLanguage;
   const canSave = canEverSave && isDirty;
 
   useEffect(() => {

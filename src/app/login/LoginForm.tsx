@@ -1,14 +1,47 @@
-// src/app/login/LoginForm.tsx #4
+// src/app/login/LoginForm.tsx #5
 "use client";
 
 import { useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
 
-export default function LoginForm() {
+type AppLanguage = "de" | "en";
+
+function t(language: AppLanguage) {
+  return language === "en"
+    ? {
+        emailLabel: "Email",
+        passwordLabel: "Password",
+        forgotPassword: "Forgot password?",
+        sending: "Sending...",
+        signIn: "Sign in",
+        signingIn: "Signing in...",
+        enterEmailFirst: "Please enter your email address first.",
+        resetMessage:
+          "If an account exists for this email address, a password reset email has been sent.",
+      }
+    : {
+        emailLabel: "E-Mail",
+        passwordLabel: "Passwort",
+        forgotPassword: "Passwort vergessen?",
+        sending: "Sende...",
+        signIn: "Anmelden",
+        signingIn: "Meldet an...",
+        enterEmailFirst: "Bitte zuerst Deine E-Mail-Adresse eingeben.",
+        resetMessage:
+          "Wenn für diese E-Mail ein Account existiert, wurde eine Nachricht zum Zurücksetzen des Passworts versendet.",
+      };
+}
+
+export default function LoginForm({
+  language,
+}: {
+  language: AppLanguage;
+}) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const supabase = supabaseBrowser();
+  const text = t(language);
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -46,7 +79,7 @@ export default function LoginForm() {
     setResetMessage("");
 
     if (!email.trim()) {
-      setError("Bitte zuerst Deine E-Mail-Adresse eingeben.");
+      setError(text.enterEmailFirst);
       return;
     }
 
@@ -68,15 +101,15 @@ export default function LoginForm() {
       return;
     }
 
-    setResetMessage(
-      "Wenn für diese E-Mail ein Account existiert, wurde eine Nachricht zum Zurücksetzen des Passworts versendet."
-    );
+    setResetMessage(text.resetMessage);
   }
 
   return (
     <form onSubmit={onSubmit} className="space-y-4">
       <div>
-        <label className="mb-1 block text-sm font-medium text-white">E-Mail</label>
+        <label className="mb-1 block text-sm font-medium text-white">
+          {text.emailLabel}
+        </label>
         <input
           type="email"
           value={email}
@@ -88,14 +121,16 @@ export default function LoginForm() {
 
       <div>
         <div className="mb-1 flex items-center justify-between gap-3">
-          <label className="block text-sm font-medium text-white">Password</label>
+          <label className="block text-sm font-medium text-white">
+            {text.passwordLabel}
+          </label>
           <button
             type="button"
             onClick={onForgotPassword}
             disabled={resetLoading}
             className="text-xs text-white/60 underline underline-offset-2 hover:text-white disabled:opacity-50"
           >
-            {resetLoading ? "Sending..." : "Forgot password?"}
+            {resetLoading ? text.sending : text.forgotPassword}
           </button>
         </div>
 
@@ -125,7 +160,7 @@ export default function LoginForm() {
         disabled={loading}
         className="w-full rounded-[14px] bg-[#c9952e] px-4 py-2 text-sm font-medium text-[#102018] disabled:opacity-50"
       >
-        {loading ? "Signing in..." : "Sign in"}
+        {loading ? text.signingIn : text.signIn}
       </button>
     </form>
   );

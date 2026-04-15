@@ -1,4 +1,4 @@
-// src/app/orga/members/page.tsx #18
+// src/app/orga/members/page.tsx #19
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
@@ -36,6 +36,11 @@ type InviteRow = {
   email_error: string | null;
   token: string;
   language: AppLanguage;
+};
+
+type ProfileRow = {
+  id: string;
+  preferred_language: AppLanguage;
 };
 
 type AuthUserInfo = {
@@ -130,6 +135,7 @@ async function saveMemberChanges(formData: FormData) {
   const targetUserId = String(formData.get("user_id") ?? "").trim();
   const nextRoleRaw = String(formData.get("role") ?? "").trim();
   const nextStatusRaw = String(formData.get("status") ?? "").trim();
+  const nextLanguageRaw = String(formData.get("language") ?? "").trim();
 
   if (!organization) {
     throw new Error("Active organization not found");
@@ -147,7 +153,12 @@ async function saveMemberChanges(formData: FormData) {
     throw new Error("Invalid target status.");
   }
 
+  if (!["de", "en"].includes(nextLanguageRaw)) {
+    throw new Error("Invalid target language.");
+  }
+
   const nextStatus = nextStatusRaw as MemberStatus;
+  const nextLanguage = nextLanguageRaw as AppLanguage;
 
   if (actorUserId === targetUserId) {
     throw new Error("Der eigene Account kann hier nicht geändert werden.");
@@ -182,12 +193,29 @@ async function saveMemberChanges(formData: FormData) {
     }
   }
 
-  if (targetMember.role === nextRoleRaw && targetMember.status === nextStatus) {
+  const supabase = supabaseServer();
+
+  const { data: profileData, error: profileLoadError } = await supabase
+    .from("profiles")
+    .select("preferred_language")
+    .eq("id", targetUserId)
+    .maybeSingle();
+
+  if (profileLoadError) {
+    throw new Error(`Failed to load profile language: ${profileLoadError.message}`);
+  }
+
+  const currentLanguage =
+    (profileData?.preferred_language as AppLanguage | undefined) ?? "de";
+
+  const memberUnchanged =
+    targetMember.role === nextRoleRaw && targetMember.status === nextStatus;
+  const languageUnchanged = currentLanguage === nextLanguage;
+
+  if (memberUnchanged && languageUnchanged) {
     revalidatePath("/orga/members");
     redirect("/orga/members");
   }
-
-  const supabase = supabaseServer();
 
   const { error } = await supabase
     .from("organization_members")
@@ -200,6 +228,18 @@ async function saveMemberChanges(formData: FormData) {
 
   if (error) {
     throw new Error(`Failed to save member changes: ${error.message}`);
+  }
+
+  const { error: profileSaveError } = await supabase.from("profiles").upsert(
+    {
+      id: targetUserId,
+      preferred_language: nextLanguage,
+    },
+    { onConflict: "id" }
+  );
+
+  if (profileSaveError) {
+    throw new Error(`Failed to save member language: ${profileSaveError.message}`);
   }
 
   revalidatePath("/orga/members");
@@ -543,6 +583,25 @@ export default async function OrgaMembersPage({
     });
   }
 
+  const profileIds = members.map((member) => member.user_id);
+
+  const profilesById = new Map<string, AppLanguage>();
+
+  if (profileIds.length > 0) {
+    const { data: profileData, error: profileError } = await supabase
+      .from("profiles")
+      .select("id,preferred_language")
+      .in("id", profileIds);
+
+    if (profileError) {
+      throw new Error(`Failed to load member languages: ${profileError.message}`);
+    }
+
+    for (const profile of (profileData ?? []) as ProfileRow[]) {
+      profilesById.set(profile.id, profile.preferred_language);
+    }
+  }
+
   const ownerCount = members.filter(
     (member) => member.role === "owner" && member.status === "active"
   ).length;
@@ -676,6 +735,7 @@ export default async function OrgaMembersPage({
                   <th className="px-6 py-3 font-medium whitespace-nowrap">E-Mail</th>
                   <th className="px-6 py-3 font-medium whitespace-nowrap">Rolle</th>
                   <th className="px-6 py-3 font-medium whitespace-nowrap">Status</th>
+                  <th className="px-6 py-3 font-medium whitespace-nowrap">Sprache</th>
                   <th className="px-6 py-3 font-medium whitespace-nowrap min-w-[150px]">
                     Letzter Login
                   </th>
@@ -706,6 +766,8 @@ export default async function OrgaMembersPage({
                     !(actorRole === "admin" && member.role === "owner") &&
                     !isLastOwner;
 
+                  const canEditLanguage = !isSelf;
+
                   const canRemove =
                     !isSelf &&
                     !(actorRole === "admin" && member.role === "owner") &&
@@ -724,8 +786,10 @@ export default async function OrgaMembersPage({
                         userId={member.user_id}
                         initialRole={member.role}
                         initialStatus={member.status}
+                        initialLanguage={profilesById.get(member.user_id) ?? "de"}
                         canEditRole={canEditRole}
                         canEditStatus={canEditStatus}
+                        canEditLanguage={canEditLanguage}
                         allowOwnerOption={actorRole === "owner"}
                         saveAction={saveMemberChanges}
                         isDemo={isDemo}
@@ -745,6 +809,7 @@ export default async function OrgaMembersPage({
                         initialStatus={member.status}
                         canEditRole={canEditRole}
                         canEditStatus={canEditStatus}
+                        canEditLanguage={canEditLanguage}
                         canRemove={canRemove}
                         removeAction={removeMember}
                         isDemo={isDemo}

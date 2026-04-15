@@ -1,14 +1,81 @@
-// src/app/reset-password/page.tsx #7
+// src/app/reset-password/page.tsx #8
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { AuthChangeEvent, Session } from "@supabase/supabase-js";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
 
+type AppLanguage = "de" | "en";
+
+const LOCALE_COOKIE = "venaris_locale";
+
+function normalizeLanguage(value: string | null | undefined): AppLanguage {
+  return value === "en" ? "en" : "de";
+}
+
+function readLocaleCookie(): AppLanguage {
+  if (typeof document === "undefined") return "de";
+
+  const raw = document.cookie
+    .split("; ")
+    .find((entry) => entry.startsWith(`${LOCALE_COOKIE}=`));
+
+  if (!raw) return "de";
+
+  const value = raw.slice(`${LOCALE_COOKIE}=`.length);
+  return normalizeLanguage(decodeURIComponent(value));
+}
+
+function t(language: AppLanguage) {
+  return language === "en"
+    ? {
+        eyebrow: "Reset Password",
+        title: "Reset password",
+        body: "Set your new password here.",
+        loadingLink: "Loading reset link...",
+        linkError:
+          "The reset link is incomplete or invalid. Please request a new password email.",
+        processError:
+          "The reset link could not be processed. Please request a new password email.",
+        passwordLabel: "New password",
+        passwordHint: "Please choose a password with at least 8 characters.",
+        passwordRepeatLabel: "Repeat password",
+        saveIdle: "Save password",
+        saveLoading: "Saving...",
+        success: "Password changed successfully. You are now being signed in...",
+        missingPassword: "Please enter a new password.",
+        shortPassword: "The password must be at least 8 characters long.",
+        missingRepeat: "Please repeat the password for confirmation.",
+        mismatch: "Password and confirmation do not match.",
+      }
+    : {
+        eyebrow: "Reset Password",
+        title: "Passwort zurücksetzen",
+        body: "Lege hier Dein neues Passwort fest.",
+        loadingLink: "Lade Reset-Link...",
+        linkError:
+          "Der Reset-Link ist unvollständig oder ungültig. Bitte fordere eine neue Passwort-E-Mail an.",
+        processError:
+          "Der Reset-Link konnte nicht verarbeitet werden. Bitte fordere eine neue Passwort-E-Mail an.",
+        passwordLabel: "Neues Passwort",
+        passwordHint: "Bitte ein Passwort mit mindestens 8 Zeichen festlegen.",
+        passwordRepeatLabel: "Passwort wiederholen",
+        saveIdle: "Passwort speichern",
+        saveLoading: "Saving...",
+        success: "Passwort erfolgreich geändert. Du wirst jetzt eingeloggt ...",
+        missingPassword: "Bitte ein neues Passwort eingeben.",
+        shortPassword: "Das Passwort muss mindestens 8 Zeichen lang sein.",
+        missingRepeat: "Bitte das Passwort zur Kontrolle wiederholen.",
+        mismatch: "Passwort und Wiederholung stimmen nicht überein.",
+      };
+}
+
 export default function ResetPasswordPage() {
   const router = useRouter();
   const supabase = supabaseBrowser();
+  const language = useMemo(() => readLocaleCookie(), []);
+  const text = t(language);
 
   const [password, setPassword] = useState("");
   const [passwordRepeat, setPasswordRepeat] = useState("");
@@ -47,9 +114,7 @@ export default function ResetPasswordPage() {
 
           if (error) {
             resolved = true;
-            setError(
-              "Der Reset-Link konnte nicht verarbeitet werden. Bitte fordere eine neue Passwort-E-Mail an."
-            );
+            setError(text.processError);
             setReady(false);
             return;
           }
@@ -67,9 +132,7 @@ export default function ResetPasswordPage() {
 
       resolved = true;
       setReady(false);
-      setError(
-        "Der Reset-Link ist unvollständig oder ungültig. Bitte fordere eine neue Passwort-E-Mail an."
-      );
+      setError(text.linkError);
     }, 2500);
 
     return () => {
@@ -77,7 +140,7 @@ export default function ResetPasswordPage() {
       window.clearTimeout(fallbackTimer);
       subscription.unsubscribe();
     };
-  }, [supabase]);
+  }, [supabase, text.linkError, text.processError]);
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -87,25 +150,25 @@ export default function ResetPasswordPage() {
 
     if (!password) {
       setLoading(false);
-      setError("Bitte ein neues Passwort eingeben.");
+      setError(text.missingPassword);
       return;
     }
 
     if (password.length < 8) {
       setLoading(false);
-      setError("Das Passwort muss mindestens 8 Zeichen lang sein.");
+      setError(text.shortPassword);
       return;
     }
 
     if (!passwordRepeat) {
       setLoading(false);
-      setError("Bitte das Passwort zur Kontrolle wiederholen.");
+      setError(text.missingRepeat);
       return;
     }
 
     if (password !== passwordRepeat) {
       setLoading(false);
-      setError("Passwort und Wiederholung stimmen nicht überein.");
+      setError(text.mismatch);
       return;
     }
 
@@ -120,7 +183,7 @@ export default function ResetPasswordPage() {
       return;
     }
 
-    setSuccess("Passwort erfolgreich geändert. Du wirst jetzt eingeloggt ...");
+    setSuccess(text.success);
 
     setTimeout(() => {
       router.push("/");
@@ -132,18 +195,16 @@ export default function ResetPasswordPage() {
     <main className="mx-auto flex min-h-screen max-w-md items-center px-6 py-12">
       <div className="w-full rounded-[28px] border border-white/10 bg-white/5 p-6 backdrop-blur-sm">
         <div className="text-xs font-medium uppercase tracking-[0.22em] text-amber-200/80">
-          Reset Password
+          {text.eyebrow}
         </div>
         <h1 className="mt-3 text-2xl font-semibold tracking-tight text-white">
-          Passwort zurücksetzen
+          {text.title}
         </h1>
-        <p className="mt-2 text-sm text-white/68">
-          Lege hier Dein neues Passwort fest.
-        </p>
+        <p className="mt-2 text-sm text-white/68">{text.body}</p>
 
         {!ready && !error ? (
           <div className="mt-6 rounded-[14px] border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/72">
-            Lade Reset-Link...
+            {text.loadingLink}
           </div>
         ) : null}
 
@@ -163,7 +224,7 @@ export default function ResetPasswordPage() {
           <form onSubmit={onSubmit} className="mt-6 space-y-4">
             <div>
               <label className="mb-1 block text-sm font-medium text-white">
-                Neues Passwort
+                {text.passwordLabel}
               </label>
               <input
                 type="password"
@@ -172,14 +233,12 @@ export default function ResetPasswordPage() {
                 className="w-full rounded-[14px] border border-white/10 bg-white/5 px-3 py-2 text-white outline-none placeholder:text-white/35"
                 required
               />
-              <p className="mt-2 text-xs text-white/45">
-                Bitte ein Passwort mit mindestens 8 Zeichen festlegen.
-              </p>
+              <p className="mt-2 text-xs text-white/45">{text.passwordHint}</p>
             </div>
 
             <div>
               <label className="mb-1 block text-sm font-medium text-white">
-                Passwort wiederholen
+                {text.passwordRepeatLabel}
               </label>
               <input
                 type="password"
@@ -195,7 +254,7 @@ export default function ResetPasswordPage() {
               disabled={loading}
               className="w-full rounded-[14px] bg-[#c9952e] px-4 py-2 text-sm font-medium text-[#102018] disabled:opacity-50"
             >
-              {loading ? "Saving..." : "Passwort speichern"}
+              {loading ? text.saveLoading : text.saveIdle}
             </button>
           </form>
         ) : null}
