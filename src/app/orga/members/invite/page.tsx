@@ -1,9 +1,8 @@
-// src/app/orga/members/invite/page.tsx #12
+// src/app/orga/members/invite/page.tsx #13
 import Link from "next/link";
 import { randomBytes } from "crypto";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
-import { cookies } from "next/headers";
 
 import { requirePathAccess } from "@/lib/authz";
 import { redirectIfDemoWrite } from "@/lib/auth";
@@ -26,12 +25,6 @@ type SubscriptionPolicyRow = {
 
 type AppLanguage = "de" | "en";
 
-const LOCALE_COOKIE = "venaris_locale";
-
-function normalizeLanguage(value: string | null | undefined): AppLanguage {
-  return value === "en" ? "en" : "de";
-}
-
 async function createInvite(formData: FormData) {
   "use server";
 
@@ -49,14 +42,10 @@ async function createInvite(formData: FormData) {
     throw new Error("Active organization not found");
   }
 
-  const cookieStore = await cookies();
-  const inviteLanguage = normalizeLanguage(
-    cookieStore.get(LOCALE_COOKIE)?.value ?? null
-  );
-
   const email = String(formData.get("email") ?? "").trim().toLowerCase();
   const inviteRole = String(formData.get("role") ?? "member").trim() || "member";
   const expiresInDaysRaw = String(formData.get("expires_in_days") ?? "14").trim();
+  const inviteLanguageRaw = String(formData.get("language") ?? "de").trim();
 
   if (!email || !email.includes("@")) {
     throw new Error("Bitte eine gültige E-Mail-Adresse eingeben.");
@@ -66,6 +55,11 @@ async function createInvite(formData: FormData) {
     throw new Error("Ungültige Rolle.");
   }
 
+  if (!["de", "en"].includes(inviteLanguageRaw)) {
+    throw new Error("Ungültige Sprache.");
+  }
+
+  const inviteLanguage = inviteLanguageRaw as AppLanguage;
   const expiresInDays = Number(expiresInDaysRaw);
 
   if (!Number.isFinite(expiresInDays) || expiresInDays < 1 || expiresInDays > 90) {
@@ -469,6 +463,29 @@ export default async function InviteMemberPage({
                   disabled={!invitePolicy.allowed || isDemo}
                   className="w-full rounded-[10px] border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none"
                 />
+              </div>
+
+              <div>
+                <label
+                  htmlFor="language"
+                  className="mb-2 block text-sm font-medium text-white"
+                >
+                  Sprache
+                </label>
+                <select
+                  id="language"
+                  name="language"
+                  defaultValue="de"
+                  disabled={!invitePolicy.allowed || isDemo}
+                  className="w-full rounded-[10px] border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none"
+                >
+                  <option value="de" className="bg-[#102018] text-white">
+                    Deutsch
+                  </option>
+                  <option value="en" className="bg-[#102018] text-white">
+                    English
+                  </option>
+                </select>
               </div>
             </div>
 
