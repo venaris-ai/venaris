@@ -1,4 +1,4 @@
-// src/app/api/demo-login/route.ts #1
+// src/app/api/demo-login/route.ts #2
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { supabaseServer } from "@/lib/supabaseServer";
@@ -6,6 +6,9 @@ import { supabaseServer } from "@/lib/supabaseServer";
 export const runtime = "nodejs";
 
 const ACTIVE_ORG_COOKIE = "venaris_active_org";
+const LOCALE_COOKIE = "venaris_locale";
+
+type AppLanguage = "de" | "en";
 
 type OrganizationRow = {
   id: string;
@@ -25,8 +28,13 @@ function normalizeOrganization(
   return organizations;
 }
 
+function normalizeLanguage(value: string | null | undefined): AppLanguage {
+  return value === "en" ? "en" : "de";
+}
+
 export async function GET(request: NextRequest) {
   const response = NextResponse.redirect(new URL("/", request.url));
+  const locale = normalizeLanguage(request.cookies.get(LOCALE_COOKIE)?.value);
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -101,6 +109,14 @@ export async function GET(request: NextRequest) {
       maxAge: 60 * 60 * 24 * 30,
     });
   }
+
+  response.cookies.set(LOCALE_COOKIE, locale, {
+    sameSite: "lax",
+    secure: process.env.NODE_ENV === "production",
+    path: "/",
+    domain: ".venaris.io",
+    maxAge: 60 * 60 * 24 * 365,
+  });
 
   return response;
 }

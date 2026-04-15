@@ -1,8 +1,9 @@
-// src/app/orga/members/invite/page.tsx #11
+// src/app/orga/members/invite/page.tsx #12
 import Link from "next/link";
 import { randomBytes } from "crypto";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
+import { cookies } from "next/headers";
 
 import { requirePathAccess } from "@/lib/authz";
 import { redirectIfDemoWrite } from "@/lib/auth";
@@ -23,6 +24,14 @@ type SubscriptionPolicyRow = {
   max_members: number;
 };
 
+type AppLanguage = "de" | "en";
+
+const LOCALE_COOKIE = "venaris_locale";
+
+function normalizeLanguage(value: string | null | undefined): AppLanguage {
+  return value === "en" ? "en" : "de";
+}
+
 async function createInvite(formData: FormData) {
   "use server";
 
@@ -39,6 +48,11 @@ async function createInvite(formData: FormData) {
   if (!organization) {
     throw new Error("Active organization not found");
   }
+
+  const cookieStore = await cookies();
+  const inviteLanguage = normalizeLanguage(
+    cookieStore.get(LOCALE_COOKIE)?.value ?? null
+  );
 
   const email = String(formData.get("email") ?? "").trim().toLowerCase();
   const inviteRole = String(formData.get("role") ?? "member").trim() || "member";
@@ -143,6 +157,7 @@ async function createInvite(formData: FormData) {
       token,
       invited_by_user_id: invitedByUserId,
       expires_at: expiresAt.toISOString(),
+      language: inviteLanguage,
     })
     .select("id")
     .single();
@@ -158,6 +173,7 @@ async function createInvite(formData: FormData) {
       role: inviteRole,
       token,
       expiresAt: expiresAt.toISOString(),
+      language: inviteLanguage,
     });
 
     const { error: updateMailError } = await supabase
