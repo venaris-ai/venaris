@@ -1,4 +1,4 @@
-// src/app/api/demo-login/route.ts #4
+// src/app/api/demo-login/route.ts #6
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { supabaseServer } from "@/lib/supabaseServer";
@@ -30,6 +30,11 @@ export async function GET(request: NextRequest) {
   const response = NextResponse.redirect(new URL("/", request.url));
   const locale = getLanguageFromRequest(request);
 
+  const demoEmail =
+    locale === "en" ? "demo-en@venaris.io" : "demo@venaris.io";
+  const demoPassword =
+    locale === "en" ? "venaris-demo-en" : "venaris-demo";
+
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -48,8 +53,8 @@ export async function GET(request: NextRequest) {
   );
 
   const { error: signInError } = await supabase.auth.signInWithPassword({
-    email: "demo@venaris.io",
-    password: "venaris-demo",
+    email: demoEmail,
+    password: demoPassword,
   });
 
   if (signInError) {
