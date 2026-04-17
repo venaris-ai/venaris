@@ -1,10 +1,16 @@
-// src/components/PlanSelectionCards.tsx #3
+// src/components/PlanSelectionCards.tsx #6
 "use client";
 
 import { useMemo, useState } from "react";
-import { BILLING_PLANS, type BillingCycle } from "@/lib/billing/plans";
+import {
+  BILLING_PLANS,
+  getBillingPlanDescription,
+  type BillingCycle,
+  type BillingPlanKey,
+} from "@/lib/billing/plans";
+import type { AppLanguage } from "@/lib/i18n";
 
-type PlanKey = "starter" | "pro" | "enterprise";
+type PlanKey = BillingPlanKey;
 
 type Props = {
   currentPlanKey: PlanKey;
@@ -20,6 +26,7 @@ type Props = {
     status: "open";
     createdAt?: string | null;
   } | null;
+  language: AppLanguage;
 };
 
 type PendingState = {
@@ -27,30 +34,41 @@ type PendingState = {
   requestType: "upgrade" | "downgrade" | "change";
 };
 
-function formatMoney(amountCents: number, currency: string) {
-  return new Intl.NumberFormat("de-DE", {
+function formatMoney(amountCents: number, currency: string, language: AppLanguage) {
+  return new Intl.NumberFormat(language === "en" ? "en-GB" : "de-DE", {
     style: "currency",
     currency,
   }).format(amountCents / 100);
 }
 
-function billingCycleLabel(cycle: BillingCycle) {
+function billingCycleLabel(cycle: BillingCycle, language: AppLanguage) {
+  if (language === "en") {
+    return cycle === "yearly" ? "Yearly" : "Monthly";
+  }
   return cycle === "yearly" ? "Jährlich" : "Monatlich";
 }
 
-function planPriceText(planKey: PlanKey, billingCycle: BillingCycle, currency: string) {
+function planPriceText(
+  planKey: PlanKey,
+  billingCycle: BillingCycle,
+  currency: string,
+  language: AppLanguage
+) {
   const plan = BILLING_PLANS[planKey];
   const cents =
     billingCycle === "yearly" ? plan.yearlyPriceCents : plan.monthlyPriceCents;
 
   if (cents == null) {
-    return "Individuell";
+    return language === "en" ? "Custom" : "Individuell";
   }
 
-  return formatMoney(cents, currency);
+  return formatMoney(cents, currency, language);
 }
 
-function requestTypeLabel(currentPlanKey: PlanKey, targetPlanKey: PlanKey) {
+function requestTypeLabel(
+  currentPlanKey: PlanKey,
+  targetPlanKey: PlanKey
+): "upgrade" | "downgrade" | "change" {
   const order: Record<PlanKey, number> = {
     starter: 1,
     pro: 2,
@@ -60,6 +78,19 @@ function requestTypeLabel(currentPlanKey: PlanKey, targetPlanKey: PlanKey) {
   if (order[targetPlanKey] > order[currentPlanKey]) return "upgrade";
   if (order[targetPlanKey] < order[currentPlanKey]) return "downgrade";
   return "change";
+}
+
+function requestTypeText(
+  requestType: "upgrade" | "downgrade" | "change",
+  language: AppLanguage
+) {
+  if (language === "en") {
+    return requestType;
+  }
+
+  if (requestType === "upgrade") return "Upgrade";
+  if (requestType === "downgrade") return "Downgrade";
+  return "Änderung";
 }
 
 function isPlanSelectable(params: {
@@ -84,9 +115,11 @@ function isPlanSelectable(params: {
   };
 }
 
-function normalizeApiErrorMessage(message: string) {
+function normalizeApiErrorMessage(message: string, language: AppLanguage) {
   if (message.includes("Demo mode is read-only")) {
-    return "Demo-Modus: Änderungen sind deaktiviert.";
+    return language === "en"
+      ? "Demo mode: changes are disabled."
+      : "Demo-Modus: Änderungen sind deaktiviert.";
   }
   return message;
 }
@@ -100,6 +133,7 @@ export default function PlanSelectionCards({
   currentStatusLabel,
   isDemo = false,
   existingOpenRequest = null,
+  language,
 }: Props) {
   const [loadingPlanKey, setLoadingPlanKey] = useState<PlanKey | null>(null);
   const [pendingRequest, setPendingRequest] = useState<PendingState | null>(
@@ -128,22 +162,42 @@ export default function PlanSelectionCards({
         let helperText = "";
 
         if (!eligibility.allowed) {
-          helperText = `Aktuell nutzt Du ${currentCameraCount} Kameras und ${currentMemberUsage} Members. ${plan.label} erlaubt maximal ${
-            plan.maxCameras == null ? "individuelle" : plan.maxCameras
-          } Kameras und ${
-            plan.maxMembers == null ? "individuelle" : plan.maxMembers
-          } Members.`;
+          helperText =
+            language === "en"
+              ? `You currently use ${currentCameraCount} cameras and ${currentMemberUsage} members. ${plan.label} allows a maximum of ${
+                  plan.maxCameras == null ? "custom" : plan.maxCameras
+                } cameras and ${
+                  plan.maxMembers == null ? "custom" : plan.maxMembers
+                } members.`
+              : `Aktuell nutzt Du ${currentCameraCount} Kameras und ${currentMemberUsage} Mitglieder. ${plan.label} erlaubt maximal ${
+                  plan.maxCameras == null ? "individuelle" : plan.maxCameras
+                } Kameras und ${
+                  plan.maxMembers == null ? "individuelle" : plan.maxMembers
+                } Mitglieder.`;
         } else if (isCurrent) {
           helperText =
             currentPlanKey === "starter"
-              ? "Auch für Starter nach Ablauf des Trials möglich."
-              : `Aktueller Plan${currentStatusLabel ? ` · ${currentStatusLabel}` : ""}.`;
+              ? language === "en"
+                ? "Also available as Starter after the trial ends."
+                : "Auch für Starter nach Ablauf des Trials möglich."
+              : language === "en"
+                ? `Current plan${currentStatusLabel ? ` · ${currentStatusLabel}` : ""}.`
+                : `Aktueller Plan${currentStatusLabel ? ` · ${currentStatusLabel}` : ""}.`;
         } else if (actionKind === "downgrade") {
-          helperText = "Planwechsel auf ein kleineres Paket.";
+          helperText =
+            language === "en"
+              ? "Plan change to a smaller package."
+              : "Planwechsel auf ein kleineres Paket.";
         } else if (actionKind === "upgrade") {
-          helperText = "Planwechsel auf ein größeres Paket.";
+          helperText =
+            language === "en"
+              ? "Plan change to a larger package."
+              : "Planwechsel auf ein größeres Paket.";
         } else {
-          helperText = "Planwechsel ohne Paketänderung.";
+          helperText =
+            language === "en"
+              ? "Plan change without package size change."
+              : "Planwechsel ohne Paketänderung.";
         }
 
         return {
@@ -155,12 +209,16 @@ export default function PlanSelectionCards({
           helperText,
         };
       }),
-    [billingCycle, currentCameraCount, currentMemberUsage, currentPlanKey, currentStatusLabel]
+    [billingCycle, currentCameraCount, currentMemberUsage, currentPlanKey, currentStatusLabel, language]
   );
 
   async function choosePlan(planKey: PlanKey) {
     if (isDemo) {
-      setError("Demo-Modus: Änderungen sind deaktiviert.");
+      setError(
+        language === "en"
+          ? "Demo mode: changes are disabled."
+          : "Demo-Modus: Änderungen sind deaktiviert."
+      );
       return;
     }
 
@@ -183,7 +241,12 @@ export default function PlanSelectionCards({
       if (!response.ok) {
         setError(
           normalizeApiErrorMessage(
-            data.error ?? data.details ?? "Anfrage konnte nicht erstellt werden."
+            data.error ??
+              data.details ??
+              (language === "en"
+                ? "Request could not be created."
+                : "Anfrage konnte nicht erstellt werden."),
+            language
           )
         );
         setLoadingPlanKey(null);
@@ -198,7 +261,12 @@ export default function PlanSelectionCards({
     } catch (e) {
       setError(
         normalizeApiErrorMessage(
-          e instanceof Error ? e.message : "Unbekannter Fehler"
+          e instanceof Error
+            ? e.message
+            : language === "en"
+              ? "Unknown error"
+              : "Unbekannter Fehler",
+          language
         )
       );
       setLoadingPlanKey(null);
@@ -209,16 +277,20 @@ export default function PlanSelectionCards({
     <div className="space-y-4">
       {isDemo ? (
         <div className="rounded-[24px] border border-amber-300/20 bg-amber-300/10 p-4 text-sm text-amber-100">
-          Demo-Modus: Änderungen sind deaktiviert.
+          {language === "en"
+            ? "Demo mode: changes are disabled."
+            : "Demo-Modus: Änderungen sind deaktiviert."}
         </div>
       ) : null}
 
       {pendingRequest ? (
         <div className="rounded-[24px] border border-emerald-300/20 bg-emerald-300/10 p-4 text-sm text-emerald-100">
-          Anfrage erfasst:{" "}
+          {language === "en" ? "Request recorded:" : "Anfrage erfasst:"}{" "}
           <strong>{BILLING_PLANS[pendingRequest.requestedPlanKey].label}</strong>{" "}
-          ({pendingRequest.requestType}). Bis zur Bearbeitung ist keine weitere
-          offene Plananfrage möglich.
+          ({requestTypeText(pendingRequest.requestType, language)}).{" "}
+          {language === "en"
+            ? "No further open plan request is possible until this one has been processed."
+            : "Bis zur Bearbeitung ist keine weitere offene Plananfrage möglich."}
         </div>
       ) : null}
 
@@ -248,28 +320,39 @@ export default function PlanSelectionCards({
                 </div>
                 {isCurrent ? (
                   <span className="rounded-full border border-sky-300/30 bg-white/5 px-3 py-1 text-xs font-medium text-sky-100">
-                    Aktuell
+                    {language === "en" ? "Current" : "Aktuell"}
                   </span>
                 ) : null}
               </div>
 
               <p className="mt-3 text-sm leading-6 text-white/68">
-                {plan.description}
+                {getBillingPlanDescription(planKey, language)}
               </p>
 
               <div className="mt-4 text-2xl font-semibold tracking-tight text-white">
-                {planPriceText(planKey, billingCycle, currency)}
+                {planPriceText(planKey, billingCycle, currency, language)}
               </div>
               <div className="mt-1 text-xs text-white/45">
-                {billingCycleLabel(billingCycle)} · inkl. MwSt.
+                {billingCycleLabel(billingCycle, language)} ·{" "}
+                {language === "en" ? "incl. VAT" : "inkl. MwSt."}
               </div>
 
               <div className="mt-4 space-y-2 text-sm text-white/72">
                 <div>
-                  Kameras: {plan.maxCameras == null ? "Individuell" : plan.maxCameras}
+                  {language === "en" ? "Cameras:" : "Kameras:"}{" "}
+                  {plan.maxCameras == null
+                    ? language === "en"
+                      ? "Custom"
+                      : "Individuell"
+                    : plan.maxCameras}
                 </div>
                 <div>
-                  Members: {plan.maxMembers == null ? "Individuell" : plan.maxMembers}
+                  {language === "en" ? "Members:" : "Mitglieder:"}{" "}
+                  {plan.maxMembers == null
+                    ? language === "en"
+                      ? "Custom"
+                      : "Individuell"
+                    : plan.maxMembers}
                 </div>
               </div>
 
@@ -281,14 +364,26 @@ export default function PlanSelectionCards({
                 type="button"
                 disabled={disabled || loading}
                 onClick={() => choosePlan(planKey)}
-                title={isDemo ? "Demo-Modus: Änderungen sind deaktiviert." : ""}
+                title={
+                  isDemo
+                    ? language === "en"
+                      ? "Demo mode: changes are disabled."
+                      : "Demo-Modus: Änderungen sind deaktiviert."
+                    : ""
+                }
                 className="mt-4 inline-flex w-full items-center justify-center rounded-[12px] bg-[#c9952e] px-4 py-2 text-sm font-medium text-[#102018] disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {loading
-                  ? "Wird angefragt..."
+                  ? language === "en"
+                    ? "Submitting request..."
+                    : "Wird angefragt..."
                   : isDemo
-                    ? "Demo-Modus"
-                    : "Plan auswählen"}
+                    ? language === "en"
+                      ? "Demo mode"
+                      : "Demo-Modus"
+                    : language === "en"
+                      ? "Choose plan"
+                      : "Plan auswählen"}
               </button>
             </div>
           );

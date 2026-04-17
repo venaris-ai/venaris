@@ -1,11 +1,10 @@
-// src/app/invite/accept/InviteAcceptForm.tsx #6
+// src/app/invite/accept/InviteAcceptForm.tsx #7
 "use client";
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
-
-type AppLanguage = "de" | "en";
+import type { AppLanguage } from "@/lib/i18n";
 
 type Props = {
   token: string;
@@ -49,7 +48,7 @@ function t(language: AppLanguage) {
         noSession: "Keine aktive Session nach Signup/Login erhalten.",
         acceptFailed: "Einladung konnte nicht angenommen werden.",
         submitIdle: "Annehmen & einloggen",
-        submitLoading: "Nimmt an...",
+        submitLoading: "Nehme an...",
       };
 }
 
@@ -167,8 +166,9 @@ export default function InviteAcceptForm({
       body: JSON.stringify({ token }),
     });
 
-    if (!acceptResponse.ok) {
-      const payload = await acceptResponse.json().catch(() => null);
+    const payload = await acceptResponse.json().catch(() => null);
+
+    if (!acceptResponse.ok || !payload?.ok) {
       setLoading(false);
       setError(payload?.error ?? text.acceptFailed);
       return;

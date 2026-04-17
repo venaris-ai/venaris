@@ -1,7 +1,13 @@
-// src/app/admin/subscriptions/page.tsx #4
+// src/app/admin/subscriptions/page.tsx #5
+import { cookies } from "next/headers";
 import { requirePathAccess } from "@/lib/authz";
 import { supabaseServer } from "@/lib/supabaseServer";
 import AdminSubscriptionRequestActions from "./AdminSubscriptionRequestActions";
+import {
+  LOCALE_COOKIE,
+  resolveLanguage,
+  type AppLanguage,
+} from "@/lib/i18n";
 
 type RequestStatus = "open" | "approved" | "rejected" | "canceled";
 type PlanKey = "starter" | "pro" | "enterprise";
@@ -68,10 +74,10 @@ function normalizeRequestRow(row: RequestRowDb): RequestRow {
   };
 }
 
-function formatDateTime(value: string | null) {
+function formatDateTime(value: string | null, language: AppLanguage) {
   if (!value) return "—";
 
-  return new Intl.DateTimeFormat("de-DE", {
+  return new Intl.DateTimeFormat(language === "en" ? "en-GB" : "de-DE", {
     dateStyle: "medium",
     timeStyle: "short",
   }).format(new Date(value));
@@ -105,6 +111,84 @@ function statusBadge(status: RequestStatus) {
   }
 }
 
+function t(language: AppLanguage) {
+  return language === "en"
+    ? {
+        eyebrow: "Admin",
+        title: "Subscription Requests",
+        intro: `Internal Venaris view for open plan requests. Access only for ${VENARIS_ADMIN_EMAIL}.`,
+
+        openRequestsStat: "Open Requests",
+        openRequestsSubline: "currently open",
+        recentDecisionsStat: "Recent Decisions",
+        recentDecisionsSubline: "latest processed items",
+        adminAccessStat: "Admin Access",
+        adminAccessValue: "Restricted",
+        adminAccessSubline: "Venaris admin only",
+        scopeStat: "Scope",
+        scopeValue: "Commercial",
+        scopeSubline: "plan changes and approvals",
+
+        openRequestsTitle: "Open Requests",
+        openRequestsText:
+          "These requests can be approved or rejected.",
+        openCount: (count: number) => `${count} open`,
+        noOpenRequests:
+          "There are currently no open plan requests.",
+
+        recentTitle: "Recently Processed",
+        recentText:
+          "The latest approved or rejected requests.",
+        noRecent:
+          "No processed plan requests yet.",
+
+        unknownOrganization: "Unknown organization",
+        createdLabel: "Created",
+        processedLabel: "Processed",
+        requestIdLabel: "Request ID",
+        requestingUserLabel: "Requesting user",
+        messageLabel: "Message",
+        noteLabel: "Note",
+      }
+    : {
+        eyebrow: "Admin",
+        title: "Subscription Requests",
+        intro: `Interne Venaris-Ansicht für offene Plananfragen. Zugriff nur für ${VENARIS_ADMIN_EMAIL}.`,
+
+        openRequestsStat: "Open Requests",
+        openRequestsSubline: "aktuell offen",
+        recentDecisionsStat: "Recent Decisions",
+        recentDecisionsSubline: "letzte Bearbeitungen",
+        adminAccessStat: "Admin Access",
+        adminAccessValue: "Restricted",
+        adminAccessSubline: "nur definierter Venaris-Admin",
+        scopeStat: "Scope",
+        scopeValue: "Commercial",
+        scopeSubline: "Planwechsel und Freigaben",
+
+        openRequestsTitle: "Offene Anfragen",
+        openRequestsText:
+          "Diese Anfragen können genehmigt oder abgelehnt werden.",
+        openCount: (count: number) => `${count} offen`,
+        noOpenRequests:
+          "Aktuell gibt es keine offenen Plananfragen.",
+
+        recentTitle: "Zuletzt bearbeitet",
+        recentText:
+          "Die letzten genehmigten oder abgelehnten Anfragen.",
+        noRecent:
+          "Noch keine bearbeiteten Plananfragen vorhanden.",
+
+        unknownOrganization: "Unbekannte Organization",
+        createdLabel: "Angelegt",
+        processedLabel: "Bearbeitet",
+        requestIdLabel: "Request ID",
+        requestingUserLabel: "Anfragender User",
+        messageLabel: "Nachricht",
+        noteLabel: "Notiz",
+      };
+}
+
 function StatCard({
   title,
   value,
@@ -124,9 +208,27 @@ function StatCard({
 }
 
 export default async function AdminSubscriptionsPage() {
-  await requirePathAccess("/admin/subscriptions");
+  const ctx = await requirePathAccess("/admin/subscriptions");
 
+  if (!ctx.user) {
+    throw new Error("Authenticated user required");
+  }
+
+  const cookieStore = await cookies();
   const supabase = supabaseServer();
+
+  const { data: profileData } = await supabase
+    .from("profiles")
+    .select("preferred_language")
+    .eq("id", ctx.user.id)
+    .maybeSingle();
+
+  const language = resolveLanguage({
+    cookieLanguage: cookieStore.get(LOCALE_COOKIE)?.value,
+    profileLanguage: profileData?.preferred_language,
+  });
+
+  const text = t(language);
 
   const [openRequestsResult, recentRequestsResult] = await Promise.all([
     supabase
@@ -203,55 +305,56 @@ export default async function AdminSubscriptionsPage() {
     <main className="space-y-8">
       <section className="rounded-[32px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(201,149,46,0.16),transparent_24%),linear-gradient(135deg,rgba(255,255,255,0.06),rgba(255,255,255,0.03))] p-6 backdrop-blur-sm">
         <div className="text-xs font-medium uppercase tracking-[0.22em] text-amber-200/80">
-          Admin
+          {text.eyebrow}
         </div>
         <h1 className="mt-3 text-3xl font-semibold text-white">
-          Subscription Requests
+          {text.title}
         </h1>
-        <p className="mt-2 text-sm text-white/68">
-          Interne Venaris-Ansicht für offene Plananfragen. Zugriff nur für{" "}
-          {VENARIS_ADMIN_EMAIL}.
-        </p>
+        <p className="mt-2 text-sm text-white/68">{text.intro}</p>
       </section>
 
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <StatCard
-          title="Open Requests"
+          title={text.openRequestsStat}
           value={openRequests.length}
-          subline="aktuell offen"
+          subline={text.openRequestsSubline}
         />
         <StatCard
-          title="Recent Decisions"
+          title={text.recentDecisionsStat}
           value={recentRequests.length}
-          subline="letzte Bearbeitungen"
+          subline={text.recentDecisionsSubline}
         />
         <StatCard
-          title="Admin Access"
-          value="Restricted"
-          subline="nur definierter Venaris-Admin"
+          title={text.adminAccessStat}
+          value={text.adminAccessValue}
+          subline={text.adminAccessSubline}
         />
         <StatCard
-          title="Scope"
-          value="Commercial"
-          subline="Planwechsel und Freigaben"
+          title={text.scopeStat}
+          value={text.scopeValue}
+          subline={text.scopeSubline}
         />
       </section>
 
       <section className="rounded-[28px] border border-white/10 bg-white/5 p-6 backdrop-blur-sm">
         <div className="flex items-center justify-between gap-4">
           <div>
-            <h2 className="text-lg font-medium text-white">Offene Anfragen</h2>
+            <h2 className="text-lg font-medium text-white">
+              {text.openRequestsTitle}
+            </h2>
             <p className="mt-1 text-sm text-white/65">
-              Diese Anfragen können genehmigt oder abgelehnt werden.
+              {text.openRequestsText}
             </p>
           </div>
-          <div className="text-sm text-white/50">{openRequests.length} offen</div>
+          <div className="text-sm text-white/50">
+            {text.openCount(openRequests.length)}
+          </div>
         </div>
 
         <div className="mt-6 space-y-4">
           {openRequests.length === 0 ? (
             <div className="rounded-[24px] border border-white/10 bg-white/5 p-5 text-sm text-white/68">
-              Aktuell gibt es keine offenen Plananfragen.
+              {text.noOpenRequests}
             </div>
           ) : (
             openRequests.map((request) => (
@@ -262,7 +365,7 @@ export default async function AdminSubscriptionsPage() {
                 <div className="flex flex-wrap items-start justify-between gap-4">
                   <div>
                     <div className="text-base font-semibold text-white">
-                      {request.organization?.name ?? "Unbekannte Organization"}
+                      {request.organization?.name ?? text.unknownOrganization}
                     </div>
                     <div className="mt-1 text-sm text-white/60">
                       {request.organization?.slug ?? "—"} ·{" "}
@@ -284,29 +387,40 @@ export default async function AdminSubscriptionsPage() {
                 <div className="mt-4 grid gap-3 md:grid-cols-2">
                   <div className="text-sm text-white/72">
                     <div>
-                      <span className="font-medium text-white">Angelegt:</span>{" "}
-                      {formatDateTime(request.created_at)}
+                      <span className="font-medium text-white">
+                        {text.createdLabel}:
+                      </span>{" "}
+                      {formatDateTime(request.created_at, language)}
                     </div>
                     <div className="mt-1 break-all">
-                      <span className="font-medium text-white">Request ID:</span>{" "}
+                      <span className="font-medium text-white">
+                        {text.requestIdLabel}:
+                      </span>{" "}
                       {request.id}
                     </div>
                     <div className="mt-1 break-all">
-                      <span className="font-medium text-white">Anfragender User:</span>{" "}
+                      <span className="font-medium text-white">
+                        {text.requestingUserLabel}:
+                      </span>{" "}
                       {request.requested_by_user_id}
                     </div>
                   </div>
 
                   <div className="text-sm text-white/72">
                     <div>
-                      <span className="font-medium text-white">Nachricht:</span>{" "}
+                      <span className="font-medium text-white">
+                        {text.messageLabel}:
+                      </span>{" "}
                       {request.message?.trim() || "—"}
                     </div>
                   </div>
                 </div>
 
                 <div className="mt-5">
-                  <AdminSubscriptionRequestActions requestId={request.id} />
+                  <AdminSubscriptionRequestActions
+                    requestId={request.id}
+                    language={language}
+                  />
                 </div>
               </div>
             ))
@@ -316,16 +430,14 @@ export default async function AdminSubscriptionsPage() {
 
       <section className="rounded-[28px] border border-white/10 bg-white/5 p-6 backdrop-blur-sm">
         <div>
-          <h2 className="text-lg font-medium text-white">Zuletzt bearbeitet</h2>
-          <p className="mt-1 text-sm text-white/65">
-            Die letzten genehmigten oder abgelehnten Anfragen.
-          </p>
+          <h2 className="text-lg font-medium text-white">{text.recentTitle}</h2>
+          <p className="mt-1 text-sm text-white/65">{text.recentText}</p>
         </div>
 
         <div className="mt-6 space-y-4">
           {recentRequests.length === 0 ? (
             <div className="rounded-[24px] border border-white/10 bg-white/5 p-5 text-sm text-white/68">
-              Noch keine bearbeiteten Plananfragen vorhanden.
+              {text.noRecent}
             </div>
           ) : (
             recentRequests.map((request) => (
@@ -336,7 +448,7 @@ export default async function AdminSubscriptionsPage() {
                 <div className="flex flex-wrap items-start justify-between gap-4">
                   <div>
                     <div className="text-base font-semibold text-white">
-                      {request.organization?.name ?? "Unbekannte Organization"}
+                      {request.organization?.name ?? text.unknownOrganization}
                     </div>
                     <div className="mt-1 text-sm text-white/60">
                       {request.organization?.slug ?? "—"} ·{" "}
@@ -358,22 +470,30 @@ export default async function AdminSubscriptionsPage() {
                 <div className="mt-4 grid gap-3 text-sm text-white/72 md:grid-cols-2">
                   <div>
                     <div>
-                      <span className="font-medium text-white">Angelegt:</span>{" "}
-                      {formatDateTime(request.created_at)}
+                      <span className="font-medium text-white">
+                        {text.createdLabel}:
+                      </span>{" "}
+                      {formatDateTime(request.created_at, language)}
                     </div>
                     <div className="mt-1">
-                      <span className="font-medium text-white">Bearbeitet:</span>{" "}
-                      {formatDateTime(request.processed_at)}
+                      <span className="font-medium text-white">
+                        {text.processedLabel}:
+                      </span>{" "}
+                      {formatDateTime(request.processed_at, language)}
                     </div>
                   </div>
 
                   <div>
                     <div>
-                      <span className="font-medium text-white">Nachricht:</span>{" "}
+                      <span className="font-medium text-white">
+                        {text.messageLabel}:
+                      </span>{" "}
                       {request.message?.trim() || "—"}
                     </div>
                     <div className="mt-1">
-                      <span className="font-medium text-white">Notiz:</span>{" "}
+                      <span className="font-medium text-white">
+                        {text.noteLabel}:
+                      </span>{" "}
                       {request.resolution_note?.trim() || "—"}
                     </div>
                   </div>

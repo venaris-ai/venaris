@@ -1,13 +1,80 @@
-// src/app/cameras/ingest/page.tsx #6
+// src/app/cameras/ingest/page.tsx #10
 export const dynamic = "force-dynamic";
 
 import Link from "next/link";
+import { cookies } from "next/headers";
 import { requirePathAccess } from "@/lib/authz";
 import { supabaseServer } from "@/lib/supabaseServer";
 import {
   resolveRevierScope,
   type RevierOption,
 } from "@/lib/intelligence/revierScope";
+import {
+  LOCALE_COOKIE,
+  resolveLanguage,
+  type AppLanguage,
+} from "@/lib/i18n";
+import {
+  buildSpeciesMetaMap,
+  getSpeciesLabel,
+  loadSpeciesMeta,
+} from "@/lib/speciesMeta";
+
+function t(language: AppLanguage) {
+  if (language === "en") {
+    return {
+      activeOrganizationContextRequired: "Active organization context required",
+      activeOrganizationNotFound: "Active organization not found",
+      allActiveGrounds: "All active grounds",
+      oneGround: "One ground",
+      eyebrow: "Ingest",
+      title: "Ingest",
+      intro: "Clean overview of processed inputs in the current scope.",
+      time: "Time",
+      camera: "Camera",
+      channel: "Channel",
+      result: "Result",
+      truth: "Truth",
+      status: "Status",
+      details: "Details",
+      noEntries: "No processed inputs with event available yet.",
+      until: "until",
+      unnamedCamera: "Unnamed camera",
+      showDetails: "Show details",
+      apiError: "API error",
+      prettyUnknown: "—",
+      completed: "completed",
+      processing: "processing",
+      failed: "failed",
+    };
+  }
+
+  return {
+    activeOrganizationContextRequired: "Aktiver Organisationskontext erforderlich",
+    activeOrganizationNotFound: "Aktive Organisation nicht gefunden",
+    allActiveGrounds: "Alle aktiven Reviere",
+    oneGround: "Ein Revier",
+    eyebrow: "Ingest",
+    title: "Ingest",
+    intro: "Bereinigte Übersicht der verarbeiteten Eingänge im aktuellen Scope.",
+    time: "Zeit",
+    camera: "Kamera",
+    channel: "Kanal",
+    result: "Ergebnis",
+    truth: "Wahr",
+    status: "Status",
+    details: "Details",
+    noEntries: "Noch keine verarbeiteten Eingänge mit Event vorhanden.",
+    until: "bis",
+    unnamedCamera: "Unbenannte Kamera",
+    showDetails: "Details anzeigen",
+    apiError: "API Fehler",
+    prettyUnknown: "—",
+    completed: "abgeschlossen",
+    processing: "in Bearbeitung",
+    failed: "fehlgeschlagen",
+  };
+}
 
 type SearchParams = {
   revier?: string;
@@ -156,24 +223,14 @@ function errorTone(status?: string | null, error?: string | null) {
   return "warn" as const;
 }
 
-function formatDateTime(value?: string | null) {
+function formatDateTime(value: string | null | undefined, language: AppLanguage) {
   if (!value) return "—";
 
   const d = new Date(value);
 
   if (Number.isNaN(d.getTime())) return "—";
 
-  return d.toLocaleString("de-DE");
-}
-
-function prettySpecies(value?: string | null) {
-  if (!value) return "—";
-  return value.replaceAll("_", " ");
-}
-
-function resultLabel(row: IngestEventRow) {
-  if (!row.topSpecies) return "—";
-  return prettySpecies(row.topSpecies);
+  return d.toLocaleString(language === "en" ? "en-GB" : "de-DE");
 }
 
 function formatProbability(value?: number | null) {
@@ -194,25 +251,46 @@ export default async function CamerasIngestPage(props: {
 }) {
   const ctx = await requirePathAccess("/cameras/ingest");
 
+  if (!ctx.user) {
+    throw new Error("Authenticated user required");
+  }
+
   if (!ctx.activeMembership) {
     throw new Error("Active organization context required");
   }
 
   const activeOrganization = ctx.activeMembership.organizations;
-  const searchParams = props?.searchParams
-    ? await Promise.resolve(props.searchParams)
-    : undefined;
-  const rawRevier = searchParams?.revier;
 
   if (!activeOrganization) {
     throw new Error("Active organization not found");
   }
 
   const supabase = supabaseServer();
+  const cookieStore = await cookies();
+
+  const { data: profileData } = await supabase
+    .from("profiles")
+    .select("preferred_language")
+    .eq("id", ctx.user.id)
+    .maybeSingle();
+
+  const language = resolveLanguage({
+    cookieLanguage: cookieStore.get(LOCALE_COOKIE)?.value,
+    profileLanguage: profileData?.preferred_language,
+  });
+
+  const text = t(language);
+  const speciesMetaRows = await loadSpeciesMeta();
+  const speciesMetaMap = buildSpeciesMetaMap(speciesMetaRows);
+
+  const searchParams = props?.searchParams
+    ? await Promise.resolve(props.searchParams)
+    : undefined;
+  const rawRevier = searchParams?.revier;
 
   let items: IngestEventRow[] = [];
   let apiError: string | null = null;
-  let scopeLabel = "Alle aktiven Reviere";
+  let scopeLabel = text.allActiveGrounds;
 
   const { data: reviersData, error: reviersError } = await supabase
     .from("reviers")
@@ -235,7 +313,7 @@ export default async function CamerasIngestPage(props: {
     if (revierScope.type === "single") {
       scopeLabel =
         reviers.find((revier) => revier.id === revierScope.revierId)?.name ??
-        "Ein Revier";
+        text.oneGround;
     }
 
     if (allowedRevierIds.length > 0) {
@@ -259,8 +337,7 @@ export default async function CamerasIngestPage(props: {
         if (allowedCameraIds.length > 0) {
           const { data: batchData, error: batchError } = await supabase
             .from("ingest_batches")
-            .select(
-              `
+            .select(`
               id,
               camera_id,
               received_at,
@@ -269,8 +346,7 @@ export default async function CamerasIngestPage(props: {
               status,
               error_summary,
               cameras ( id, name )
-              `
-            )
+            `)
             .in("camera_id", allowedCameraIds)
             .order("received_at", { ascending: false })
             .limit(50);
@@ -394,14 +470,12 @@ export default async function CamerasIngestPage(props: {
         <div className="flex items-start justify-between gap-4">
           <div>
             <div className="text-xs font-medium uppercase tracking-[0.22em] text-amber-200/80">
-              Ingest
+              {text.eyebrow}
             </div>
             <h1 className="mt-3 text-3xl font-semibold tracking-tight text-white">
-              Ingest
+              {text.title}
             </h1>
-            <p className="mt-2 text-sm text-white/68">
-              Bereinigte Übersicht der verarbeiteten Eingänge im aktuellen Scope.
-            </p>
+            <p className="mt-2 text-sm text-white/68">{text.intro}</p>
           </div>
 
           <div className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-white/72">
@@ -414,20 +488,20 @@ export default async function CamerasIngestPage(props: {
         <table className="w-full text-sm">
           <thead className="border-b border-white/8 bg-white/5 text-left text-white/55">
             <tr>
-              <th className="px-3 py-2">Zeit</th>
-              <th className="px-3 py-2">Kamera</th>
-              <th className="px-3 py-2">Kanal</th>
-              <th className="px-3 py-2">Ergebnis</th>
-              <th className="px-3 py-2">Wahr</th>
-              <th className="px-3 py-2">Status</th>
-              <th className="px-3 py-2">Details</th>
+              <th className="px-3 py-2">{text.time}</th>
+              <th className="px-3 py-2">{text.camera}</th>
+              <th className="px-3 py-2">{text.channel}</th>
+              <th className="px-3 py-2">{text.result}</th>
+              <th className="px-3 py-2">{text.truth}</th>
+              <th className="px-3 py-2">{text.status}</th>
+              <th className="px-3 py-2">{text.details}</th>
             </tr>
           </thead>
           <tbody>
             {items.length === 0 ? (
               <tr>
                 <td className="px-3 py-6 text-white/45" colSpan={7}>
-                  Noch keine verarbeiteten Eingänge mit Event vorhanden.
+                  {text.noEntries}
                 </td>
               </tr>
             ) : (
@@ -449,16 +523,16 @@ export default async function CamerasIngestPage(props: {
                     className="border-b border-white/8 last:border-b-0"
                   >
                     <td className="px-3 py-3 text-white/72 whitespace-nowrap">
-                      <div>{formatDateTime(row.startAt ?? row.receivedAt)}</div>
+                      <div>{formatDateTime(row.startAt ?? row.receivedAt, language)}</div>
                       {row.endAt && row.endAt !== row.startAt ? (
                         <div className="text-xs text-white/45">
-                          bis {formatDateTime(row.endAt)}
+                          {text.until} {formatDateTime(row.endAt, language)}
                         </div>
                       ) : null}
                     </td>
 
                     <td className="px-3 py-3 text-white">
-                      {row.cameraName?.trim() || "Unbenannte Kamera"}
+                      {row.cameraName?.trim() || text.unnamedCamera}
                     </td>
 
                     <td className="px-3 py-3">
@@ -466,7 +540,9 @@ export default async function CamerasIngestPage(props: {
                     </td>
 
                     <td className="px-3 py-3">
-                      <div className="font-medium text-white">{resultLabel(row)}</div>
+                      <div className="font-medium text-white">
+                        {getSpeciesLabel(row.topSpecies, language, speciesMetaMap)}
+                      </div>
                       {row.errorSummary ? (
                         <div className={`mt-1 text-xs ${errorClass}`}>{row.errorSummary}</div>
                       ) : null}
@@ -485,7 +561,7 @@ export default async function CamerasIngestPage(props: {
                         href={`/cameras/events/${row.eventId}`}
                         className="text-amber-200 underline underline-offset-4 hover:text-amber-100"
                       >
-                        Details anzeigen
+                        {text.showDetails}
                       </Link>
                     </td>
                   </tr>
@@ -498,7 +574,7 @@ export default async function CamerasIngestPage(props: {
 
       {apiError ? (
         <div className="rounded-[24px] border border-rose-300/20 bg-rose-300/10 p-4 text-sm text-rose-100">
-          API error: {apiError}
+          {text.apiError}: {apiError}
         </div>
       ) : null}
     </main>

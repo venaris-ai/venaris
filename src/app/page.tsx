@@ -1,5 +1,7 @@
-// src/app/page.tsx #6
+// src/app/page.tsx #8
+import type { ReactNode } from "react";
 import Link from "next/link";
+import { cookies } from "next/headers";
 import { requirePathAccess, canAccessPath } from "@/lib/authz";
 import { supabaseServer } from "@/lib/supabaseServer";
 import { getBillingPlan } from "@/lib/billing/plans";
@@ -7,6 +9,16 @@ import {
   resolveSubscriptionState,
   type SubscriptionStatus,
 } from "@/lib/billing/subscriptionPolicy";
+import {
+  LOCALE_COOKIE,
+  resolveLanguage,
+  type AppLanguage,
+} from "@/lib/i18n";
+import {
+  buildSpeciesMetaMap,
+  getSpeciesLabel,
+  loadSpeciesMeta,
+} from "@/lib/speciesMeta";
 
 type SubscriptionRow = {
   plan_key: "starter" | "pro" | "enterprise";
@@ -39,44 +51,50 @@ type EventFeedRow = {
   asset_count: number | null;
 };
 
-function formatDate(value: string | null) {
+function locale(language: AppLanguage) {
+  return language === "en" ? "en-GB" : "de-DE";
+}
+
+function formatDate(value: string | null, language: AppLanguage) {
   if (!value) return "—";
 
-  return new Intl.DateTimeFormat("de-DE", {
+  return new Intl.DateTimeFormat(locale(language), {
     dateStyle: "medium",
   }).format(new Date(value));
 }
 
-function formatDateTime(value: string | null) {
+function formatDateTime(value: string | null, language: AppLanguage) {
   if (!value) return "—";
 
-  return new Intl.DateTimeFormat("de-DE", {
+  return new Intl.DateTimeFormat(locale(language), {
     dateStyle: "medium",
     timeStyle: "short",
   }).format(new Date(value));
 }
 
-function formatMoney(amountCents: number, currency: string) {
-  return new Intl.NumberFormat("de-DE", {
+function formatMoney(
+  amountCents: number,
+  currency: string,
+  language: AppLanguage
+) {
+  return new Intl.NumberFormat(locale(language), {
     style: "currency",
     currency,
   }).format(amountCents / 100);
 }
 
-function formatSpecies(value: string | null) {
-  if (!value) return "—";
-
-  return value
-    .split("_")
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(" ");
-}
-
-function formatPlanPrice(subscription: SubscriptionRow) {
+function formatPlanPrice(
+  subscription: SubscriptionRow,
+  language: AppLanguage
+) {
   const plan = getBillingPlan(subscription.plan_key);
 
   if (subscription.price_amount_cents > 0) {
-    return formatMoney(subscription.price_amount_cents, subscription.price_currency);
+    return formatMoney(
+      subscription.price_amount_cents,
+      subscription.price_currency,
+      language
+    );
   }
 
   if (!plan) return "—";
@@ -87,15 +105,25 @@ function formatPlanPrice(subscription: SubscriptionRow) {
       : plan.monthlyPriceCents;
 
   if (price != null) {
-    return formatMoney(price, subscription.price_currency);
+    return formatMoney(price, subscription.price_currency, language);
   }
 
   return subscription.plan_key === "enterprise"
-    ? "Individuell"
-    : "Noch nicht festgelegt";
+    ? language === "en"
+      ? "Custom"
+      : "Individuell"
+    : language === "en"
+      ? "Not set yet"
+      : "Noch nicht festgelegt";
 }
 
-function billingCycleLabel(cycle: "monthly" | "yearly") {
+function billingCycleLabel(
+  cycle: "monthly" | "yearly",
+  language: AppLanguage
+) {
+  if (language === "en") {
+    return cycle === "yearly" ? "Yearly" : "Monthly";
+  }
   return cycle === "yearly" ? "Jährlich" : "Monatlich";
 }
 
@@ -112,45 +140,271 @@ function planLabel(planKey: SubscriptionRow["plan_key"]) {
   }
 }
 
-function statusUi(status: SubscriptionStatus) {
+function statusUi(status: SubscriptionStatus, language: AppLanguage) {
+  if (language === "en") {
+    switch (status) {
+      case "trialing":
+        return {
+          label: "Trialing",
+          badgeClass: "border-sky-300/25 bg-sky-300/10 text-sky-200",
+        };
+      case "active":
+        return {
+          label: "Active",
+          badgeClass: "border-emerald-300/25 bg-emerald-300/10 text-emerald-200",
+        };
+      case "past_due":
+        return {
+          label: "Past Due",
+          badgeClass: "border-amber-300/25 bg-amber-300/10 text-amber-200",
+        };
+      case "canceled":
+        return {
+          label: "Canceled",
+          badgeClass: "border-orange-300/25 bg-orange-300/10 text-orange-200",
+        };
+      case "expired":
+        return {
+          label: "Expired",
+          badgeClass: "border-rose-300/25 bg-rose-300/10 text-rose-200",
+        };
+      default:
+        return {
+          label: status,
+          badgeClass: "border-white/10 bg-white/5 text-white/72",
+        };
+    }
+  }
+
   switch (status) {
     case "trialing":
       return {
         label: "Trialing",
-        badgeClass:
-          "border-sky-300/25 bg-sky-300/10 text-sky-200",
+        badgeClass: "border-sky-300/25 bg-sky-300/10 text-sky-200",
       };
     case "active":
       return {
         label: "Active",
-        badgeClass:
-          "border-emerald-300/25 bg-emerald-300/10 text-emerald-200",
+        badgeClass: "border-emerald-300/25 bg-emerald-300/10 text-emerald-200",
       };
     case "past_due":
       return {
         label: "Past Due",
-        badgeClass:
-          "border-amber-300/25 bg-amber-300/10 text-amber-200",
+        badgeClass: "border-amber-300/25 bg-amber-300/10 text-amber-200",
       };
     case "canceled":
       return {
         label: "Canceled",
-        badgeClass:
-          "border-orange-300/25 bg-orange-300/10 text-orange-200",
+        badgeClass: "border-orange-300/25 bg-orange-300/10 text-orange-200",
       };
     case "expired":
       return {
         label: "Expired",
-        badgeClass:
-          "border-rose-300/25 bg-rose-300/10 text-rose-200",
+        badgeClass: "border-rose-300/25 bg-rose-300/10 text-rose-200",
       };
     default:
       return {
         label: status,
-        badgeClass:
-          "border-white/10 bg-white/5 text-white/72",
+        badgeClass: "border-white/10 bg-white/5 text-white/72",
       };
   }
+}
+
+function t(language: AppLanguage) {
+  if (language === "en") {
+    return {
+      pageEyebrow: "Home",
+      pageTitle: "Venaris Home",
+      pageBody:
+        "Central overview of wildlife, cameras and organization in the active context.",
+
+      open: "Open →",
+
+      wildlifeEyebrow: "Wildlife",
+      operationsEyebrow: "Operations",
+      commercialEyebrow: "Commercial",
+      teamEyebrow: "Team",
+
+      signalMissing: "No signal yet",
+      camerasMetric: (count: number) => `${count} cameras`,
+      events14dMetric: (count: number) => `${count} events / 14 days`,
+      noPlan: "No plan",
+
+      understandMovement: "Understand movement in the ground",
+      buildWildlife: "Build wildlife visibility",
+      wildlifeWithSignalText: (count: number) =>
+        `${count} relevant wildlife events in the last 14 days. This gives you an immediate view of what is actually happening right now.`,
+      wildlifeNoSignalText:
+        "No recent wildlife events are visible yet. The best next step is the wildlife overview.",
+
+      keepCameraSituationInView: "Keep camera operations in view",
+      activateFirstCameras: "Activate first cameras",
+      camerasWithSignalText: (count: number) =>
+        `${count} cameras are visible in the scope of the active organization. Status and Ingest are the fastest operational entry points.`,
+      camerasNoSignalText:
+        "As soon as cameras are created and connected, this becomes the operational backbone for wildlife and monitoring.",
+
+      managePlanAndLimits: "Actively manage plan and limits",
+      managePlanAndLimitsText: (
+        plan: string,
+        status: string
+      ) =>
+        `${plan} is currently running with status ${status}. This is where you manage growth, limits and plan changes.`,
+      noSubscriptionText:
+        "No subscription is stored yet for this organization. That should be clarified next.",
+
+      unlockAccessForMoreUsers: "Enable access for more users",
+      memberUsageText: (used: number, max: number) =>
+        `${used} of ${max} member slots are currently in use.`,
+      extendTeam: "Expand team",
+      inviteUsersText:
+        "Invite more users and extend operational access to the organization.",
+
+      wildlifeEvents14d: "Wildlife Events (14 days)",
+      wildlifeEvents14dSubline:
+        "Fast activity anchor for the current period.",
+      camerasTitle: "Cameras",
+      camerasPlanSubline: (current: number, max: number) =>
+        `${current} / ${max} in the active plan`,
+      noSubscriptionFound: "No subscription found",
+      membersTitle: "Members",
+      openInvites: (count: number) => `${count} open invites`,
+      subscriptionTitle: "Abo",
+      subscriptionSubline: (price: string, status: string) =>
+        `${price} incl. VAT · ${status}`,
+      noSubscriptionStored: "No subscription stored",
+
+      wildlifeOpen: "Open wildlife",
+      camerasOpen: "Open cameras",
+      orgaOpen: "Open organization",
+
+      organizationAndSubscription: "Organization & Subscription",
+      organizationAndSubscriptionText:
+        "Commercial framework, team and ground scope of the active organization.",
+      subscriptionMissingForOrg:
+        "No subscription has been found for this organization.",
+
+      scope: "Scope",
+      grounds: "Grounds",
+      members: "Members",
+      openInvitesLabel: "Open invites",
+
+      trialEnds: "Trial ends",
+      periodUntil: "Period until",
+
+      wildlifeSnapshot: "Wildlife Snapshot",
+      wildlifeSnapshotText:
+        "The latest visible events and the fastest entry into wildlife.",
+      noRecentEvents:
+        "No recent events are visible in the dashboard scope yet.",
+      cameraLabel: "Camera",
+      assetsLabel: "Assets",
+      scoreLabel: "Score",
+
+      cameraSnapshot: "Camera Snapshot",
+      cameraSnapshotText:
+        "Most recently created or most recently visible cameras with quick access to setup.",
+      noCamerasYet: "No cameras created yet.",
+      noLocationLabel: "No location label",
+      createdLabel: "Created",
+      lastSeenLabel: "Last seen",
+    };
+  }
+
+  return {
+    pageEyebrow: "Home",
+    pageTitle: "Venaris Home",
+    pageBody:
+      "Zentrale Übersicht über Wildlife, Cameras und Organization der aktiven Umgebung.",
+
+    open: "Öffnen →",
+
+    wildlifeEyebrow: "Wildlife",
+    operationsEyebrow: "Operations",
+    commercialEyebrow: "Commercial",
+    teamEyebrow: "Team",
+
+    signalMissing: "Noch kein Signal",
+    camerasMetric: (count: number) => `${count} Kameras`,
+    events14dMetric: (count: number) => `${count} Events / 14 Tage`,
+    noPlan: "Kein Plan",
+
+    understandMovement: "Bewegung im Revier verstehen",
+    buildWildlife: "Wildlife aufbauen",
+    wildlifeWithSignalText: (count: number) =>
+      `${count} relevante Wildlife-Events in den letzten 14 Tagen. Hier siehst Du sofort, was gerade wirklich los ist.`,
+    wildlifeNoSignalText:
+      "Noch keine aktuellen Wildlife-Events sichtbar. Der beste Startpunkt ist jetzt die Wildlife-Übersicht.",
+
+    keepCameraSituationInView: "Kamera-Lage im Blick behalten",
+    activateFirstCameras: "Erste Kameras aktivieren",
+    camerasWithSignalText: (count: number) =>
+      `${count} Kameras sind im Scope der aktiven Organisation sichtbar. Status und Ingest sind der schnellste operative Einstieg.`,
+    camerasNoSignalText:
+      "Sobald Kameras angelegt und verbunden sind, entsteht hier der operative Backbone für Wildlife und Monitoring.",
+
+    managePlanAndLimits: "Plan und Limits aktiv steuern",
+    managePlanAndLimitsText: (plan: string, status: string) =>
+      `${plan} läuft aktuell mit Status ${status}. Hier steuerst Du Wachstum, Limits und Planwechsel.`,
+    noSubscriptionText:
+      "Für diese Organisation ist noch kein Abo hinterlegt. Das solltest Du als Nächstes klären.",
+
+    unlockAccessForMoreUsers: "Zugang für weitere Nutzer freischalten",
+    memberUsageText: (used: number, max: number) =>
+      `${used} von ${max} Member-Slots sind aktuell genutzt.`,
+    extendTeam: "Team erweitern",
+    inviteUsersText:
+      "Lade weitere Nutzer ein und erweitere den operativen Zugriff auf die Organisation.",
+
+    wildlifeEvents14d: "Wildtier-Ereignisse (14 Tage)",
+    wildlifeEvents14dSubline:
+      "Schneller Aktivitätsanker für den aktuellen Zeitraum.",
+    camerasTitle: "Kameras",
+    camerasPlanSubline: (current: number, max: number) =>
+      `${current} / ${max} im aktiven Plan`,
+    noSubscriptionFound: "Kein Abo gefunden",
+    membersTitle: "Mitglieder",
+    openInvites: (count: number) => `${count} offene Einladungen`,
+    subscriptionTitle: "Abo",
+    subscriptionSubline: (price: string, status: string) =>
+      `${price} inkl. MwSt. · ${status}`,
+    noSubscriptionStored: "Kein Abo hinterlegt",
+
+    wildlifeOpen: "Wildlife öffnen",
+    camerasOpen: "Cameras öffnen",
+    orgaOpen: "Orga öffnen",
+
+    organizationAndSubscription: "Organisation & Abo",
+    organizationAndSubscriptionText:
+      "Kommerzieller Rahmen, Team und Revier-Scope der aktiven Organization.",
+    subscriptionMissingForOrg:
+      "Für diese Organisation wurde noch kein Abo gefunden.",
+
+    scope: "Scope",
+    grounds: "Reviere",
+    members: "Members",
+    openInvitesLabel: "Offene Invites",
+
+    trialEnds: "Trial endet",
+    periodUntil: "Periode bis",
+
+    wildlifeSnapshot: "Wildlife Snapshot",
+    wildlifeSnapshotText:
+      "Die letzten sichtbaren Ereignisse und der schnellste Einstieg in Wildlife.",
+    noRecentEvents:
+      "Noch keine aktuellen Events im Dashboard-Scope sichtbar.",
+    cameraLabel: "Kamera",
+    assetsLabel: "Assets",
+    scoreLabel: "Score",
+
+    cameraSnapshot: "Kamera Snapshot",
+    cameraSnapshotText:
+      "Zuletzt angelegte bzw. zuletzt sichtbare Kameras mit schnellem Zugang zur Anlage.",
+    noCamerasYet: "Noch keine Kameras angelegt.",
+    noLocationLabel: "Keine Ortsbezeichnung",
+    createdLabel: "Erstellt",
+    lastSeenLabel: "Last seen",
+  };
 }
 
 function StatCard({
@@ -183,8 +437,8 @@ function SectionCard({
 }: {
   title: string;
   text: string;
-  actions?: React.ReactNode;
-  children: React.ReactNode;
+  actions?: ReactNode;
+  children: ReactNode;
 }) {
   return (
     <section className="rounded-[28px] border border-white/10 bg-white/5 p-6 backdrop-blur-sm">
@@ -223,12 +477,14 @@ function FocusCard({
   title,
   text,
   metric,
+  openLabel,
 }: {
   href: string;
   eyebrow: string;
   title: string;
   text: string;
   metric?: string;
+  openLabel: string;
 }) {
   return (
     <Link
@@ -254,7 +510,7 @@ function FocusCard({
       </div>
 
       <div className="mt-5 text-sm font-medium text-amber-200 group-hover:text-amber-100">
-        Öffnen →
+        {openLabel}
       </div>
     </Link>
   );
@@ -262,11 +518,31 @@ function FocusCard({
 
 export default async function HomePage() {
   const ctx = await requirePathAccess("/");
+  const cookieStore = await cookies();
   const supabase = supabaseServer();
+
+  if (!ctx.user) {
+    throw new Error("Authenticated user required");
+  }
 
   if (!ctx.activeMembership) {
     throw new Error("Active organization context required");
   }
+
+  const { data: profileData } = await supabase
+    .from("profiles")
+    .select("preferred_language")
+    .eq("id", ctx.user.id)
+    .maybeSingle();
+
+  const language = resolveLanguage({
+    cookieLanguage: cookieStore.get(LOCALE_COOKIE)?.value,
+    profileLanguage: profileData?.preferred_language,
+  });
+
+  const text = t(language);
+  const speciesMetaRows = await loadSpeciesMeta();
+  const speciesMetaMap = buildSpeciesMetaMap(speciesMetaRows);
 
   const organization = ctx.activeMembership.organizations;
   const role = ctx.activeMembership.role;
@@ -412,10 +688,12 @@ export default async function HomePage() {
     : null;
 
   const effectiveStatus = subscription
-    ? statusUi(resolvedSubscription?.effectiveStatus ?? subscription.status)
+    ? statusUi(resolvedSubscription?.effectiveStatus ?? subscription.status, language)
     : null;
 
-  const subscriptionPrice = subscription ? formatPlanPrice(subscription) : "—";
+  const subscriptionPrice = subscription
+    ? formatPlanPrice(subscription, language)
+    : "—";
 
   const canSee = (pathname: string) =>
     canAccessPath({
@@ -434,59 +712,69 @@ export default async function HomePage() {
     showWildlife
       ? {
           href: "/wildlife",
-          eyebrow: "Wildlife",
+          eyebrow: text.wildlifeEyebrow,
           title:
-            recentEventsCount > 0 ? "Bewegung im Revier verstehen" : "Wildlife aufbauen",
+            recentEventsCount > 0
+              ? text.understandMovement
+              : text.buildWildlife,
           text:
             recentEventsCount > 0
-              ? `${recentEventsCount} relevante Wildlife-Events in den letzten 14 Tagen. Hier siehst Du sofort, was gerade wirklich los ist.`
-              : "Noch keine aktuellen Wildlife-Events sichtbar. Der beste Startpunkt ist jetzt die Wildlife-Übersicht.",
+              ? text.wildlifeWithSignalText(recentEventsCount)
+              : text.wildlifeNoSignalText,
           metric:
             recentEventsCount > 0
-              ? `${recentEventsCount} Events / 14 Tage`
-              : "Noch kein Signal",
+              ? text.events14dMetric(recentEventsCount)
+              : text.signalMissing,
         }
       : null,
 
     showCameras
       ? {
           href: "/cameras",
-          eyebrow: "Operations",
+          eyebrow: text.operationsEyebrow,
           title:
-            cameras.length > 0 ? "Kamera-Lage im Blick behalten" : "Erste Kameras aktivieren",
+            cameras.length > 0
+              ? text.keepCameraSituationInView
+              : text.activateFirstCameras,
           text:
             cameras.length > 0
-              ? `${cameras.length} Kameras sind im Scope der aktiven Organisation sichtbar. Health, Events und Ingest sind der schnellste operative Einstieg.`
-              : "Sobald Kameras angelegt und verbunden sind, entsteht hier der operative Backbone für Wildlife und Monitoring.",
-          metric: `${cameras.length} Kameras`,
+              ? text.camerasWithSignalText(cameras.length)
+              : text.camerasNoSignalText,
+          metric: text.camerasMetric(cameras.length),
         }
       : null,
 
     showSubscription
       ? {
           href: "/orga/subscription",
-          eyebrow: "Commercial",
-          title: "Plan und Limits aktiv steuern",
+          eyebrow: text.commercialEyebrow,
+          title: text.managePlanAndLimits,
           text: subscription
-            ? `${planLabel(subscription.plan_key)} läuft aktuell mit Status ${effectiveStatus?.label ?? "—"}. Hier steuerst Du Wachstum, Limits und Planwechsel.`
-            : "Für diese Organisation ist noch keine Subscription hinterlegt. Das solltest Du als Nächstes klären.",
-          metric: subscription ? planLabel(subscription.plan_key) : "Kein Plan",
+            ? text.managePlanAndLimitsText(
+                planLabel(subscription.plan_key),
+                effectiveStatus?.label ?? "—"
+              )
+            : text.noSubscriptionText,
+          metric: subscription ? planLabel(subscription.plan_key) : text.noPlan,
         }
       : showInvite
-      ? {
-          href: "/orga/members/invite",
-          eyebrow: "Team",
-          title: "Zugang für weitere Nutzer freischalten",
-          text:
-            subscription && resolvedSubscription
-              ? `${resolvedSubscription.currentMemberUsage} von ${subscription.max_members} Member-Slots sind aktuell genutzt.`
-              : "Lade weitere Nutzer ein und erweitere den operativen Zugriff auf die Organisation.",
-          metric:
-            subscription && resolvedSubscription
-              ? `${resolvedSubscription.currentMemberUsage} / ${subscription.max_members}`
-              : "Team erweitern",
-        }
-      : null,
+        ? {
+            href: "/orga/members/invite",
+            eyebrow: text.teamEyebrow,
+            title: text.unlockAccessForMoreUsers,
+            text:
+              subscription && resolvedSubscription
+                ? text.memberUsageText(
+                    resolvedSubscription.currentMemberUsage,
+                    subscription.max_members
+                  )
+                : text.inviteUsersText,
+            metric:
+              subscription && resolvedSubscription
+                ? `${resolvedSubscription.currentMemberUsage} / ${subscription.max_members}`
+                : text.extendTeam,
+          }
+        : null,
   ].filter(Boolean) as {
     href: string;
     eyebrow: string;
@@ -498,43 +786,46 @@ export default async function HomePage() {
   const statCards = [
     {
       visible: showWildlife,
-      title: "Wildlife Events (14 Tage)",
+      title: text.wildlifeEvents14d,
       value: String(recentEventsCount),
-      subline: "Schneller Aktivitätsanker für den aktuellen Zeitraum.",
+      subline: text.wildlifeEvents14dSubline,
     },
     {
       visible: showCameras,
-      title: "Kameras",
+      title: text.camerasTitle,
       value: String(cameras.length),
       subline: subscription
-        ? `${cameras.length} / ${subscription.max_cameras} im aktiven Plan`
-        : "Keine Subscription gefunden",
+        ? text.camerasPlanSubline(cameras.length, subscription.max_cameras)
+        : text.noSubscriptionFound,
     },
     {
       visible: showOrga,
-      title: "Members",
+      title: text.membersTitle,
       value: String(membersCount),
-      subline: `${openInvitesCount} offene Invites`,
+      subline: text.openInvites(openInvitesCount),
     },
     {
       visible: showSubscription,
-      title: "Subscription",
+      title: text.subscriptionTitle,
       value: subscription ? planLabel(subscription.plan_key) : "—",
       subline: subscription
-        ? `${subscriptionPrice} inkl. MwSt. · ${effectiveStatus?.label ?? "—"}`
-        : "Keine Subscription hinterlegt",
+        ? text.subscriptionSubline(
+            subscriptionPrice,
+            effectiveStatus?.label ?? "—"
+          )
+        : text.noSubscriptionStored,
     },
   ].filter((item) => item.visible);
 
-  const wildlifeActions = [{ href: "/wildlife", label: "Wildlife öffnen" }].filter(
+  const wildlifeActions = [{ href: "/wildlife", label: text.wildlifeOpen }].filter(
     (item) => canSee(item.href)
   );
 
-  const cameraActions = [{ href: "/cameras", label: "Cameras öffnen" }].filter(
+  const cameraActions = [{ href: "/cameras", label: text.camerasOpen }].filter(
     (item) => canSee(item.href)
   );
 
-  const orgaActions = [{ href: "/orga", label: "Orga öffnen" }].filter((item) =>
+  const orgaActions = [{ href: "/orga", label: text.orgaOpen }].filter((item) =>
     canSee(item.href)
   );
 
@@ -543,14 +834,13 @@ export default async function HomePage() {
       <section className="rounded-[32px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(201,149,46,0.16),transparent_24%),linear-gradient(135deg,rgba(255,255,255,0.06),rgba(255,255,255,0.03))] p-6 backdrop-blur-sm">
         <div>
           <div className="text-xs font-medium uppercase tracking-[0.22em] text-amber-200/80">
-            Home
+            {text.pageEyebrow}
           </div>
           <h1 className="mt-3 text-3xl font-semibold tracking-tight text-white">
-            Venaris Home
+            {text.pageTitle}
           </h1>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-white/68">
-            Zentrale Übersicht über Wildlife, Cameras und Organization der aktiven
-            Umgebung.
+            {text.pageBody}
           </p>
         </div>
 
@@ -564,6 +854,7 @@ export default async function HomePage() {
                 title={card.title}
                 text={card.text}
                 metric={card.metric}
+                openLabel={text.open}
               />
             ))}
           </div>
@@ -596,8 +887,8 @@ export default async function HomePage() {
       {showOrga ? (
         <section className="grid gap-4 xl:grid-cols-2">
           <SectionCard
-            title="Organization & Subscription"
-            text="Kommerzieller Rahmen, Team und Revier-Scope der aktiven Organization."
+            title={text.organizationAndSubscription}
+            text={text.organizationAndSubscriptionText}
             actions={
               orgaActions.length > 0 ? (
                 <>
@@ -610,7 +901,7 @@ export default async function HomePage() {
           >
             {!subscription ? (
               <div className="rounded-[24px] border border-amber-300/20 bg-amber-300/10 p-5 text-sm text-amber-100">
-                Für diese Organization wurde noch keine Subscription gefunden.
+                {text.subscriptionMissingForOrg}
               </div>
             ) : (
               <div className="grid gap-4 md:grid-cols-2">
@@ -626,27 +917,34 @@ export default async function HomePage() {
                     </span>
                   </div>
                   <p className="mt-3 text-sm leading-6 text-white/68">
-                    {subscriptionPrice} inkl. MwSt. ·{" "}
-                    {billingCycleLabel(subscription.billing_cycle)}
+                    {subscriptionPrice}{" "}
+                    {language === "en" ? "incl. VAT" : "inkl. MwSt."} ·{" "}
+                    {billingCycleLabel(subscription.billing_cycle, language)}
                   </p>
                   <p className="mt-2 text-sm leading-6 text-white/60">
-                    Trial endet: {formatDate(subscription.trial_ends_at)} · Periode bis:{" "}
-                    {formatDate(subscription.current_period_end)}
+                    {text.trialEnds}: {formatDate(subscription.trial_ends_at, language)} ·{" "}
+                    {text.periodUntil}:{" "}
+                    {formatDate(subscription.current_period_end, language)}
                   </p>
                 </div>
 
                 <div className="rounded-[24px] border border-white/10 bg-white/5 p-5">
-                  <div className="text-sm font-medium text-white/50">Scope</div>
+                  <div className="text-sm font-medium text-white/50">{text.scope}</div>
                   <div className="mt-3 space-y-2 text-sm text-white/72">
-                    <div>Reviere: {reviersCount}</div>
                     <div>
-                      Members: {resolvedSubscription?.currentMemberUsage ?? membersCount} /{" "}
+                      {text.grounds}: {reviersCount}
+                    </div>
+                    <div>
+                      {text.members}:{" "}
+                      {resolvedSubscription?.currentMemberUsage ?? membersCount} /{" "}
                       {subscription.max_members}
                     </div>
                     <div>
-                      Kameras: {cameras.length} / {subscription.max_cameras}
+                      {text.camerasTitle}: {cameras.length} / {subscription.max_cameras}
                     </div>
-                    <div>Offene Invites: {openInvitesCount}</div>
+                    <div>
+                      {text.openInvitesLabel}: {openInvitesCount}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -654,8 +952,8 @@ export default async function HomePage() {
           </SectionCard>
 
           <SectionCard
-            title="Wildlife Snapshot"
-            text="Die letzten sichtbaren Ereignisse und der schnellste Einstieg in Wildlife."
+            title={text.wildlifeSnapshot}
+            text={text.wildlifeSnapshotText}
             actions={
               wildlifeActions.length > 0 ? (
                 <>
@@ -668,7 +966,7 @@ export default async function HomePage() {
           >
             {recentEvents.length === 0 ? (
               <div className="rounded-[24px] border border-white/10 bg-white/5 p-5 text-sm text-white/68">
-                Noch keine aktuellen Events im Dashboard-Scope sichtbar.
+                {text.noRecentEvents}
               </div>
             ) : (
               <div className="space-y-3">
@@ -680,18 +978,19 @@ export default async function HomePage() {
                     <div className="flex flex-wrap items-start justify-between gap-3">
                       <div>
                         <div className="text-sm font-medium text-white">
-                          {formatSpecies(event.top_species)}
+                          {getSpeciesLabel(event.top_species, language, speciesMetaMap)}
                           {event.top_count ? ` · ${event.top_count}` : ""}
                         </div>
                         <p className="mt-1 text-sm text-white/65">
-                          Kamera: {cameraNameById.get(event.camera_id) ?? "—"}
+                          {text.cameraLabel}:{" "}
+                          {cameraNameById.get(event.camera_id) ?? "—"}
                         </p>
                       </div>
 
                       <div className="text-right text-xs text-white/45">
-                        <div>{formatDateTime(event.start_at)}</div>
+                        <div>{formatDateTime(event.start_at, language)}</div>
                         <div className="mt-1">
-                          Assets: {event.asset_count ?? 0} · Score:{" "}
+                          {text.assetsLabel}: {event.asset_count ?? 0} · {text.scoreLabel}:{" "}
                           {event.relevance_score != null
                             ? Math.round(event.relevance_score)
                             : "—"}
@@ -710,8 +1009,8 @@ export default async function HomePage() {
         <section className={`grid gap-4 ${showCameras ? "xl:grid-cols-2" : ""}`}>
           {showWildlife ? (
             <SectionCard
-              title="Wildlife Snapshot"
-              text="Die letzten sichtbaren Ereignisse und der schnellste Einstieg in Wildlife."
+              title={text.wildlifeSnapshot}
+              text={text.wildlifeSnapshotText}
               actions={
                 wildlifeActions.length > 0 ? (
                   <>
@@ -724,7 +1023,7 @@ export default async function HomePage() {
             >
               {recentEvents.length === 0 ? (
                 <div className="rounded-[24px] border border-white/10 bg-white/5 p-5 text-sm text-white/68">
-                  Noch keine aktuellen Events im Dashboard-Scope sichtbar.
+                  {text.noRecentEvents}
                 </div>
               ) : (
                 <div className="space-y-3">
@@ -736,18 +1035,19 @@ export default async function HomePage() {
                       <div className="flex flex-wrap items-start justify-between gap-3">
                         <div>
                           <div className="text-sm font-medium text-white">
-                            {formatSpecies(event.top_species)}
+                            {getSpeciesLabel(event.top_species, language, speciesMetaMap)}
                             {event.top_count ? ` · ${event.top_count}` : ""}
                           </div>
                           <p className="mt-1 text-sm text-white/65">
-                            Kamera: {cameraNameById.get(event.camera_id) ?? "—"}
+                            {text.cameraLabel}:{" "}
+                            {cameraNameById.get(event.camera_id) ?? "—"}
                           </p>
                         </div>
 
                         <div className="text-right text-xs text-white/45">
-                          <div>{formatDateTime(event.start_at)}</div>
+                          <div>{formatDateTime(event.start_at, language)}</div>
                           <div className="mt-1">
-                            Assets: {event.asset_count ?? 0} · Score:{" "}
+                            {text.assetsLabel}: {event.asset_count ?? 0} · {text.scoreLabel}:{" "}
                             {event.relevance_score != null
                               ? Math.round(event.relevance_score)
                               : "—"}
@@ -763,8 +1063,8 @@ export default async function HomePage() {
 
           {showCameras ? (
             <SectionCard
-              title="Camera Snapshot"
-              text="Zuletzt angelegte bzw. zuletzt sichtbare Kameras mit schnellem Zugang zur Anlage."
+              title={text.cameraSnapshot}
+              text={text.cameraSnapshotText}
               actions={
                 cameraActions.length > 0 ? (
                   <>
@@ -777,7 +1077,7 @@ export default async function HomePage() {
             >
               {cameras.length === 0 ? (
                 <div className="rounded-[24px] border border-white/10 bg-white/5 p-5 text-sm text-white/68">
-                  Noch keine Kameras angelegt.
+                  {text.noCamerasYet}
                 </div>
               ) : (
                 <div className="space-y-3">
@@ -792,14 +1092,18 @@ export default async function HomePage() {
                             {camera.name}
                           </div>
                           <p className="mt-1 text-sm text-white/65">
-                            {camera.location_name || "Keine Ortsbezeichnung"}
+                            {camera.location_name || text.noLocationLabel}
                           </p>
                         </div>
 
                         <div className="text-right text-xs text-white/45">
-                          <div>Erstellt: {formatDate(camera.created_at)}</div>
+                          <div>
+                            {text.createdLabel}:{" "}
+                            {formatDate(camera.created_at, language)}
+                          </div>
                           <div className="mt-1">
-                            Last seen: {formatDateTime(camera.last_seen_at)}
+                            {text.lastSeenLabel}:{" "}
+                            {formatDateTime(camera.last_seen_at, language)}
                           </div>
                         </div>
                       </div>
@@ -813,8 +1117,8 @@ export default async function HomePage() {
       ) : showCameras ? (
         <section>
           <SectionCard
-            title="Camera Snapshot"
-            text="Zuletzt angelegte bzw. zuletzt sichtbare Kameras mit schnellem Zugang zur Anlage."
+            title={text.cameraSnapshot}
+            text={text.cameraSnapshotText}
             actions={
               cameraActions.length > 0 ? (
                 <>
@@ -827,7 +1131,7 @@ export default async function HomePage() {
           >
             {cameras.length === 0 ? (
               <div className="rounded-[24px] border border-white/10 bg-white/5 p-5 text-sm text-white/68">
-                Noch keine Kameras angelegt.
+                {text.noCamerasYet}
               </div>
             ) : (
               <div className="space-y-3">
@@ -842,14 +1146,17 @@ export default async function HomePage() {
                           {camera.name}
                         </div>
                         <p className="mt-1 text-sm text-white/65">
-                          {camera.location_name || "Keine Ortsbezeichnung"}
+                          {camera.location_name || text.noLocationLabel}
                         </p>
                       </div>
 
                       <div className="text-right text-xs text-white/45">
-                        <div>Erstellt: {formatDate(camera.created_at)}</div>
+                        <div>
+                          {text.createdLabel}: {formatDate(camera.created_at, language)}
+                        </div>
                         <div className="mt-1">
-                          Last seen: {formatDateTime(camera.last_seen_at)}
+                          {text.lastSeenLabel}:{" "}
+                          {formatDateTime(camera.last_seen_at, language)}
                         </div>
                       </div>
                     </div>

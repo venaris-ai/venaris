@@ -1,11 +1,11 @@
-// src/app/orga/members/MemberRowControls.tsx #8
+// src/app/orga/members/MemberRowControls.tsx #11
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { type AppLanguage } from "@/lib/i18n";
 
 type MemberRole = "owner" | "admin" | "member" | "viewer";
 type MemberStatus = "active" | "disabled";
-type AppLanguage = "de" | "en";
 
 function emitDirtyState(userId: string, dirty: boolean) {
   window.dispatchEvent(
@@ -13,6 +13,38 @@ function emitDirtyState(userId: string, dirty: boolean) {
       detail: { userId, dirty },
     })
   );
+}
+
+function t(language: AppLanguage) {
+  return language === "en"
+    ? {
+        demoReadOnly: "Demo mode: changes are disabled.",
+        roleNotEditable: "Role cannot be changed for this member.",
+        statusNotEditable: "Status cannot be changed for this member.",
+        languageNotEditable: "Language cannot be changed for this member.",
+        member: "Member",
+        admin: "Admin",
+        owner: "Owner",
+        viewer: "Viewer",
+        active: "Active",
+        disabled: "Disabled",
+        german: "Deutsch",
+        english: "English",
+      }
+    : {
+        demoReadOnly: "Demo-Modus: Änderungen sind deaktiviert.",
+        roleNotEditable: "Rolle kann für dieses Mitglied nicht geändert werden.",
+        statusNotEditable: "Status kann für dieses Mitglied nicht geändert werden.",
+        languageNotEditable: "Sprache kann für dieses Mitglied nicht geändert werden.",
+        member: "Member",
+        admin: "Admin",
+        owner: "Owner",
+        viewer: "Viewer",
+        active: "Active",
+        disabled: "Disabled",
+        german: "Deutsch",
+        english: "English",
+      };
 }
 
 export default function MemberRowControls({
@@ -26,6 +58,7 @@ export default function MemberRowControls({
   allowOwnerOption,
   saveAction,
   isDemo = false,
+  uiLanguage,
 }: {
   userId: string;
   initialRole: MemberRole;
@@ -37,10 +70,12 @@ export default function MemberRowControls({
   allowOwnerOption: boolean;
   saveAction: (formData: FormData) => void | Promise<void>;
   isDemo?: boolean;
+  uiLanguage: AppLanguage;
 }) {
   const [role, setRole] = useState<MemberRole>(initialRole);
   const [status, setStatus] = useState<MemberStatus>(initialStatus);
   const [language, setLanguage] = useState<AppLanguage>(initialLanguage);
+  const text = t(uiLanguage);
 
   const formId = useMemo(() => `member-controls-${userId}`, [userId]);
   const dirty =
@@ -69,24 +104,24 @@ export default function MemberRowControls({
             className="rounded-[10px] border border-white/10 bg-white/5 px-2.5 py-1.5 text-sm text-white outline-none disabled:bg-white/5 disabled:text-white/35"
             title={
               isDemo
-                ? "Demo-Modus: Änderungen sind deaktiviert."
+                ? text.demoReadOnly
                 : !canEditRole
-                  ? "Rolle kann für dieses Mitglied nicht geändert werden."
+                  ? text.roleNotEditable
                   : ""
             }
           >
             <option value="viewer" className="bg-[#102018] text-white">
-              Viewer
+              {text.viewer}
             </option>
             <option value="member" className="bg-[#102018] text-white">
-              Member
+              {text.member}
             </option>
             <option value="admin" className="bg-[#102018] text-white">
-              Admin
+              {text.admin}
             </option>
             {allowOwnerOption ? (
               <option value="owner" className="bg-[#102018] text-white">
-                Owner
+                {text.owner}
               </option>
             ) : null}
           </select>
@@ -101,17 +136,17 @@ export default function MemberRowControls({
           className="rounded-[10px] border border-white/10 bg-white/5 px-2.5 py-1.5 text-sm text-white outline-none disabled:bg-white/5 disabled:text-white/35"
           title={
             isDemo
-              ? "Demo-Modus: Änderungen sind deaktiviert."
+              ? text.demoReadOnly
               : !canEditStatus
-                ? "Status kann für dieses Mitglied nicht geändert werden."
+                ? text.statusNotEditable
                 : ""
           }
         >
           <option value="active" className="bg-[#102018] text-white">
-            Active
+            {text.active}
           </option>
           <option value="disabled" className="bg-[#102018] text-white">
-            Disabled
+            {text.disabled}
           </option>
         </select>
       </td>
@@ -124,17 +159,17 @@ export default function MemberRowControls({
           className="rounded-[10px] border border-white/10 bg-white/5 px-2.5 py-1.5 text-sm text-white outline-none disabled:bg-white/5 disabled:text-white/35"
           title={
             isDemo
-              ? "Demo-Modus: Änderungen sind deaktiviert."
+              ? text.demoReadOnly
               : !canEditLanguage
-                ? "Sprache kann für dieses Mitglied nicht geändert werden."
+                ? text.languageNotEditable
                 : ""
           }
         >
           <option value="de" className="bg-[#102018] text-white">
-            Deutsch
+            {text.german}
           </option>
           <option value="en" className="bg-[#102018] text-white">
-            English
+            {text.english}
           </option>
         </select>
       </td>

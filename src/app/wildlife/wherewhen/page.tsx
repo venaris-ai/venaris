@@ -1,13 +1,24 @@
-// src/app/wildlife/wherewhen/page.tsx #2
+// src/app/wildlife/wherewhen/page.tsx #4
 export const runtime = "nodejs";
 
 import Link from "next/link";
+import { cookies } from "next/headers";
 import { supabaseServer } from "@/lib/supabaseServer";
-import { requireActiveOrganization } from "@/lib/auth";
+import { requirePathAccess } from "@/lib/authz";
+import {
+  LOCALE_COOKIE,
+  resolveLanguage,
+  type AppLanguage,
+} from "@/lib/i18n";
 import {
   resolveRevierScope,
   type RevierOption,
 } from "@/lib/intelligence/revierScope";
+import {
+  buildSpeciesMetaMap,
+  getSpeciesLabel,
+  loadSpeciesMeta,
+} from "@/lib/speciesMeta";
 
 type PeriodKey = "30d" | "90d" | "365d";
 
@@ -58,23 +69,16 @@ function resolvePeriodRange(period: PeriodKey) {
   };
 }
 
-function prettySpecies(value: string | null | undefined) {
-  if (!value) return "—";
-  return value.replaceAll("_", " ");
-}
-
-function titleCase(value: string | null | undefined) {
-  const s = prettySpecies(value);
-  return s.replace(/\b\w/g, (m) => m.toUpperCase());
-}
-
 function fmtPct(value: number) {
   return `${Math.round(value)}%`;
 }
 
 function fmtWindow(startHour: number, spanHours = 2) {
   const endHour = (startHour + spanHours) % 24;
-  return `${String(startHour).padStart(2, "0")}:00–${String(endHour).padStart(2, "0")}:00`;
+  return `${String(startHour).padStart(2, "0")}:00–${String(endHour).padStart(
+    2,
+    "0"
+  )}:00`;
 }
 
 function buildHref(
@@ -118,27 +122,129 @@ async function fetchEventSpeciesSummaryChunked(
   return rows;
 }
 
+function t(language: AppLanguage) {
+  if (language === "en") {
+    return {
+      eyebrow: "Where & When",
+      title: "Where & When",
+      intro:
+        "Where and when selected species become visible in the current ground scope.",
+      activeOrganizationNotFound: "Active organization not found.",
+      reviersLoadFailed: "Failed to load grounds:",
+      noActiveGrounds:
+        "There are currently no active grounds for the active organization.",
+      camerasLoadFailed: "Failed to load cameras:",
+      noCamerasInScope:
+        "There are no cameras for the current ground scope.",
+      eventsLoadFailed: "Failed to load events:",
+      speciesSummaryLoadFailed: "Failed to load species summary:",
+      unknownError: "unknown error",
+      speciesSelection: "Species Selection",
+      speciesSelectionText:
+        "Analysis of camera and time windows for a selected species.",
+      species: "Species",
+      update: "Update",
+      noWhereWhenData:
+        "No robust where-and-when data available for the selected period.",
+      currentSelection: "current selection",
+      speciesEvents: "Species Events",
+      inPeriod: "in period",
+      topCamera: "Top Camera",
+      topTimeWindow: "Top Time Window",
+      primaryHint: "Primary Hint",
+      primaryHintText:
+        "Condensed hint from camera and 2h time window.",
+      strongestHint: "Strongest hint",
+      near: "Near",
+      timeWindow: "Time window",
+      probability: "Probability",
+      basis: "Basis",
+      events: "events",
+      topCamerasFor: (species: string) => `Top Cameras for ${species}`,
+      topCamerasText:
+        "Probability-oriented distribution by camera.",
+      noCameraHints: "No camera hints available.",
+      topTimeWindowsFor: (species: string) =>
+        `Top Time Windows for ${species}`,
+      topTimeWindowsText: "Condensed by 2h windows.",
+      noTimeWindowHints: "No time-window hints available.",
+      matrix: "Camera × Time Window Matrix",
+      matrixText: "The strongest combinations of place and time.",
+      noCombinations: "No robust combinations available.",
+    };
+  }
+
+  return {
+eyebrow: "Wo & Wann",
+title: "Wo & Wann",
+intro:
+  "Wo und wann ausgewählte Arten im aktuellen Revier-Scope sichtbar werden.",
+activeOrganizationNotFound: "Aktive Organisation nicht gefunden.",
+reviersLoadFailed: "Fehler beim Laden der Reviere:",
+noActiveGrounds:
+  "Für die aktive Organisation sind derzeit keine aktiven Reviere vorhanden.",
+camerasLoadFailed: "Fehler beim Laden der Kameras:",
+noCamerasInScope:
+  "Für den aktuellen Revier-Scope sind keine Kameras vorhanden.",
+eventsLoadFailed: "Fehler beim Laden der Ereignisse:",
+speciesSummaryLoadFailed: "Fehler beim Laden der Artenzusammenfassung:",
+unknownError: "Unbekannter Fehler",
+speciesSelection: "Artauswahl",
+speciesSelectionText:
+  "Analyse von Kameras und Zeitfenstern für eine ausgewählte Art.",
+species: "Art",
+update: "Aktualisieren",
+noWhereWhenData:
+  "Keine belastbaren Wo-und-Wann-Daten für den gewählten Zeitraum verfügbar.",
+currentSelection: "Aktuelle Auswahl",
+speciesEvents: "Arten-Ereignisse",
+inPeriod: "im Zeitraum",
+topCamera: "Top-Kamera",
+topTimeWindow: "Top-Zeitfenster",
+primaryHint: "Primärer Hinweis",
+primaryHintText:
+  "Verdichteter Hinweis aus Kamera und 2h-Zeitfenster.",
+strongestHint: "Stärkster Hinweis",
+near: "Nähe",
+timeWindow: "Zeitfenster",
+probability: "Wahrscheinlichkeit",
+basis: "Basis",
+events: "Ereignisse",
+topCamerasFor: (species: string) => `Top-Kameras für ${species}`,
+topCamerasText:
+  "Wahrscheinlichkeitsorientierte Verteilung nach Kamera.",
+noCameraHints: "Keine Kamera-Hinweise verfügbar.",
+topTimeWindowsFor: (species: string) =>
+  `Top-Zeitfenster für ${species}`,
+topTimeWindowsText: "Verdichtung nach 2h-Zeitfenstern.",
+noTimeWindowHints: "Keine Zeitfenster-Hinweise verfügbar.",
+matrix: "Kamera- × Zeitfenster-Matrix",
+matrixText: "Die stärksten Kombinationen aus Ort und Zeit.",
+noCombinations: "Keine belastbaren Kombinationen verfügbar.",
+  };
+}
+
 function WhereWhenPageHeader({
   period,
   revierValue,
   selectedSpecies,
+  language,
 }: {
   period: PeriodKey;
   revierValue: string;
   selectedSpecies?: string | null;
+  language: AppLanguage;
 }) {
+  const text = t(language);
+
   return (
     <section className="rounded-[32px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(201,149,46,0.16),transparent_24%),linear-gradient(135deg,rgba(255,255,255,0.06),rgba(255,255,255,0.03))] p-6 backdrop-blur-sm">
       <div>
         <div className="text-xs font-medium uppercase tracking-[0.22em] text-amber-200/80">
-          Where &amp; When
+          {text.eyebrow}
         </div>
-        <h1 className="mt-3 text-3xl font-semibold text-white">
-          Where &amp; When
-        </h1>
-        <p className="mt-2 text-sm text-white/68">
-          Wo und wann ausgewählte Arten im aktuellen Revier-Scope sichtbar werden.
-        </p>
+        <h1 className="mt-3 text-3xl font-semibold text-white">{text.title}</h1>
+        <p className="mt-2 text-sm text-white/68">{text.intro}</p>
       </div>
 
       <div className="mt-5 flex flex-wrap items-center gap-1.5">
@@ -184,8 +290,30 @@ function StatCard({
 export default async function WildlifeWhereWhenPage(props: {
   searchParams?: Promise<SearchParams> | SearchParams;
 }) {
-  const { activeMembership } = await requireActiveOrganization();
-  const activeOrganization = activeMembership.organizations;
+  const ctx = await requirePathAccess("/wildlife/wherewhen");
+
+  if (!ctx.user) {
+    throw new Error("Authenticated user required");
+  }
+
+  const cookieStore = await cookies();
+  const supabase = supabaseServer();
+
+  const { data: profileData } = await supabase
+    .from("profiles")
+    .select("preferred_language")
+    .eq("id", ctx.user.id)
+    .maybeSingle();
+
+  const language = resolveLanguage({
+    cookieLanguage: cookieStore.get(LOCALE_COOKIE)?.value,
+    profileLanguage: profileData?.preferred_language,
+  });
+
+  const text = t(language);
+  const activeOrganization = ctx.activeMembership?.organizations;
+  const speciesMetaRows = await loadSpeciesMeta();
+  const speciesMetaMap = buildSpeciesMetaMap(speciesMetaRows);
 
   const searchParams = props?.searchParams
     ? await Promise.resolve(props.searchParams)
@@ -202,16 +330,18 @@ export default async function WildlifeWhereWhenPage(props: {
   if (!activeOrganization) {
     return (
       <main className="space-y-8">
-        <WhereWhenPageHeader period={period} revierValue="all" />
-
+        <WhereWhenPageHeader
+          period={period}
+          revierValue="all"
+          language={language}
+        />
         <div className="rounded-[24px] border border-rose-300/20 bg-rose-300/10 p-4 text-sm text-rose-100">
-          Active organization not found.
+          {text.activeOrganizationNotFound}
         </div>
       </main>
     );
   }
 
-  const supabase = supabaseServer();
   const { startAt, endAt } = resolvePeriodRange(period);
 
   const { data: reviersData, error: reviersError } = await supabase
@@ -224,10 +354,13 @@ export default async function WildlifeWhereWhenPage(props: {
   if (reviersError) {
     return (
       <main className="space-y-8">
-        <WhereWhenPageHeader period={period} revierValue="all" />
-
+        <WhereWhenPageHeader
+          period={period}
+          revierValue="all"
+          language={language}
+        />
         <div className="rounded-[24px] border border-rose-300/20 bg-rose-300/10 p-4 text-sm text-rose-100">
-          Fehler beim Laden der Reviere: {reviersError.message}
+          {text.reviersLoadFailed} {reviersError.message}
         </div>
       </main>
     );
@@ -248,10 +381,13 @@ export default async function WildlifeWhereWhenPage(props: {
   if (allowedRevierIds.length === 0) {
     return (
       <main className="space-y-8">
-        <WhereWhenPageHeader period={period} revierValue="all" />
-
+        <WhereWhenPageHeader
+          period={period}
+          revierValue="all"
+          language={language}
+        />
         <div className="rounded-[24px] border border-white/10 bg-white/5 p-4 text-sm text-white/68">
-          Für die aktive Organisation sind derzeit keine aktiven Reviere vorhanden.
+          {text.noActiveGrounds}
         </div>
       </main>
     );
@@ -276,10 +412,10 @@ export default async function WildlifeWhereWhenPage(props: {
         <WhereWhenPageHeader
           period={period}
           revierValue={currentRevierValue}
+          language={language}
         />
-
         <div className="rounded-[24px] border border-rose-300/20 bg-rose-300/10 p-4 text-sm text-rose-100">
-          Fehler beim Laden der Kameras: {camerasError.message}
+          {text.camerasLoadFailed} {camerasError.message}
         </div>
       </main>
     );
@@ -300,10 +436,10 @@ export default async function WildlifeWhereWhenPage(props: {
         <WhereWhenPageHeader
           period={period}
           revierValue={currentRevierValue}
+          language={language}
         />
-
         <div className="rounded-[24px] border border-white/10 bg-white/5 p-4 text-sm text-white/68">
-          Für den aktuellen Revier-Scope sind keine Kameras vorhanden.
+          {text.noCamerasInScope}
         </div>
       </main>
     );
@@ -323,10 +459,10 @@ export default async function WildlifeWhereWhenPage(props: {
         <WhereWhenPageHeader
           period={period}
           revierValue={currentRevierValue}
+          language={language}
         />
-
         <div className="rounded-[24px] border border-rose-300/20 bg-rose-300/10 p-4 text-sm text-rose-100">
-          Fehler beim Laden der Events: {eventsError.message}
+          {text.eventsLoadFailed} {eventsError.message}
         </div>
       </main>
     );
@@ -345,11 +481,11 @@ export default async function WildlifeWhereWhenPage(props: {
           <WhereWhenPageHeader
             period={period}
             revierValue={currentRevierValue}
+            language={language}
           />
-
           <div className="rounded-[24px] border border-rose-300/20 bg-rose-300/10 p-4 text-sm text-rose-100">
-            Fehler beim Laden der Species-Zusammenfassung:{" "}
-            {err instanceof Error ? err.message : "unknown error"}
+            {text.speciesSummaryLoadFailed}{" "}
+            {err instanceof Error ? err.message : text.unknownError}
           </div>
         </main>
       );
@@ -451,6 +587,11 @@ export default async function WildlifeWhereWhenPage(props: {
     .slice(0, 8);
 
   const primaryHint = topComboEntries[0] ?? null;
+  const selectedSpeciesLabel = getSpeciesLabel(
+    selectedSpecies,
+    language,
+    speciesMetaMap
+  );
 
   return (
     <main className="space-y-8">
@@ -458,15 +599,14 @@ export default async function WildlifeWhereWhenPage(props: {
         period={period}
         revierValue={currentRevierValue}
         selectedSpecies={selectedSpecies}
+        language={language}
       />
 
       <section className="rounded-[28px] border border-white/10 bg-white/5 p-5 backdrop-blur-sm">
         <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
           <div>
-            <h2 className="text-lg font-medium text-white">Species Selection</h2>
-            <p className="text-sm text-white/65">
-              Analyse von Kamera- und Zeitfenstern für eine ausgewählte Art.
-            </p>
+            <h2 className="text-lg font-medium text-white">{text.speciesSelection}</h2>
+            <p className="text-sm text-white/65">{text.speciesSelectionText}</p>
           </div>
 
           <form
@@ -479,7 +619,7 @@ export default async function WildlifeWhereWhenPage(props: {
 
             <div className="flex flex-col gap-1">
               <label htmlFor="species" className="text-sm font-medium text-white">
-                Species
+                {text.species}
               </label>
               <select
                 id="species"
@@ -493,14 +633,14 @@ export default async function WildlifeWhereWhenPage(props: {
                     value={row.species}
                     className="bg-[#102018] text-white"
                   >
-                    {titleCase(row.species)} ({row.count})
+                    {getSpeciesLabel(row.species, language, speciesMetaMap)} ({row.count})
                   </option>
                 ))}
               </select>
             </div>
 
             <button className="rounded-[10px] border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/78 hover:border-amber-300/20 hover:bg-white/8 hover:text-white">
-              Update
+              {text.update}
             </button>
           </form>
         </div>
@@ -508,23 +648,23 @@ export default async function WildlifeWhereWhenPage(props: {
 
       {!selectedSpecies || totalSelectedSpeciesEvents === 0 ? (
         <div className="rounded-[24px] border border-white/10 bg-white/5 p-4 text-sm text-white/68">
-          Keine belastbaren Where-&amp;-When-Daten für den gewählten Zeitraum verfügbar.
+          {text.noWhereWhenData}
         </div>
       ) : (
         <>
           <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
             <StatCard
-              title="Species"
-              value={titleCase(selectedSpecies)}
-              subline="aktuelle Auswahl"
+              title={text.species}
+              value={selectedSpeciesLabel}
+              subline={text.currentSelection}
             />
             <StatCard
-              title="Species Events"
+              title={text.speciesEvents}
               value={totalSelectedSpeciesEvents}
-              subline="im Zeitraum"
+              subline={text.inPeriod}
             />
             <StatCard
-              title="Top Camera"
+              title={text.topCamera}
               value={
                 topCameraEntries[0]
                   ? cameraLabelById[topCameraEntries[0].cameraId] ?? topCameraEntries[0].cameraId
@@ -535,7 +675,7 @@ export default async function WildlifeWhereWhenPage(props: {
               }
             />
             <StatCard
-              title="Top Time Window"
+              title={text.topTimeWindow}
               value={topWindowEntries[0] ? fmtWindow(topWindowEntries[0].window2h) : "—"}
               subline={
                 topWindowEntries[0] ? fmtPct(topWindowEntries[0].probability) : "—"
@@ -545,41 +685,40 @@ export default async function WildlifeWhereWhenPage(props: {
 
           <section className="rounded-[28px] border border-white/10 bg-white/5 p-5 backdrop-blur-sm">
             <div className="mb-4">
-              <h2 className="text-lg font-medium text-white">Primary Hint</h2>
-              <p className="text-sm text-white/65">
-                Verdichteter Hinweis aus Kamera und 2h-Zeitfenster.
-              </p>
+              <h2 className="text-lg font-medium text-white">{text.primaryHint}</h2>
+              <p className="text-sm text-white/65">{text.primaryHintText}</p>
             </div>
 
             <div className="rounded-[20px] border border-white/10 bg-white/5 p-4">
-              <div className="text-sm text-white/55">Stärkster Hinweis</div>
+              <div className="text-sm text-white/55">{text.strongestHint}</div>
               <div className="mt-2 text-xl font-semibold text-white">
-                Nähe{" "}
+                {text.near}{" "}
                 {primaryHint
                   ? cameraLabelById[primaryHint.cameraId] ?? primaryHint.cameraId
                   : "—"}
               </div>
               <div className="mt-2 text-sm text-white/72">
-                Species: <span className="font-medium text-white">{titleCase(selectedSpecies)}</span>
+                {text.species}:{" "}
+                <span className="font-medium text-white">{selectedSpeciesLabel}</span>
               </div>
               <div className="text-sm text-white/72">
-                Zeitfenster:{" "}
+                {text.timeWindow}:{" "}
                 <span className="font-medium text-white">
                   {primaryHint ? fmtWindow(primaryHint.window2h) : "—"}
                 </span>
               </div>
               <div className="text-sm text-white/72">
-                Wahrscheinlichkeit:{" "}
+                {text.probability}:{" "}
                 <span className="font-medium text-white">
                   {primaryHint ? fmtPct(primaryHint.probability) : "—"}
                 </span>
               </div>
               <div className="text-sm text-white/72">
-                Basis:{" "}
+                {text.basis}:{" "}
                 <span className="font-medium text-white">
                   {primaryHint ? primaryHint.count : "—"}
                 </span>{" "}
-                Events
+                {text.events}
               </div>
             </div>
           </section>
@@ -588,11 +727,9 @@ export default async function WildlifeWhereWhenPage(props: {
             <div className="rounded-[28px] border border-white/10 bg-white/5 p-5 backdrop-blur-sm">
               <div className="mb-4">
                 <h2 className="text-lg font-medium text-white">
-                  Top Cameras for {titleCase(selectedSpecies)}
+                  {text.topCamerasFor(selectedSpeciesLabel)}
                 </h2>
-                <p className="text-sm text-white/65">
-                  Wahrscheinlichkeitsorientierte Verteilung nach Kamera.
-                </p>
+                <p className="text-sm text-white/65">{text.topCamerasText}</p>
               </div>
 
               <div className="space-y-3">
@@ -605,15 +742,13 @@ export default async function WildlifeWhereWhenPage(props: {
                       {cameraLabelById[row.cameraId] ?? row.cameraId}
                     </span>
                     <span className="text-white/78">
-                      {row.count} Events · {fmtPct(row.probability)}
+                      {row.count} {text.events} · {fmtPct(row.probability)}
                     </span>
                   </div>
                 ))}
 
                 {topCameraEntries.length === 0 && (
-                  <div className="text-sm text-white/68">
-                    Keine Kamera-Hinweise verfügbar.
-                  </div>
+                  <div className="text-sm text-white/68">{text.noCameraHints}</div>
                 )}
               </div>
             </div>
@@ -621,11 +756,9 @@ export default async function WildlifeWhereWhenPage(props: {
             <div className="rounded-[28px] border border-white/10 bg-white/5 p-5 backdrop-blur-sm">
               <div className="mb-4">
                 <h2 className="text-lg font-medium text-white">
-                  Top Time Windows for {titleCase(selectedSpecies)}
+                  {text.topTimeWindowsFor(selectedSpeciesLabel)}
                 </h2>
-                <p className="text-sm text-white/65">
-                  Verdichtung nach 2h-Fenstern.
-                </p>
+                <p className="text-sm text-white/65">{text.topTimeWindowsText}</p>
               </div>
 
               <div className="space-y-3">
@@ -636,15 +769,13 @@ export default async function WildlifeWhereWhenPage(props: {
                   >
                     <span className="text-white/78">{fmtWindow(row.window2h)}</span>
                     <span className="text-white/78">
-                      {row.count} Events · {fmtPct(row.probability)}
+                      {row.count} {text.events} · {fmtPct(row.probability)}
                     </span>
                   </div>
                 ))}
 
                 {topWindowEntries.length === 0 && (
-                  <div className="text-sm text-white/68">
-                    Keine Zeitfenster-Hinweise verfügbar.
-                  </div>
+                  <div className="text-sm text-white/68">{text.noTimeWindowHints}</div>
                 )}
               </div>
             </div>
@@ -652,10 +783,8 @@ export default async function WildlifeWhereWhenPage(props: {
 
           <section className="rounded-[28px] border border-white/10 bg-white/5 p-5 backdrop-blur-sm">
             <div className="mb-4">
-              <h2 className="text-lg font-medium text-white">Camera × Time Window Matrix</h2>
-              <p className="text-sm text-white/65">
-                Die stärksten Kombinationen aus Ort und Zeit.
-              </p>
+              <h2 className="text-lg font-medium text-white">{text.matrix}</h2>
+              <p className="text-sm text-white/65">{text.matrixText}</p>
             </div>
 
             <div className="space-y-3">
@@ -670,22 +799,22 @@ export default async function WildlifeWhereWhenPage(props: {
                         #{idx + 1} · {cameraLabelById[row.cameraId] ?? row.cameraId}
                       </div>
                       <div className="mt-1 text-xs text-white/45">
-                        Zeitfenster {fmtWindow(row.window2h)}
+                        {text.timeWindow} {fmtWindow(row.window2h)}
                       </div>
                     </div>
 
                     <div className="text-right">
                       <div className="font-medium text-white">{fmtPct(row.probability)}</div>
-                      <div className="text-xs text-white/45">{row.count} Events</div>
+                      <div className="text-xs text-white/45">
+                        {row.count} {text.events}
+                      </div>
                     </div>
                   </div>
                 </div>
               ))}
 
               {topComboEntries.length === 0 && (
-                <div className="text-sm text-white/68">
-                  Keine belastbaren Kombinationen verfügbar.
-                </div>
+                <div className="text-sm text-white/68">{text.noCombinations}</div>
               )}
             </div>
           </section>

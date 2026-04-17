@@ -1,6 +1,7 @@
-// src/app/orga/members/invite/page.tsx #13
+// src/app/orga/members/invite/page.tsx #17
 import Link from "next/link";
 import { randomBytes } from "crypto";
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 
@@ -14,6 +15,11 @@ import {
   canInviteMember,
   resolveSubscriptionState,
 } from "@/lib/billing/subscriptionPolicy";
+import {
+  LOCALE_COOKIE,
+  resolveLanguage,
+  type AppLanguage,
+} from "@/lib/i18n";
 
 type SubscriptionPolicyRow = {
   status: "trialing" | "active" | "past_due" | "canceled" | "expired";
@@ -23,12 +29,160 @@ type SubscriptionPolicyRow = {
   max_members: number;
 };
 
-type AppLanguage = "de" | "en";
+async function resolveUiLanguageForProtectedPath(pathname: string) {
+  const ctx = await requirePathAccess(pathname);
+
+  if (!ctx.user) {
+    throw new Error("Authenticated user required");
+  }
+
+  const supabase = supabaseServer();
+  const cookieStore = await cookies();
+
+  const { data: profileData } = await supabase
+    .from("profiles")
+    .select("preferred_language")
+    .eq("id", ctx.user.id)
+    .maybeSingle();
+
+  const language = resolveLanguage({
+    cookieLanguage: cookieStore.get(LOCALE_COOKIE)?.value,
+    profileLanguage: profileData?.preferred_language,
+  });
+
+  return { ctx, supabase, language };
+}
+
+function t(language: AppLanguage) {
+  return language === "en"
+    ? {
+        invalidEmail: "Please enter a valid email address.",
+        invalidRole: "Invalid role.",
+        invalidLanguage: "Invalid language.",
+        invalidExpiry: "Expiry must be between 1 and 90 days.",
+        openInviteExists: "There is already an open invitation for this email address.",
+        noSubscription: "No subscription was found for this organization.",
+        inviteCreatedMailFailedPrefix:
+          "Invitation was created, but email delivery failed:",
+        eyebrow: "Invite Member",
+        title: "Invite member",
+        intro: "Create a new invitation for the active organization here.",
+        demoReadOnly: "Demo mode: changes are disabled.",
+        memberUsageTitle: "Member usage",
+        usageComposition: (active: number, open: number) =>
+          `Composition: ${active} active members + ${open} open invites`,
+        trialExpiredHint:
+          "Note: the trial has already expired logically and is effectively treated as `expired`.",
+        emailLabel: "Email *",
+        roleLabel: "Role",
+        validDaysLabel: "Valid for (days)",
+        languageLabel: "Language",
+        german: "Deutsch",
+        english: "English",
+        inviteBlocked: "Invitation blocked",
+        demoMode: "Demo mode",
+        createInvite: "Create invitation",
+        saving: "Saving...",
+        cancel: "Cancel",
+        noteTitle: "Important note",
+        noteDemo:
+          "This is a demo account. Records cannot be removed, added or changed.",
+        noteNormal:
+          "New invitations are sent by email. The recipient can then create their account and accept the invitation directly.",
+        roleOverviewTitle: "Role overview",
+        roleOverviewText:
+          "This overview helps with choosing the appropriate role for new members.",
+        roleCol: "Role",
+        meaningCol: "Meaning",
+      }
+    : {
+        invalidEmail: "Bitte eine gültige E-Mail-Adresse eingeben.",
+        invalidRole: "Ungültige Rolle.",
+        invalidLanguage: "Ungültige Sprache.",
+        invalidExpiry: "Die Gültigkeitsdauer muss zwischen 1 und 90 Tagen liegen.",
+        openInviteExists: "Für diese E-Mail existiert bereits eine offene Einladung.",
+        noSubscription: "Für diese Organisation wurde kein Abo gefunden.",
+        inviteCreatedMailFailedPrefix:
+          "Einladung wurde angelegt, aber E-Mail-Versand fehlgeschlagen:",
+        eyebrow: "Mitglied einladen",
+        title: "Mitglied einladen",
+        intro: "Lege hier eine neue Einladung für die aktive Organisation an.",
+        demoReadOnly: "Demo-Modus: Änderungen sind deaktiviert.",
+        memberUsageTitle: "Mitglieder-Nutzung",
+        usageComposition: (active: number, open: number) =>
+          `Zusammensetzung: ${active} aktive Mitglieder + ${open} offene Einladungen`,
+        trialExpiredHint:
+          "Hinweis: Der Trial ist fachlich bereits abgelaufen und wird effektiv als `expired` behandelt.",
+        emailLabel: "E-Mail *",
+        roleLabel: "Rolle",
+        validDaysLabel: "Gültig für (Tage)",
+        languageLabel: "Sprache",
+        german: "Deutsch",
+        english: "Englisch",
+        inviteBlocked: "Einladung gesperrt",
+        demoMode: "Demo-Modus",
+        createInvite: "Einladung anlegen",
+        saving: "Speichern...",
+        cancel: "Abbrechen",
+        noteTitle: "Wichtiger Hinweis",
+        noteDemo:
+          "Das ist ein Demo-Account. Datensätze können weder entfernt noch hinzugefügt oder geändert werden.",
+        noteNormal:
+          "Neue Einladungen werden per E-Mail verschickt. Der Empfänger kann danach seinen Account anlegen und die Einladung direkt annehmen.",
+        roleOverviewTitle: "Rollenübersicht",
+        roleOverviewText:
+          "Diese Übersicht hilft bei der Auswahl der passenden Rolle für neue Mitglieder.",
+        roleCol: "Rolle",
+        meaningCol: "Bedeutung",
+      };
+}
+
+function getRoleDescriptions(language: AppLanguage) {
+  return language === "en"
+    ? [
+        {
+          role: "Owner",
+          text: "Full administrative access to organization, members, grounds and later subscription functions.",
+        },
+        {
+          role: "Admin",
+          text: "Operational administration of the platform without necessarily having the same ownership role as an owner.",
+        },
+        {
+          role: "Member",
+          text: "Regular working access for daily use within the shared organizational structure.",
+        },
+        {
+          role: "Viewer",
+          text: "Read-only access for users who should see content but not change administrative settings.",
+        },
+      ]
+    : [
+        {
+          role: "Owner",
+          text: "Voller administrativer Zugriff auf Organisation, Mitglieder, Reviere und spätere Abo-Funktionen.",
+        },
+        {
+          role: "Admin",
+          text: "Operative Verwaltung der Plattform, ohne zwingend dieselbe Eigentümerrolle wie ein Owner zu haben.",
+        },
+        {
+          role: "Member",
+          text: "Regulärer Arbeitszugang für die tägliche Nutzung innerhalb der freigegebenen Organisationsstruktur.",
+        },
+        {
+          role: "Viewer",
+          text: "Lesender Zugriff für Nutzer, die Inhalte sehen, aber nicht administrativ verändern sollen.",
+        },
+      ];
+}
 
 async function createInvite(formData: FormData) {
   "use server";
 
-  const ctx = await requirePathAccess("/orga/members/invite");
+  const { ctx, supabase, language } = await resolveUiLanguageForProtectedPath(
+    "/orga/members/invite"
+  );
   redirectIfDemoWrite(ctx, "/orga/members/invite?demo_read_only=1");
 
   if (!ctx.activeMembership) {
@@ -37,6 +191,7 @@ async function createInvite(formData: FormData) {
 
   const organization = ctx.activeMembership.organizations;
   const invitedByUserId = ctx.user.id;
+  const text = t(language);
 
   if (!organization) {
     throw new Error("Active organization not found");
@@ -45,33 +200,31 @@ async function createInvite(formData: FormData) {
   const email = String(formData.get("email") ?? "").trim().toLowerCase();
   const inviteRole = String(formData.get("role") ?? "member").trim() || "member";
   const expiresInDaysRaw = String(formData.get("expires_in_days") ?? "14").trim();
-  const inviteLanguageRaw = String(formData.get("language") ?? "de").trim();
+  const inviteLanguageRaw = String(formData.get("language") ?? "").trim();
 
   if (!email || !email.includes("@")) {
-    throw new Error("Bitte eine gültige E-Mail-Adresse eingeben.");
+    throw new Error(text.invalidEmail);
   }
 
   if (!["owner", "admin", "member", "viewer"].includes(inviteRole)) {
-    throw new Error("Ungültige Rolle.");
+    throw new Error(text.invalidRole);
   }
 
   if (!["de", "en"].includes(inviteLanguageRaw)) {
-    throw new Error("Ungültige Sprache.");
+    throw new Error(text.invalidLanguage);
   }
 
   const inviteLanguage = inviteLanguageRaw as AppLanguage;
   const expiresInDays = Number(expiresInDaysRaw);
 
   if (!Number.isFinite(expiresInDays) || expiresInDays < 1 || expiresInDays > 90) {
-    throw new Error("Expiry muss zwischen 1 und 90 Tagen liegen.");
+    throw new Error(text.invalidExpiry);
   }
 
   const expiresAt = new Date();
   expiresAt.setDate(expiresAt.getDate() + Math.round(expiresInDays));
 
   const token = randomBytes(24).toString("hex");
-
-  const supabase = supabaseServer();
   const nowIso = new Date().toISOString();
 
   const { data: existingPending, error: existingPendingError } = await supabase
@@ -87,7 +240,7 @@ async function createInvite(formData: FormData) {
   }
 
   if (existingPending) {
-    throw new Error("Für diese E-Mail existiert bereits eine offene Einladung.");
+    throw new Error(text.openInviteExists);
   }
 
   const [subscriptionResult, memberCountResult, inviteCountResult] = await Promise.all([
@@ -115,7 +268,7 @@ async function createInvite(formData: FormData) {
   }
 
   if (!subscriptionResult.data) {
-    throw new Error("Für diese Organization wurde keine Subscription gefunden.");
+    throw new Error(text.noSubscription);
   }
 
   if (memberCountResult.error) {
@@ -135,6 +288,7 @@ async function createInvite(formData: FormData) {
     currentCameraCount: 0,
     activeMemberCount: memberCountResult.count ?? 0,
     openInviteCount: inviteCountResult.count ?? 0,
+    language,
   });
 
   if (!invitePolicy.allowed) {
@@ -199,32 +353,13 @@ async function createInvite(formData: FormData) {
       })
       .eq("id", inviteRow.id);
 
-    throw new Error(`Einladung wurde angelegt, aber E-Mail-Versand fehlgeschlagen: ${message}`);
+    throw new Error(`${text.inviteCreatedMailFailedPrefix} ${message}`);
   }
 
   revalidatePath("/orga/members");
   revalidatePath("/orga/subscription");
   redirect("/orga/members?invited=1");
 }
-
-const roleDescriptions = [
-  {
-    role: "Owner",
-    text: "Voller administrativer Zugriff auf Organization, Members, Reviere und spätere Subscription-Funktionen.",
-  },
-  {
-    role: "Admin",
-    text: "Operative Verwaltung der Plattform, ohne zwingend dieselbe Eigentümerrolle wie ein Owner zu haben.",
-  },
-  {
-    role: "Member",
-    text: "Regulärer Arbeitszugang für die tägliche Nutzung innerhalb der freigegebenen Organisationsstruktur.",
-  },
-  {
-    role: "Viewer",
-    text: "Lesender Zugriff für Nutzer, die Inhalte sehen, aber nicht administrativ verändern sollen.",
-  },
-];
 
 export default async function InviteMemberPage({
   searchParams,
@@ -234,7 +369,9 @@ export default async function InviteMemberPage({
   const params = (await searchParams) ?? {};
   const demoReadOnly = params.demo_read_only === "1";
 
-  const ctx = await requirePathAccess("/orga/members/invite");
+  const { ctx, supabase, language } = await resolveUiLanguageForProtectedPath(
+    "/orga/members/invite"
+  );
 
   if (!ctx.activeMembership) {
     throw new Error("Active organization context required");
@@ -247,8 +384,9 @@ export default async function InviteMemberPage({
     throw new Error("Active organization not found");
   }
 
-  const supabase = supabaseServer();
   const nowIso = new Date().toISOString();
+  const text = t(language);
+  const roleDescriptions = getRoleDescriptions(language);
 
   const [subscriptionResult, memberCountResult, inviteCountResult] = await Promise.all([
     supabase
@@ -277,7 +415,7 @@ export default async function InviteMemberPage({
   }
 
   if (!subscriptionResult.data) {
-    throw new Error("No subscription found for active organization");
+    throw new Error(text.noSubscription);
   }
 
   if (memberCountResult.error) {
@@ -297,6 +435,7 @@ export default async function InviteMemberPage({
     currentCameraCount: 0,
     activeMemberCount: memberCountResult.count ?? 0,
     openInviteCount: inviteCountResult.count ?? 0,
+    language,
   } as const;
 
   const resolvedState = resolveSubscriptionState(policyInput);
@@ -314,13 +453,13 @@ export default async function InviteMemberPage({
       <section className="rounded-[32px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(201,149,46,0.16),transparent_24%),linear-gradient(135deg,rgba(255,255,255,0.06),rgba(255,255,255,0.03))] p-6 backdrop-blur-sm">
         <div>
           <div className="text-xs font-medium uppercase tracking-[0.22em] text-amber-200/80">
-            Invite Member
+            {text.eyebrow}
           </div>
           <h1 className="mt-3 text-3xl font-semibold tracking-tight text-white">
-            Mitglied einladen
+            {text.title}
           </h1>
           <p className="mt-2 max-w-3xl text-sm text-white/68">
-            Lege hier eine neue Einladung für die aktive Organisation an.
+            {text.intro}
           </p>
         </div>
       </section>
@@ -328,7 +467,7 @@ export default async function InviteMemberPage({
       {demoReadOnly ? (
         <section className="rounded-[24px] border border-amber-300/20 bg-amber-300/10 p-4">
           <p className="text-sm text-amber-100">
-            Demo-Modus: Änderungen sind deaktiviert.
+            {text.demoReadOnly}
           </p>
         </section>
       ) : null}
@@ -347,7 +486,7 @@ export default async function InviteMemberPage({
                 invitePolicy.allowed ? "text-sky-100" : "text-rose-100"
               }`}
             >
-              Member-Nutzung
+              {text.memberUsageTitle}
             </h2>
             <p
               className={`mt-1 text-sm leading-6 ${
@@ -361,8 +500,10 @@ export default async function InviteMemberPage({
                 invitePolicy.allowed ? "text-sky-100/70" : "text-rose-100/70"
               }`}
             >
-              Zusammensetzung: {policyInput.activeMemberCount} aktive Members +{" "}
-              {policyInput.openInviteCount} offene Invites
+              {text.usageComposition(
+                policyInput.activeMemberCount,
+                policyInput.openInviteCount
+              )}
             </p>
           </div>
 
@@ -388,8 +529,7 @@ export default async function InviteMemberPage({
 
         {resolvedState.effectiveStatus !== subscriptionResult.data.status ? (
           <p className="mt-3 text-xs text-rose-200">
-            Hinweis: Der Trial ist fachlich bereits abgelaufen und wird effektiv als
-            `expired` behandelt.
+            {text.trialExpiredHint}
           </p>
         ) : null}
       </section>
@@ -403,7 +543,7 @@ export default async function InviteMemberPage({
                   htmlFor="email"
                   className="mb-2 block text-sm font-medium text-white"
                 >
-                  E-Mail *
+                  {text.emailLabel}
                 </label>
                 <input
                   id="email"
@@ -421,7 +561,7 @@ export default async function InviteMemberPage({
                   htmlFor="role"
                   className="mb-2 block text-sm font-medium text-white"
                 >
-                  Rolle
+                  {text.roleLabel}
                 </label>
                 <select
                   id="role"
@@ -450,7 +590,7 @@ export default async function InviteMemberPage({
                   htmlFor="expires_in_days"
                   className="mb-2 block text-sm font-medium text-white"
                 >
-                  Gültig für (Tage)
+                  {text.validDaysLabel}
                 </label>
                 <input
                   id="expires_in_days"
@@ -470,20 +610,20 @@ export default async function InviteMemberPage({
                   htmlFor="language"
                   className="mb-2 block text-sm font-medium text-white"
                 >
-                  Sprache
+                  {text.languageLabel}
                 </label>
                 <select
                   id="language"
                   name="language"
-                  defaultValue="de"
+                  defaultValue={language}
                   disabled={!invitePolicy.allowed || isDemo}
                   className="w-full rounded-[10px] border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none"
                 >
                   <option value="de" className="bg-[#102018] text-white">
-                    Deutsch
+                    {text.german}
                   </option>
                   <option value="en" className="bg-[#102018] text-white">
-                    English
+                    {text.english}
                   </option>
                 </select>
               </div>
@@ -493,39 +633,37 @@ export default async function InviteMemberPage({
               <SubmitButton
                 idleLabel={
                   !invitePolicy.allowed
-                    ? "Einladung gesperrt"
+                    ? text.inviteBlocked
                     : isDemo
-                      ? "Demo-Modus"
-                      : "Einladung anlegen"
+                      ? text.demoMode
+                      : text.createInvite
                 }
-                pendingLabel="Speichert..."
+                pendingLabel={text.saving}
               />
 
               <Link
                 href="/orga/members"
                 className="rounded-[10px] border border-white/10 bg-white/5 px-4 py-2 text-sm text-white/78 hover:border-amber-300/20 hover:bg-white/8 hover:text-white"
               >
-                Abbrechen
+                {text.cancel}
               </Link>
             </div>
           </form>
         </section>
 
         <aside className="rounded-[28px] border border-amber-300/20 bg-amber-300/10 p-6 backdrop-blur-sm">
-          <h2 className="text-lg font-medium text-amber-100">Wichtiger Hinweis</h2>
+          <h2 className="text-lg font-medium text-amber-100">{text.noteTitle}</h2>
           <p className="mt-2 text-sm leading-6 text-amber-100/80">
-            {isDemo
-              ? "Das ist ein Demo-Account. Datensätze können weder entfernt noch hinzugefügt oder geändert werden."
-              : "Neue Einladungen werden per E-Mail verschickt. Der Empfänger kann danach seinen Account anlegen und die Einladung direkt annehmen."}
+            {isDemo ? text.noteDemo : text.noteNormal}
           </p>
         </aside>
       </section>
 
       <section className="rounded-[28px] border border-white/10 bg-white/5 backdrop-blur-sm">
         <div className="border-b border-white/8 px-6 py-4">
-          <h2 className="text-lg font-medium text-white">Rollenübersicht</h2>
+          <h2 className="text-lg font-medium text-white">{text.roleOverviewTitle}</h2>
           <p className="mt-1 text-sm text-white/65">
-            Diese Übersicht hilft bei der Auswahl der passenden Rolle für neue Mitglieder.
+            {text.roleOverviewText}
           </p>
         </div>
 
@@ -533,8 +671,8 @@ export default async function InviteMemberPage({
           <table className="min-w-full text-sm">
             <thead className="bg-white/5 text-left text-white/55">
               <tr>
-                <th className="px-6 py-3 font-medium">Rolle</th>
-                <th className="px-6 py-3 font-medium">Bedeutung</th>
+                <th className="px-6 py-3 font-medium">{text.roleCol}</th>
+                <th className="px-6 py-3 font-medium">{text.meaningCol}</th>
               </tr>
             </thead>
             <tbody>

@@ -1,13 +1,24 @@
-// src/app/wildlife/species/page.tsx #2
+// src/app/wildlife/species/page.tsx #4
 export const runtime = "nodejs";
 
 import Link from "next/link";
+import { cookies } from "next/headers";
 import { supabaseServer } from "@/lib/supabaseServer";
-import { requireActiveOrganization } from "@/lib/auth";
+import { requirePathAccess } from "@/lib/authz";
+import {
+  LOCALE_COOKIE,
+  resolveLanguage,
+  type AppLanguage,
+} from "@/lib/i18n";
 import {
   resolveRevierScope,
   type RevierOption,
 } from "@/lib/intelligence/revierScope";
+import {
+  buildSpeciesMetaMap,
+  getSpeciesLabel,
+  loadSpeciesMeta,
+} from "@/lib/speciesMeta";
 
 type PeriodKey = "30d" | "90d" | "365d";
 
@@ -57,16 +68,6 @@ function resolvePeriodRange(period: PeriodKey) {
   };
 }
 
-function prettySpecies(value: string | null | undefined) {
-  if (!value) return "—";
-  return value.replaceAll("_", " ");
-}
-
-function titleCase(value: string | null | undefined) {
-  const s = prettySpecies(value);
-  return s.replace(/\b\w/g, (m) => m.toUpperCase());
-}
-
 function buildHref(period: PeriodKey, revierValue: string) {
   const params = new URLSearchParams();
   params.set("period", period);
@@ -99,23 +100,117 @@ async function fetchEventSpeciesSummaryChunked(
   return rows;
 }
 
+function t(language: AppLanguage) {
+  if (language === "en") {
+    return {
+      eyebrow: "Species",
+      title: "Species",
+      intro:
+        "Species overview, frequencies and focal points for the current ground scope.",
+      activeOrganizationNotFound: "Active organization not found.",
+      reviersLoadFailed: "Failed to load grounds:",
+      noActiveGrounds:
+        "There are currently no active grounds for the active organization.",
+      camerasLoadFailed: "Failed to load cameras:",
+      noCamerasInScope:
+        "There are no cameras for the current ground scope.",
+      eventsLoadFailed: "Failed to load events:",
+      speciesSummaryLoadFailed: "Failed to load species summary:",
+      unknownError: "unknown error",
+      observedSpecies: "Observed Species",
+      inPeriod: "in period",
+      speciesEvents: "Species Events",
+      withSpeciesSummary: "with species summary",
+      observedAnimals: "Observed Animals",
+      aggregated: "aggregated",
+      camerasInScope: "Cameras In Scope",
+      currentGroundScope: "current ground scope",
+      topSpecies: "Top Species",
+      topSpeciesText:
+        "Quick look at the most frequent species in the selected period.",
+      topCamera: "Top camera",
+      animals: "animals",
+      noSpeciesData:
+        "No species data in the selected period yet.",
+      speciesOverview: "Species Overview",
+      speciesOverviewText:
+        "Detailed species overview for the current ground scope.",
+      noSpeciesObservations:
+        "No species observations found in the selected period.",
+      species: "Species",
+      events: "Events",
+      observedAnimalsCol: "Observed Animals",
+      avgPerEvent: "Avg / Event",
+      max: "Max",
+      topCameraCol: "Top Camera",
+      avgRelevance: "Avg Relevance",
+    };
+  }
+
+  return {
+eyebrow: "Arten",
+title: "Arten",
+intro:
+  "Artenübersicht, Häufigkeiten und Schwerpunkte für den aktuellen Revier-Scope.",
+activeOrganizationNotFound: "Aktive Organisation nicht gefunden.",
+reviersLoadFailed: "Fehler beim Laden der Reviere:",
+noActiveGrounds:
+  "Für die aktive Organisation sind derzeit keine aktiven Reviere vorhanden.",
+camerasLoadFailed: "Fehler beim Laden der Kameras:",
+noCamerasInScope:
+  "Für den aktuellen Revier-Scope sind keine Kameras vorhanden.",
+eventsLoadFailed: "Fehler beim Laden der Ereignisse:",
+speciesSummaryLoadFailed: "Fehler beim Laden der Artenzusammenfassung:",
+unknownError: "Unbekannter Fehler",
+observedSpecies: "Beobachtete Arten",
+inPeriod: "im Zeitraum",
+speciesEvents: "Arten-Ereignisse",
+withSpeciesSummary: "mit Artenzusammenfassung",
+observedAnimals: "Beobachtete Tiere",
+aggregated: "aggregiert",
+camerasInScope: "Kameras im Scope",
+currentGroundScope: "Aktueller Revier-Scope",
+topSpecies: "Top-Arten",
+topSpeciesText:
+  "Schnellblick auf die häufigsten Arten im gewählten Zeitraum.",
+topCamera: "Top-Kamera",
+animals: "Tiere",
+noSpeciesData:
+  "Noch keine Artdaten im gewählten Zeitraum.",
+speciesOverview: "Artenübersicht",
+speciesOverviewText:
+  "Detaillierte Artenübersicht für den aktuellen Revier-Scope.",
+noSpeciesObservations:
+  "Keine Artenbeobachtungen im gewählten Zeitraum gefunden.",
+species: "Art",
+events: "Ereignisse",
+observedAnimalsCol: "Beobachtete Tiere",
+avgPerEvent: "Ø / Ereignis",
+max: "Max.",
+topCameraCol: "Top-Kamera",
+avgRelevance: "Ø Relevanz",
+  };
+}
+
 function SpeciesPageHeader({
   period,
   revierValue,
+  language,
 }: {
   period: PeriodKey;
   revierValue: string;
+  language: AppLanguage;
 }) {
+  const text = t(language);
+
   return (
     <section className="rounded-[32px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(201,149,46,0.16),transparent_24%),linear-gradient(135deg,rgba(255,255,255,0.06),rgba(255,255,255,0.03))] p-6 backdrop-blur-sm">
       <div>
         <div className="text-xs font-medium uppercase tracking-[0.22em] text-amber-200/80">
-          Species
+          {text.eyebrow}
         </div>
-        <h1 className="mt-3 text-3xl font-semibold text-white">Species</h1>
-        <p className="mt-2 text-sm text-white/68">
-          Artenübersicht, Häufigkeiten und Schwerpunkte für den aktuellen Revier-Scope.
-        </p>
+        <h1 className="mt-3 text-3xl font-semibold text-white">{text.title}</h1>
+        <p className="mt-2 text-sm text-white/68">{text.intro}</p>
       </div>
 
       <div className="mt-5 flex flex-wrap items-center gap-1.5">
@@ -161,8 +256,30 @@ function StatCard({
 export default async function WildlifeSpeciesPage(props: {
   searchParams?: Promise<SearchParams> | SearchParams;
 }) {
-  const { activeMembership } = await requireActiveOrganization();
-  const activeOrganization = activeMembership.organizations;
+  const ctx = await requirePathAccess("/wildlife/species");
+
+  if (!ctx.user) {
+    throw new Error("Authenticated user required");
+  }
+
+  const cookieStore = await cookies();
+  const supabase = supabaseServer();
+
+  const { data: profileData } = await supabase
+    .from("profiles")
+    .select("preferred_language")
+    .eq("id", ctx.user.id)
+    .maybeSingle();
+
+  const language = resolveLanguage({
+    cookieLanguage: cookieStore.get(LOCALE_COOKIE)?.value,
+    profileLanguage: profileData?.preferred_language,
+  });
+
+  const text = t(language);
+  const activeOrganization = ctx.activeMembership?.organizations;
+  const speciesMetaRows = await loadSpeciesMeta();
+  const speciesMetaMap = buildSpeciesMetaMap(speciesMetaRows);
 
   const searchParams = props?.searchParams
     ? await Promise.resolve(props.searchParams)
@@ -179,16 +296,14 @@ export default async function WildlifeSpeciesPage(props: {
   if (!activeOrganization) {
     return (
       <main className="space-y-8">
-        <SpeciesPageHeader period={period} revierValue="all" />
-
+        <SpeciesPageHeader period={period} revierValue="all" language={language} />
         <div className="rounded-[24px] border border-rose-300/20 bg-rose-300/10 p-4 text-sm text-rose-100">
-          Active organization not found.
+          {text.activeOrganizationNotFound}
         </div>
       </main>
     );
   }
 
-  const supabase = supabaseServer();
   const { startAt, endAt } = resolvePeriodRange(period);
 
   const { data: reviersData, error: reviersError } = await supabase
@@ -201,10 +316,9 @@ export default async function WildlifeSpeciesPage(props: {
   if (reviersError) {
     return (
       <main className="space-y-8">
-        <SpeciesPageHeader period={period} revierValue="all" />
-
+        <SpeciesPageHeader period={period} revierValue="all" language={language} />
         <div className="rounded-[24px] border border-rose-300/20 bg-rose-300/10 p-4 text-sm text-rose-100">
-          Fehler beim Laden der Reviere: {reviersError.message}
+          {text.reviersLoadFailed} {reviersError.message}
         </div>
       </main>
     );
@@ -225,10 +339,9 @@ export default async function WildlifeSpeciesPage(props: {
   if (allowedRevierIds.length === 0) {
     return (
       <main className="space-y-8">
-        <SpeciesPageHeader period={period} revierValue="all" />
-
+        <SpeciesPageHeader period={period} revierValue="all" language={language} />
         <div className="rounded-[24px] border border-white/10 bg-white/5 p-4 text-sm text-white/68">
-          Für die aktive Organisation sind derzeit keine aktiven Reviere vorhanden.
+          {text.noActiveGrounds}
         </div>
       </main>
     );
@@ -253,10 +366,10 @@ export default async function WildlifeSpeciesPage(props: {
         <SpeciesPageHeader
           period={period}
           revierValue={currentRevierValue}
+          language={language}
         />
-
         <div className="rounded-[24px] border border-rose-300/20 bg-rose-300/10 p-4 text-sm text-rose-100">
-          Fehler beim Laden der Kameras: {camerasError.message}
+          {text.camerasLoadFailed} {camerasError.message}
         </div>
       </main>
     );
@@ -277,10 +390,10 @@ export default async function WildlifeSpeciesPage(props: {
         <SpeciesPageHeader
           period={period}
           revierValue={currentRevierValue}
+          language={language}
         />
-
         <div className="rounded-[24px] border border-white/10 bg-white/5 p-4 text-sm text-white/68">
-          Für den aktuellen Revier-Scope sind keine Kameras vorhanden.
+          {text.noCamerasInScope}
         </div>
       </main>
     );
@@ -300,10 +413,10 @@ export default async function WildlifeSpeciesPage(props: {
         <SpeciesPageHeader
           period={period}
           revierValue={currentRevierValue}
+          language={language}
         />
-
         <div className="rounded-[24px] border border-rose-300/20 bg-rose-300/10 p-4 text-sm text-rose-100">
-          Fehler beim Laden der Events: {eventsError.message}
+          {text.eventsLoadFailed} {eventsError.message}
         </div>
       </main>
     );
@@ -322,11 +435,11 @@ export default async function WildlifeSpeciesPage(props: {
           <SpeciesPageHeader
             period={period}
             revierValue={currentRevierValue}
+            language={language}
           />
-
           <div className="rounded-[24px] border border-rose-300/20 bg-rose-300/10 p-4 text-sm text-rose-100">
-            Fehler beim Laden der Species-Zusammenfassung:{" "}
-            {err instanceof Error ? err.message : "unknown error"}
+            {text.speciesSummaryLoadFailed}{" "}
+            {err instanceof Error ? err.message : text.unknownError}
           </div>
         </main>
       );
@@ -397,43 +510,44 @@ export default async function WildlifeSpeciesPage(props: {
   const totalSpecies = speciesOverview.length;
   const totalObservedAnimals = speciesOverview.reduce((sum, s) => sum + s.observedAnimals, 0);
   const totalEvents = speciesOverview.reduce((sum, s) => sum + s.eventCount, 0);
-
   const topSpecies = speciesOverview.slice(0, 3);
 
   return (
     <main className="space-y-8">
-      <SpeciesPageHeader period={period} revierValue={currentRevierValue} />
+      <SpeciesPageHeader
+        period={period}
+        revierValue={currentRevierValue}
+        language={language}
+      />
 
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <StatCard
-          title="Observed Species"
+          title={text.observedSpecies}
           value={totalSpecies}
-          subline="im Zeitraum"
+          subline={text.inPeriod}
         />
         <StatCard
-          title="Species Events"
+          title={text.speciesEvents}
           value={totalEvents}
-          subline="mit Species-Summary"
+          subline={text.withSpeciesSummary}
         />
         <StatCard
-          title="Observed Animals"
+          title={text.observedAnimals}
           value={totalObservedAnimals}
-          subline="aggregiert"
+          subline={text.aggregated}
         />
         <StatCard
-          title="Cameras In Scope"
+          title={text.camerasInScope}
           value={cameraList.length}
-          subline="aktueller Revier-Scope"
+          subline={text.currentGroundScope}
         />
       </section>
 
       <section className="grid gap-4 lg:grid-cols-[0.8fr_1.2fr]">
         <div className="rounded-[28px] border border-white/10 bg-white/5 p-5 backdrop-blur-sm">
           <div className="mb-4">
-            <h2 className="text-lg font-medium text-white">Top Species</h2>
-            <p className="text-sm text-white/65">
-              Schnellblick auf die häufigsten Arten im gewählten Zeitraum.
-            </p>
+            <h2 className="text-lg font-medium text-white">{text.topSpecies}</h2>
+            <p className="text-sm text-white/65">{text.topSpeciesText}</p>
           </div>
 
           <div className="space-y-3">
@@ -444,9 +558,11 @@ export default async function WildlifeSpeciesPage(props: {
               >
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                    <div className="font-medium text-white">{titleCase(row.species)}</div>
+                    <div className="font-medium text-white">
+                      {getSpeciesLabel(row.species, language, speciesMetaMap)}
+                    </div>
                     <div className="mt-1 text-xs text-white/45">
-                      Top Camera:{" "}
+                      {text.topCamera}:{" "}
                       {row.topCameraId
                         ? cameraLabelById[row.topCameraId] ?? row.topCameraId
                         : "—"}
@@ -454,9 +570,9 @@ export default async function WildlifeSpeciesPage(props: {
                   </div>
 
                   <div className="text-right">
-                    <div className="font-medium text-white">{row.eventCount} Events</div>
+                    <div className="font-medium text-white">{row.eventCount} {text.events}</div>
                     <div className="text-xs text-white/45">
-                      {row.observedAnimals} Tiere
+                      {row.observedAnimals} {text.animals}
                     </div>
                   </div>
                 </div>
@@ -464,37 +580,33 @@ export default async function WildlifeSpeciesPage(props: {
             ))}
 
             {topSpecies.length === 0 && (
-              <div className="text-sm text-white/68">
-                Noch keine Species-Daten im gewählten Zeitraum.
-              </div>
+              <div className="text-sm text-white/68">{text.noSpeciesData}</div>
             )}
           </div>
         </div>
 
         <div className="rounded-[28px] border border-white/10 bg-white/5 p-5 backdrop-blur-sm">
           <div className="mb-4">
-            <h2 className="text-lg font-medium text-white">Species Overview</h2>
-            <p className="text-sm text-white/65">
-              Detaillierte Artenübersicht für den aktuellen Revier-Scope.
-            </p>
+            <h2 className="text-lg font-medium text-white">{text.speciesOverview}</h2>
+            <p className="text-sm text-white/65">{text.speciesOverviewText}</p>
           </div>
 
           {speciesOverview.length === 0 ? (
             <div className="rounded-[14px] border border-white/10 bg-white/5 p-4 text-sm text-white/68">
-              Keine Species-Beobachtungen im gewählten Zeitraum gefunden.
+              {text.noSpeciesObservations}
             </div>
           ) : (
             <div className="overflow-x-auto">
               <table className="min-w-full border-collapse text-sm">
                 <thead>
                   <tr className="border-b border-white/8 text-left text-white/55">
-                    <th className="px-3 py-2 font-medium">Species</th>
-                    <th className="px-3 py-2 font-medium">Events</th>
-                    <th className="px-3 py-2 font-medium">Observed Animals</th>
-                    <th className="px-3 py-2 font-medium">Avg / Event</th>
-                    <th className="px-3 py-2 font-medium">Max</th>
-                    <th className="px-3 py-2 font-medium">Top Camera</th>
-                    <th className="px-3 py-2 font-medium">Avg Relevance</th>
+                    <th className="px-3 py-2 font-medium">{text.species}</th>
+                    <th className="px-3 py-2 font-medium">{text.events}</th>
+                    <th className="px-3 py-2 font-medium">{text.observedAnimalsCol}</th>
+                    <th className="px-3 py-2 font-medium">{text.avgPerEvent}</th>
+                    <th className="px-3 py-2 font-medium">{text.max}</th>
+                    <th className="px-3 py-2 font-medium">{text.topCameraCol}</th>
+                    <th className="px-3 py-2 font-medium">{text.avgRelevance}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -504,7 +616,7 @@ export default async function WildlifeSpeciesPage(props: {
                       className="border-b border-white/8 last:border-b-0"
                     >
                       <td className="px-3 py-2 font-medium text-white">
-                        {titleCase(row.species)}
+                        {getSpeciesLabel(row.species, language, speciesMetaMap)}
                       </td>
                       <td className="px-3 py-2 text-white/72">{row.eventCount}</td>
                       <td className="px-3 py-2 text-white/72">{row.observedAnimals}</td>
@@ -516,7 +628,7 @@ export default async function WildlifeSpeciesPage(props: {
                           : "—"}
                       </td>
                       <td className="px-3 py-2 text-white/72">
-                        {row.avgRelevance.toFixed(3)}
+                        {`${Math.round(row.avgRelevance * 100)}%`}
                       </td>
                     </tr>
                   ))}

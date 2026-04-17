@@ -1,12 +1,13 @@
-// src/app/api/invites/accept/route.ts #4
+// src/app/api/invites/accept/route.ts #5
 import { NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
 import { supabaseServer } from "@/lib/supabaseServer";
 import { supabaseAuthServer } from "@/lib/supabaseAuthServer";
-
-type AppLanguage = "de" | "en";
-
-const LOCALE_COOKIE = "venaris_locale";
+import {
+  LOCALE_COOKIE,
+  normalizeLanguage,
+  type AppLanguage,
+} from "@/lib/i18n";
 
 type InviteRow = {
   id: string;
@@ -23,10 +24,6 @@ type InviteRow = {
 function isExpired(expiresAt: string | null) {
   if (!expiresAt) return false;
   return new Date(expiresAt).getTime() < Date.now();
-}
-
-function normalizeLanguage(value: string | null | undefined): AppLanguage {
-  return value === "en" ? "en" : "de";
 }
 
 export async function POST(request: Request) {

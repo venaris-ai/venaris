@@ -1,18 +1,38 @@
-// src/app/api/ingest/route.ts
+// src/app/api/ingest/route.ts #2
 export const runtime = "nodejs";
 
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabaseServer";
 import { ingestFiles, safeJsonParse } from "@/lib/ingestCore";
+import { getLanguageFromRequest, type AppLanguage } from "@/lib/i18n";
 
-export async function POST(req: Request) {
+function t(language: AppLanguage) {
+  return language === "en"
+    ? {
+        ingestTokenRequired: "x-ingest-token required",
+        invalidIngestToken: "invalid ingest token",
+        noFilesProvided: "no files provided (file or files/files[])",
+        ingestCrashed: "ingest crashed",
+      }
+    : {
+        ingestTokenRequired: "x-ingest-token erforderlich",
+        invalidIngestToken: "ungültiger ingest token",
+        noFilesProvided: "keine Dateien übergeben (file oder files/files[])",
+        ingestCrashed: "ingest abgestürzt",
+      };
+}
+
+export async function POST(req: NextRequest) {
+  const language = getLanguageFromRequest(req);
+  const text = t(language);
+
   try {
     const supabase = supabaseServer();
 
     // 1) Auth via ingest token
     const token = req.headers.get("x-ingest-token")?.trim();
     if (!token) {
-      return NextResponse.json({ error: "x-ingest-token required" }, { status: 401 });
+      return NextResponse.json({ error: text.ingestTokenRequired }, { status: 401 });
     }
 
     const { data: camera, error: camError } = await supabase
@@ -22,7 +42,7 @@ export async function POST(req: Request) {
       .single();
 
     if (camError || !camera?.id) {
-      return NextResponse.json({ error: "invalid ingest token" }, { status: 401 });
+      return NextResponse.json({ error: text.invalidIngestToken }, { status: 401 });
     }
 
     // 2) Parse multipart form
@@ -39,7 +59,7 @@ export async function POST(req: Request) {
 
     if (files.length === 0) {
       return NextResponse.json(
-        { error: "no files provided (file or files/files[])" },
+        { error: text.noFilesProvided },
         { status: 400 }
       );
     }
@@ -59,7 +79,7 @@ export async function POST(req: Request) {
   } catch (err: any) {
     console.error("INGEST crashed:", err);
     return NextResponse.json(
-      { error: "ingest crashed", details: err?.message ?? String(err) },
+      { error: text.ingestCrashed, details: err?.message ?? String(err) },
       { status: 500 }
     );
   }

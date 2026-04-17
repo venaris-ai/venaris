@@ -1,7 +1,8 @@
-// src/app/api/subscription/change-request/route.ts #3
+// src/app/api/subscription/change-request/route.ts #7
 import { NextRequest, NextResponse } from "next/server";
 import { assertNotDemoWrite, requireOrganizationRole } from "@/lib/auth";
 import { supabaseServer } from "@/lib/supabaseServer";
+import { getLanguageFromRequest, type AppLanguage } from "@/lib/i18n";
 
 type PlanKey = "starter" | "pro" | "enterprise";
 type RequestType = "upgrade" | "downgrade" | "change";
@@ -41,7 +42,38 @@ function deriveRequestType(
   return "change";
 }
 
+function t(language: AppLanguage) {
+  return language === "en"
+    ? {
+        activeOrganizationNotFound: "Active organization not found.",
+        invalidRequestedPlanKey: "Invalid requestedPlanKey.",
+        failedToLoadSubscription: "Failed to load subscription.",
+        subscriptionNotFound: "Subscription not found.",
+        failedToCheckOpenRequests: "Failed to check open requests.",
+        existingOpenRequest:
+          "There is already an open plan request for this organization.",
+        failedToCreateChangeRequest: "Failed to create change request.",
+        unexpectedError: "Unexpected error.",
+      }
+    : {
+        activeOrganizationNotFound: "Aktive Organization nicht gefunden.",
+        invalidRequestedPlanKey: "Ungültiger requestedPlanKey.",
+        failedToLoadSubscription: "Abo konnte nicht geladen werden.",
+        subscriptionNotFound: "Abo nicht gefunden.",
+        failedToCheckOpenRequests:
+          "Offene Plananfragen konnten nicht geprüft werden.",
+        existingOpenRequest:
+          "Es gibt bereits eine offene Plananfrage für diese Organization.",
+        failedToCreateChangeRequest:
+          "Plananfrage konnte nicht erstellt werden.",
+        unexpectedError: "Unerwarteter Fehler.",
+      };
+}
+
 export async function POST(req: NextRequest) {
+  const language = getLanguageFromRequest(req);
+  const text = t(language);
+
   try {
     const ctx = await requireOrganizationRole(["owner"]);
     assertNotDemoWrite(ctx);
@@ -51,7 +83,7 @@ export async function POST(req: NextRequest) {
 
     if (!organization) {
       return NextResponse.json(
-        { error: "active organization not found" },
+        { error: text.activeOrganizationNotFound },
         { status: 400 }
       );
     }
@@ -63,7 +95,7 @@ export async function POST(req: NextRequest) {
 
     if (!isPlanKey(requestedPlanKey)) {
       return NextResponse.json(
-        { error: "invalid requestedPlanKey" },
+        { error: text.invalidRequestedPlanKey },
         { status: 400 }
       );
     }
@@ -79,7 +111,7 @@ export async function POST(req: NextRequest) {
     if (subscriptionResult.error) {
       return NextResponse.json(
         {
-          error: "failed to load subscription",
+          error: text.failedToLoadSubscription,
           details: subscriptionResult.error.message,
         },
         { status: 500 }
@@ -90,7 +122,7 @@ export async function POST(req: NextRequest) {
 
     if (!subscription) {
       return NextResponse.json(
-        { error: "subscription not found" },
+        { error: text.subscriptionNotFound },
         { status: 404 }
       );
     }
@@ -109,7 +141,7 @@ export async function POST(req: NextRequest) {
     if (existingOpenRequestResult.error) {
       return NextResponse.json(
         {
-          error: "failed to check open requests",
+          error: text.failedToCheckOpenRequests,
           details: existingOpenRequestResult.error.message,
         },
         { status: 500 }
@@ -119,7 +151,7 @@ export async function POST(req: NextRequest) {
     if (existingOpenRequestResult.data) {
       return NextResponse.json(
         {
-          error: "Es gibt bereits eine offene Plananfrage für diese Organization.",
+          error: text.existingOpenRequest,
           existingRequest: existingOpenRequestResult.data,
         },
         { status: 409 }
@@ -147,7 +179,7 @@ export async function POST(req: NextRequest) {
     if (insertResult.error || !insertResult.data) {
       return NextResponse.json(
         {
-          error: "failed to create change request",
+          error: text.failedToCreateChangeRequest,
           details: insertResult.error?.message ?? "no row returned",
         },
         { status: 500 }
@@ -164,7 +196,7 @@ export async function POST(req: NextRequest) {
   } catch (e) {
     return NextResponse.json(
       {
-        error: "unexpected error",
+        error: text.unexpectedError,
         details: e instanceof Error ? e.message : String(e),
       },
       { status: 500 }

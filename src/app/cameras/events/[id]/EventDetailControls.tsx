@@ -1,29 +1,12 @@
-// src/app/cameras/events/[id]/EventDetailControls.tsx #3
+// src/app/cameras/events/[id]/EventDetailControls.tsx #6
 "use client";
 
 import { useMemo, useState } from "react";
+import { type AppLanguage } from "@/lib/i18n";
+import type { SpeciesOption } from "@/lib/speciesMeta";
 
-const SPECIES_OPTIONS = [
-  "roe_deer",
-  "wild_boar",
-  "red_deer",
-  "fallow_deer",
-  "mouflon",
-  "fox",
-  "wolf",
-  "badger",
-  "raccoon",
-  "raccoon_dog",
-  "hare",
-  "rabbit",
-  "pheasant",
-  "crow",
-  "other",
-] as const;
-
-type SpeciesValue = (typeof SPECIES_OPTIONS)[number];
 type RelevantSelectValue = "auto" | "yes" | "no";
-type SpeciesSelectValue = "auto" | SpeciesValue;
+type SpeciesSelectValue = "auto" | string;
 
 function SaveIcon() {
   return (
@@ -42,9 +25,12 @@ function SaveIcon() {
   );
 }
 
-function prettySpecies(value: string | null) {
+function getSpeciesLabel(
+  value: string | null,
+  speciesLabelByCode: Record<string, string>
+) {
   if (!value) return "—";
-  return value.replaceAll("_", " ");
+  return speciesLabelByCode[value] ?? value.replaceAll("_", " ");
 }
 
 function relevantUserToSelect(value: boolean | null): RelevantSelectValue {
@@ -61,7 +47,41 @@ function selectToRelevantUser(value: RelevantSelectValue): boolean | null {
 
 function speciesUserToSelect(value: string | null): SpeciesSelectValue {
   if (!value) return "auto";
-  return value as SpeciesValue;
+  return value;
+}
+
+function t(language: AppLanguage) {
+  if (language === "en") {
+    return {
+      save: "Save changes",
+      relevant: "Relevant",
+      species: "Species",
+      yes: "Yes",
+      no: "No",
+      auto: "Auto",
+      active: "Active",
+      couldNotSave: "Could not save changes:",
+      demoTitle: "Demo mode",
+      demoText:
+        "This is a demo account. Records cannot be deleted, added, or changed.",
+      understood: "Understood",
+    };
+  }
+
+  return {
+    save: "Änderungen speichern",
+    relevant: "Relevant",
+    species: "Art",
+    yes: "Ja",
+    no: "Nein",
+    auto: "Auto",
+    active: "Aktiv",
+    couldNotSave: "Konnte Änderungen nicht speichern:",
+    demoTitle: "Demo-Modus",
+    demoText:
+      "Das ist ein Demo-Account. Datensätze können weder entfernt noch hinzugefügt oder geändert werden.",
+    understood: "Verstanden",
+  };
 }
 
 export default function EventDetailControls({
@@ -71,6 +91,9 @@ export default function EventDetailControls({
   initialSpeciesAuto,
   initialSpeciesUser,
   isDemo = false,
+  language,
+  speciesOptions,
+  speciesLabelByCode,
 }: {
   assetId: string | null;
   initialRelevantAuto: boolean | null;
@@ -78,7 +101,12 @@ export default function EventDetailControls({
   initialSpeciesAuto: string | null;
   initialSpeciesUser: string | null;
   isDemo?: boolean;
+  language: AppLanguage;
+  speciesOptions: SpeciesOption[];
+  speciesLabelByCode: Record<string, string>;
 }) {
+  const text = t(language);
+
   const [relevantValue, setRelevantValue] = useState<RelevantSelectValue>(
     relevantUserToSelect(initialRelevantUser)
   );
@@ -93,17 +121,19 @@ export default function EventDetailControls({
     speciesValue !== speciesUserToSelect(initialSpeciesUser);
 
   const currentRelevantLabel = useMemo(() => {
-    if (relevantValue === "yes") return "Yes";
-    if (relevantValue === "no") return "No";
-    if (initialRelevantAuto === true) return "Yes";
-    if (initialRelevantAuto === false) return "No";
+    if (relevantValue === "yes") return text.yes;
+    if (relevantValue === "no") return text.no;
+    if (initialRelevantAuto === true) return text.yes;
+    if (initialRelevantAuto === false) return text.no;
     return "—";
-  }, [relevantValue, initialRelevantAuto]);
+  }, [relevantValue, initialRelevantAuto, text.no, text.yes]);
 
   const currentSpeciesLabel = useMemo(() => {
-    if (speciesValue !== "auto") return prettySpecies(speciesValue);
-    return prettySpecies(initialSpeciesAuto);
-  }, [speciesValue, initialSpeciesAuto]);
+    if (speciesValue !== "auto") {
+      return getSpeciesLabel(speciesValue, speciesLabelByCode);
+    }
+    return getSpeciesLabel(initialSpeciesAuto, speciesLabelByCode);
+  }, [speciesValue, initialSpeciesAuto, speciesLabelByCode]);
 
   async function saveChanges() {
     if (!assetId || !dirty || busy || isDemo) return;
@@ -134,19 +164,19 @@ export default function EventDetailControls({
       ]);
 
       if (!relevantRes.ok) {
-        const txt = await relevantRes.text();
-        throw new Error(txt || `Relevant HTTP ${relevantRes.status}`);
+        const rawText = await relevantRes.text();
+        throw new Error(rawText || `Relevant HTTP ${relevantRes.status}`);
       }
 
       if (!speciesRes.ok) {
-        const txt = await speciesRes.text();
-        throw new Error(txt || `Species HTTP ${speciesRes.status}`);
+        const rawText = await speciesRes.text();
+        throw new Error(rawText || `Species HTTP ${speciesRes.status}`);
       }
 
       window.location.reload();
-    } catch (e) {
-      const message = String((e as any)?.message ?? e);
-      alert(`Konnte Änderungen nicht speichern: ${message}`);
+    } catch (error) {
+      const message = String((error as { message?: string })?.message ?? error);
+      alert(`${text.couldNotSave} ${message}`);
     } finally {
       setBusy(false);
     }
@@ -162,8 +192,8 @@ export default function EventDetailControls({
                 type="button"
                 onClick={() => setIsReadOnlyModalOpen(true)}
                 className="inline-flex h-8 w-8 items-center justify-center rounded-[10px] border border-amber-300/20 bg-amber-300/10 text-amber-200 hover:bg-amber-300/15"
-                aria-label="Änderungen speichern"
-                title="Änderungen speichern"
+                aria-label={text.save}
+                title={text.save}
               >
                 <SaveIcon />
               </button>
@@ -173,8 +203,8 @@ export default function EventDetailControls({
                 onClick={saveChanges}
                 disabled={busy || !assetId}
                 className="inline-flex h-8 w-8 items-center justify-center rounded-[10px] border border-amber-300/20 bg-amber-300/10 text-amber-200 hover:bg-amber-300/15 disabled:cursor-not-allowed disabled:opacity-60"
-                aria-label="Änderungen speichern"
-                title="Änderungen speichern"
+                aria-label={text.save}
+                title={text.save}
               >
                 <SaveIcon />
               </button>
@@ -182,8 +212,8 @@ export default function EventDetailControls({
           ) : (
             <span
               className="inline-flex h-8 w-8 items-center justify-center rounded-[10px] border border-white/8 text-white/20"
-              aria-label="Änderungen speichern"
-              title="Änderungen speichern"
+              aria-label={text.save}
+              title={text.save}
             >
               <SaveIcon />
             </span>
@@ -191,45 +221,49 @@ export default function EventDetailControls({
         </div>
 
         <div className="rounded-[20px] border border-white/10 bg-white/5 p-4">
-          <div className="text-xs text-white/45">Relevant</div>
+          <div className="text-xs text-white/45">{text.relevant}</div>
           <select
             value={relevantValue}
             onChange={(e) => setRelevantValue(e.target.value as RelevantSelectValue)}
             disabled={!assetId || busy || isDemo}
             className="mt-2 w-full rounded-[10px] border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none disabled:bg-white/5 disabled:text-white/35"
-            title={isDemo ? "Demo-Modus: Änderungen sind deaktiviert." : ""}
+            title={isDemo ? text.demoTitle : ""}
           >
             <option value="auto" className="bg-[#102018] text-white">
               {initialRelevantAuto === true
-                ? "Yes"
+                ? text.yes
                 : initialRelevantAuto === false
-                  ? "No"
-                  : "Auto"}
+                  ? text.no
+                  : text.auto}
             </option>
             <option value="yes" className="bg-[#102018] text-white">
-              Yes
+              {text.yes}
             </option>
             <option value="no" className="bg-[#102018] text-white">
-              No
+              {text.no}
             </option>
           </select>
         </div>
 
         <div className="rounded-[20px] border border-white/10 bg-white/5 p-4">
-          <div className="text-xs text-white/45">Species</div>
+          <div className="text-xs text-white/45">{text.species}</div>
           <select
             value={speciesValue}
             onChange={(e) => setSpeciesValue(e.target.value as SpeciesSelectValue)}
             disabled={!assetId || busy || isDemo}
             className="mt-2 w-full rounded-[10px] border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none disabled:bg-white/5 disabled:text-white/35"
-            title={isDemo ? "Demo-Modus: Änderungen sind deaktiviert." : ""}
+            title={isDemo ? text.demoTitle : ""}
           >
             <option value="auto" className="bg-[#102018] text-white">
-              {prettySpecies(initialSpeciesAuto)}
+              {getSpeciesLabel(initialSpeciesAuto, speciesLabelByCode)}
             </option>
-            {SPECIES_OPTIONS.map((species) => (
-              <option key={species} value={species} className="bg-[#102018] text-white">
-                {prettySpecies(species)}
+            {speciesOptions.map((species) => (
+              <option
+                key={species.value}
+                value={species.value}
+                className="bg-[#102018] text-white"
+              >
+                {species.label}
               </option>
             ))}
           </select>
@@ -237,7 +271,7 @@ export default function EventDetailControls({
 
         {(relevantValue !== "auto" || speciesValue !== "auto") && (
           <div className="text-xs text-white/45">
-            Aktiv:{" "}
+            {text.active}:{" "}
             <span className="text-white/70">
               {currentRelevantLabel} · {currentSpeciesLabel}
             </span>
@@ -248,10 +282,8 @@ export default function EventDetailControls({
       {isReadOnlyModalOpen ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="w-full max-w-md rounded-[20px] border border-white/10 bg-[#102018] p-6 shadow-2xl">
-            <h3 className="text-lg font-semibold text-white">Demo-Modus</h3>
-            <p className="mt-2 text-sm text-white/70">
-              Das ist ein Demo-Account. Datensätze können weder entfernt noch hinzugefügt oder geändert werden.
-            </p>
+            <h3 className="text-lg font-semibold text-white">{text.demoTitle}</h3>
+            <p className="mt-2 text-sm text-white/70">{text.demoText}</p>
 
             <div className="mt-5 flex items-center justify-end gap-3">
               <button
@@ -259,7 +291,7 @@ export default function EventDetailControls({
                 onClick={() => setIsReadOnlyModalOpen(false)}
                 className="rounded-[10px] border border-white/10 bg-white/5 px-4 py-2 text-sm text-white/78 hover:bg-white/8 hover:text-white"
               >
-                Verstanden
+                {text.understood}
               </button>
             </div>
           </div>

@@ -1,14 +1,11 @@
-// src/app/login/page.tsx #4
+// src/app/login/page.tsx #5
 import { cookies } from "next/headers";
 import LoginForm from "./LoginForm";
-
-type AppLanguage = "de" | "en";
-
-const LOCALE_COOKIE = "venaris_locale";
-
-function normalizeLanguage(value: string | null | undefined): AppLanguage {
-  return value === "en" ? "en" : "de";
-}
+import {
+  LOCALE_COOKIE,
+  normalizeLanguage,
+  type AppLanguage,
+} from "@/lib/i18n";
 
 function t(language: AppLanguage) {
   return language === "en"

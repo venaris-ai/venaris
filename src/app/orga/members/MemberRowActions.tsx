@@ -1,8 +1,44 @@
-// src/app/orga/members/MemberRowActions.tsx #6
+// src/app/orga/members/MemberRowActions.tsx #9
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
+import { type AppLanguage } from "@/lib/i18n";
+
+type DirtyEventDetail = {
+  userId: string;
+  dirty: boolean;
+};
+
+function t(language: AppLanguage) {
+  return language === "en"
+    ? {
+        save: "Save changes",
+        remove: "Remove member permanently",
+        confirmRemoveTitle: "Remove member?",
+        confirmRemoveText:
+          "Are you sure you want to remove this member permanently?",
+        cancel: "Cancel",
+        removeButton: "Remove",
+        demoTitle: "Demo mode",
+        demoText:
+          "This is a demo account. Records cannot be removed, added or changed.",
+        understood: "Understood",
+      }
+    : {
+        save: "Änderungen speichern",
+        remove: "Mitglied dauerhaft entfernen",
+        confirmRemoveTitle: "Mitglied entfernen?",
+        confirmRemoveText:
+          "Sind Sie sicher, dass Sie das Mitglied dauerhaft entfernen möchten?",
+        cancel: "Abbrechen",
+        removeButton: "Entfernen",
+        demoTitle: "Demo-Modus",
+        demoText:
+          "Das ist ein Demo-Account. Datensätze können weder entfernt noch hinzugefügt oder geändert werden.",
+        understood: "Verstanden",
+      };
+}
 
 function SaveIcon() {
   return (
@@ -40,14 +76,6 @@ function TrashIcon() {
   );
 }
 
-type MemberRole = "owner" | "admin" | "member" | "viewer";
-type MemberStatus = "active" | "disabled";
-
-type DirtyEventDetail = {
-  userId: string;
-  dirty: boolean;
-};
-
 export default function MemberRowActions({
   userId,
   canEditRole,
@@ -56,17 +84,18 @@ export default function MemberRowActions({
   canRemove,
   removeAction,
   isDemo = false,
+  language,
 }: {
   userId: string;
-  initialRole?: MemberRole;
-  initialStatus?: MemberStatus;
   canEditRole: boolean;
   canEditStatus: boolean;
   canEditLanguage: boolean;
   canRemove: boolean;
   removeAction: (formData: FormData) => void | Promise<void>;
   isDemo?: boolean;
+  language: AppLanguage;
 }) {
+  const text = t(language);
   const [isDirty, setIsDirty] = useState(false);
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
   const [isReadOnlyModalOpen, setIsReadOnlyModalOpen] = useState(false);
@@ -102,8 +131,8 @@ export default function MemberRowActions({
                 type="button"
                 onClick={() => setIsReadOnlyModalOpen(true)}
                 className="inline-flex h-8 w-8 items-center justify-center rounded-[10px] border border-amber-300/20 bg-amber-300/10 text-amber-200 hover:bg-amber-300/15"
-                aria-label="Änderungen speichern"
-                title="Änderungen speichern"
+                aria-label={text.save}
+                title={text.save}
               >
                 <SaveIcon />
               </button>
@@ -112,8 +141,8 @@ export default function MemberRowActions({
                 type="submit"
                 form={formId}
                 className="inline-flex h-8 w-8 items-center justify-center rounded-[10px] border border-amber-300/20 bg-amber-300/10 text-amber-200 hover:bg-amber-300/15"
-                aria-label="Änderungen speichern"
-                title="Änderungen speichern"
+                aria-label={text.save}
+                title={text.save}
               >
                 <SaveIcon />
               </button>
@@ -121,8 +150,8 @@ export default function MemberRowActions({
           ) : (
             <span
               className="inline-flex h-8 w-8 items-center justify-center rounded-[10px] border border-white/8 text-white/20"
-              aria-label="Änderungen speichern"
-              title="Änderungen speichern"
+              aria-label={text.save}
+              title={text.save}
             >
               <SaveIcon />
             </span>
@@ -138,8 +167,8 @@ export default function MemberRowActions({
                     : setIsDeleteConfirmOpen(true)
                 }
                 className="inline-flex h-8 w-8 items-center justify-center rounded-[10px] border border-white/10 bg-white/5 text-white/72 hover:border-rose-300/20 hover:bg-rose-300/10 hover:text-rose-200"
-                aria-label="Mitglied dauerhaft entfernen"
-                title="Mitglied dauerhaft entfernen"
+                aria-label={text.remove}
+                title={text.remove}
               >
                 <TrashIcon />
               </button>
@@ -149,11 +178,10 @@ export default function MemberRowActions({
                     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
                       <div className="w-full max-w-md rounded-[20px] border border-white/10 bg-[#102018] p-6 shadow-2xl">
                         <h3 className="text-lg font-semibold text-white">
-                          Mitglied entfernen?
+                          {text.confirmRemoveTitle}
                         </h3>
                         <p className="mt-2 text-sm text-white/70">
-                          Sind Sie sicher, dass Sie das Mitglied dauerhaft
-                          entfernen möchten?
+                          {text.confirmRemoveText}
                         </p>
 
                         <div className="mt-5 flex items-center justify-end gap-3">
@@ -162,7 +190,7 @@ export default function MemberRowActions({
                             onClick={() => setIsDeleteConfirmOpen(false)}
                             className="rounded-[10px] border border-white/10 bg-white/5 px-4 py-2 text-sm text-white/78 hover:bg-white/8 hover:text-white"
                           >
-                            Abbrechen
+                            {text.cancel}
                           </button>
 
                           <form action={removeAction}>
@@ -171,7 +199,7 @@ export default function MemberRowActions({
                               type="submit"
                               className="rounded-[10px] border border-rose-300/20 bg-rose-300/10 px-4 py-2 text-sm text-rose-100 hover:bg-rose-300/15"
                             >
-                              Entfernen
+                              {text.removeButton}
                             </button>
                           </form>
                         </div>
@@ -186,11 +214,10 @@ export default function MemberRowActions({
                     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
                       <div className="w-full max-w-md rounded-[20px] border border-white/10 bg-[#102018] p-6 shadow-2xl">
                         <h3 className="text-lg font-semibold text-white">
-                          Demo-Modus
+                          {text.demoTitle}
                         </h3>
                         <p className="mt-2 text-sm text-white/70">
-                          Das ist ein Demo-Account. Datensätze können weder
-                          entfernt noch hinzugefügt oder geändert werden.
+                          {text.demoText}
                         </p>
 
                         <div className="mt-5 flex items-center justify-end gap-3">
@@ -199,7 +226,7 @@ export default function MemberRowActions({
                             onClick={() => setIsReadOnlyModalOpen(false)}
                             className="rounded-[10px] border border-white/10 bg-white/5 px-4 py-2 text-sm text-white/78 hover:bg-white/8 hover:text-white"
                           >
-                            Verstanden
+                            {text.understood}
                           </button>
                         </div>
                       </div>

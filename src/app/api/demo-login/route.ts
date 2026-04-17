@@ -1,14 +1,12 @@
-// src/app/api/demo-login/route.ts #2
+// src/app/api/demo-login/route.ts #4
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { supabaseServer } from "@/lib/supabaseServer";
+import { LOCALE_COOKIE, getLanguageFromRequest } from "@/lib/i18n";
 
 export const runtime = "nodejs";
 
 const ACTIVE_ORG_COOKIE = "venaris_active_org";
-const LOCALE_COOKIE = "venaris_locale";
-
-type AppLanguage = "de" | "en";
 
 type OrganizationRow = {
   id: string;
@@ -28,13 +26,9 @@ function normalizeOrganization(
   return organizations;
 }
 
-function normalizeLanguage(value: string | null | undefined): AppLanguage {
-  return value === "en" ? "en" : "de";
-}
-
 export async function GET(request: NextRequest) {
   const response = NextResponse.redirect(new URL("/", request.url));
-  const locale = normalizeLanguage(request.cookies.get(LOCALE_COOKIE)?.value);
+  const locale = getLanguageFromRequest(request);
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,

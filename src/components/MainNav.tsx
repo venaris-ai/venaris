@@ -1,16 +1,21 @@
-// src/components/MainNav.tsx #4
+// src/components/MainNav.tsx #5
 import Link from "next/link";
 import {
-  MAIN_NAV_ITEMS,
   filterNavItemsByAccess,
+  getMainNavItems,
   getOptionalAccessContext,
+  type AppLanguage,
 } from "@/lib/authz";
 
-export default async function MainNav() {
+export default async function MainNav({
+  language,
+}: {
+  language: AppLanguage;
+}) {
   const { role, email, isDemo } = await getOptionalAccessContext();
 
   const items = filterNavItemsByAccess({
-    items: MAIN_NAV_ITEMS,
+    items: getMainNavItems(language),
     role,
     email,
     isDemo,

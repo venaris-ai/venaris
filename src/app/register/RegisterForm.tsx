@@ -1,11 +1,14 @@
-// src/app/register/RegisterForm.tsx #4
+// src/app/register/RegisterForm.tsx #6
 "use client";
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
-
-type AppLanguage = "de" | "en";
+import {
+  LOCALE_COOKIE,
+  normalizeLanguage,
+  type AppLanguage,
+} from "@/lib/i18n";
 
 function t(language: AppLanguage) {
   return language === "en"
@@ -46,7 +49,7 @@ function t(language: AppLanguage) {
         passwordHint: "Bitte ein Passwort mit mindestens 8 Zeichen festlegen.",
         passwordRepeatLabel: "Passwort wiederholen",
         submitIdle: "Konto erstellen",
-        submitLoading: "Creating account...",
+        submitLoading: "Konto wird erstellt...",
         orgNameRequired: "Bitte einen Organisationsnamen eingeben.",
         orgNameTooShort: "Der Organisationsname ist zu kurz.",
         emailRequired: "Bitte eine E-Mail-Adresse eingeben.",
@@ -61,6 +64,10 @@ function t(language: AppLanguage) {
         activateOrgFailed:
           "Konto wurde erstellt, aber die Organisation konnte nicht aktiviert werden.",
       };
+}
+
+function setLocaleCookie(language: AppLanguage) {
+  document.cookie = `${LOCALE_COOKIE}=${encodeURIComponent(language)}; path=/; max-age=31536000; samesite=lax`;
 }
 
 export default function RegisterForm({
@@ -88,6 +95,7 @@ export default function RegisterForm({
 
     const orgName = organizationName.trim();
     const userEmail = email.trim().toLowerCase();
+    const resolvedLanguage = normalizeLanguage(language);
 
     if (!orgName) {
       setLoading(false);
@@ -98,12 +106,6 @@ export default function RegisterForm({
     if (orgName.length < 2) {
       setLoading(false);
       setError(text.orgNameTooShort);
-      return;
-    }
-
-    if (!["de", "en"].includes(language)) {
-      setLoading(false);
-      setError(text.invalidLanguage);
       return;
     }
 
@@ -137,13 +139,15 @@ export default function RegisterForm({
       return;
     }
 
+    setLocaleCookie(resolvedLanguage);
+
     const signUpResult = await supabase.auth.signUp({
       email: userEmail,
       password,
       options: {
         data: {
-          preferred_language: language,
-          language,
+          preferred_language: resolvedLanguage,
+          language: resolvedLanguage,
         },
       },
     });
@@ -225,7 +229,11 @@ export default function RegisterForm({
         </label>
         <select
           value={language}
-          onChange={(e) => setLanguage(e.target.value as AppLanguage)}
+          onChange={(e) => {
+            const nextLanguage = normalizeLanguage(e.target.value);
+            setLanguage(nextLanguage);
+            setLocaleCookie(nextLanguage);
+          }}
           className="w-full rounded-[14px] border border-white/10 bg-white/5 px-3 py-2 text-white outline-none"
         >
           <option value="de" className="bg-[#102018] text-white">

@@ -1,4 +1,8 @@
-// src/lib/billing/plans.ts #2
+// src/lib/billing/plans.ts #5
+import type { AppLanguage } from "@/lib/i18n";
+
+export type { AppLanguage } from "@/lib/i18n";
+
 export type BillingPlanKey = "starter" | "pro" | "enterprise";
 
 export type BillingCycle = "monthly" | "yearly";
@@ -52,4 +56,22 @@ export function getBillingPlan(planKey: string | null | undefined) {
     return BILLING_PLANS[planKey];
   }
   return null;
+}
+
+export function getBillingPlanDescription(
+  planKey: BillingPlanKey,
+  language: AppLanguage
+) {
+  if (language === "en") {
+    switch (planKey) {
+      case "starter":
+        return "For smaller hunting grounds and first teams with clearly limited camera and member counts.";
+      case "pro":
+        return "For professional use with more cameras, more users and operational expansion.";
+      case "enterprise":
+        return "For larger organizations with an individual contract and limit structure.";
+    }
+  }
+
+  return BILLING_PLANS[planKey].description;
 }

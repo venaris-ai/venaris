@@ -1,7 +1,8 @@
-// src/app/api/register/route.ts #1
+// src/app/api/register/route.ts #2
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabaseServer";
 import { supabaseAuthServer } from "@/lib/supabaseAuthServer";
+import { getLanguageFromRequest, type AppLanguage } from "@/lib/i18n";
 
 type Payload = {
   organizationName: string;
@@ -12,6 +13,36 @@ type OrganizationRow = {
   name: string;
   slug: string;
 };
+
+function t(language: AppLanguage) {
+  return language === "en"
+    ? {
+        notAuthenticated: "not authenticated",
+        organizationNameRequired: "organizationName required",
+        organizationNameTooShort: "organizationName too short",
+        membershipCheckFailed: "membership check failed",
+        userAlreadyBelongsToOrganization: "user already belongs to an organization",
+        organizationOwnershipCheckFailed: "organization ownership check failed",
+        userAlreadyOwnsOrganization: "user already owns an organization",
+        organizationCreationFailed: "organization creation failed",
+        noOrganizationReturned: "no organization returned",
+        ownerMembershipCreationFailed: "owner membership creation failed",
+        unexpectedError: "unexpected error",
+      }
+    : {
+        notAuthenticated: "nicht authentifiziert",
+        organizationNameRequired: "organizationName erforderlich",
+        organizationNameTooShort: "organizationName zu kurz",
+        membershipCheckFailed: "Prüfung der Mitgliedschaft fehlgeschlagen",
+        userAlreadyBelongsToOrganization: "Benutzer gehört bereits zu einer Organisation",
+        organizationOwnershipCheckFailed: "Prüfung der Organisationsinhaberschaft fehlgeschlagen",
+        userAlreadyOwnsOrganization: "Benutzer besitzt bereits eine Organisation",
+        organizationCreationFailed: "Anlage der Organisation fehlgeschlagen",
+        noOrganizationReturned: "keine Organisation zurückgegeben",
+        ownerMembershipCreationFailed: "Anlage der Owner-Mitgliedschaft fehlgeschlagen",
+        unexpectedError: "unerwarteter Fehler",
+      };
+}
 
 function slugifyOrganizationName(value: string): string {
   const base = value
@@ -54,6 +85,9 @@ async function findAvailableOrganizationSlug(
 }
 
 export async function POST(req: NextRequest) {
+  const language = getLanguageFromRequest(req);
+  const text = t(language);
+
   try {
     const auth = await supabaseAuthServer();
     const {
@@ -62,14 +96,14 @@ export async function POST(req: NextRequest) {
     } = await auth.auth.getUser();
 
     if (authError || !user) {
-      return NextResponse.json({ error: "not authenticated" }, { status: 401 });
+      return NextResponse.json({ error: text.notAuthenticated }, { status: 401 });
     }
 
     const body = (await req.json()) as Partial<Payload>;
 
     if (!body.organizationName || !body.organizationName.trim()) {
       return NextResponse.json(
-        { error: "organizationName required" },
+        { error: text.organizationNameRequired },
         { status: 400 }
       );
     }
@@ -78,7 +112,7 @@ export async function POST(req: NextRequest) {
 
     if (organizationName.length < 2) {
       return NextResponse.json(
-        { error: "organizationName too short" },
+        { error: text.organizationNameTooShort },
         { status: 400 }
       );
     }
@@ -93,7 +127,7 @@ export async function POST(req: NextRequest) {
     if (membershipCheck.error) {
       return NextResponse.json(
         {
-          error: "membership check failed",
+          error: text.membershipCheckFailed,
           details: membershipCheck.error.message,
         },
         { status: 500 }
@@ -102,7 +136,7 @@ export async function POST(req: NextRequest) {
 
     if ((membershipCheck.count ?? 0) > 0) {
       return NextResponse.json(
-        { error: "user already belongs to an organization" },
+        { error: text.userAlreadyBelongsToOrganization },
         { status: 409 }
       );
     }
@@ -115,7 +149,7 @@ export async function POST(req: NextRequest) {
     if (ownedOrgCheck.error) {
       return NextResponse.json(
         {
-          error: "organization ownership check failed",
+          error: text.organizationOwnershipCheckFailed,
           details: ownedOrgCheck.error.message,
         },
         { status: 500 }
@@ -124,7 +158,7 @@ export async function POST(req: NextRequest) {
 
     if ((ownedOrgCheck.count ?? 0) > 0) {
       return NextResponse.json(
-        { error: "user already owns an organization" },
+        { error: text.userAlreadyOwnsOrganization },
         { status: 409 }
       );
     }
@@ -150,8 +184,8 @@ export async function POST(req: NextRequest) {
     if (insertOrganization.error || !insertOrganization.data) {
       return NextResponse.json(
         {
-          error: "organization creation failed",
-          details: insertOrganization.error?.message ?? "no organization returned",
+          error: text.organizationCreationFailed,
+          details: insertOrganization.error?.message ?? text.noOrganizationReturned,
         },
         { status: 500 }
       );
@@ -172,7 +206,7 @@ export async function POST(req: NextRequest) {
 
       return NextResponse.json(
         {
-          error: "owner membership creation failed",
+          error: text.ownerMembershipCreationFailed,
           details: insertMembership.error.message,
         },
         { status: 500 }
@@ -193,7 +227,7 @@ export async function POST(req: NextRequest) {
   } catch (e) {
     return NextResponse.json(
       {
-        error: "unexpected error",
+        error: text.unexpectedError,
         details: e instanceof Error ? e.message : String(e),
       },
       { status: 500 }

@@ -1,9 +1,10 @@
-// src/app/api/cameras/create/route.ts #4b
+// src/app/api/cameras/create/route.ts #5
 import { NextRequest, NextResponse } from "next/server";
 import crypto from "node:crypto";
 import { supabaseServer } from "@/lib/supabaseServer";
 import { assertNotDemoWrite, requireOrganizationRole } from "@/lib/auth";
 import { canCreateCamera } from "@/lib/billing/subscriptionPolicy";
+import { getLanguageFromRequest, type AppLanguage } from "@/lib/i18n";
 
 type Vendor =
   | "berger&schröter"
@@ -78,6 +79,42 @@ const FTP_PUBLIC_PORT = Number(process.env.FTP_PUBLIC_PORT || "21");
 
 const HETZNER_PROVISIONER_URL = process.env.HETZNER_PROVISIONER_URL || "";
 const HETZNER_PROVISIONER_TOKEN = process.env.HETZNER_PROVISIONER_TOKEN || "";
+
+function t(language: AppLanguage) {
+  return language === "en"
+    ? {
+        activeOrganizationNotFound: "active organization not found",
+        cameraNameRequired: "cameraName required",
+        invalidMethod: "invalid method",
+        invalidVendor: "invalid vendor",
+        invalidDirectionDeg: "directionDeg must be 0-359",
+        subscriptionCheckFailed: "subscription check failed",
+        noSubscriptionFound: "no subscription found for active organization",
+        cameraUsageCheckFailed: "camera usage check failed",
+        cameraCreationBlocked: "camera creation blocked",
+        provisioningFailed: "provisioning failed",
+        noProvisioningResult: "no provisioning result",
+        ftpProvisioningFailed: "ftp provisioning failed",
+        missingFtpRoutingValues: "missing ftp routing values",
+        unexpectedError: "unexpected error",
+      }
+    : {
+        activeOrganizationNotFound: "aktive Organisation nicht gefunden",
+        cameraNameRequired: "cameraName erforderlich",
+        invalidMethod: "ungültige Methode",
+        invalidVendor: "ungültiger Hersteller",
+        invalidDirectionDeg: "directionDeg muss zwischen 0 und 359 liegen",
+        subscriptionCheckFailed: "Prüfung des Abos fehlgeschlagen",
+        noSubscriptionFound: "kein Abo für die aktive Organisation gefunden",
+        cameraUsageCheckFailed: "Prüfung der Kamera-Nutzung fehlgeschlagen",
+        cameraCreationBlocked: "Kameraanlage gesperrt",
+        provisioningFailed: "Provisioning fehlgeschlagen",
+        noProvisioningResult: "kein Provisioning-Ergebnis",
+        ftpProvisioningFailed: "FTP-Provisioning fehlgeschlagen",
+        missingFtpRoutingValues: "fehlende FTP-Routing-Werte",
+        unexpectedError: "unerwarteter Fehler",
+      };
+}
 
 function generateFtpPassword(length = 8): string {
   const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789";
@@ -166,34 +203,44 @@ async function provisionFtpOnHetzner(params: {
 }
 
 export async function POST(req: NextRequest) {
+  const language = getLanguageFromRequest(req);
+  const text = t(language);
+
   try {
     const body = (await req.json()) as Partial<Payload>;
 
-const ctx = await requireOrganizationRole(["owner", "admin"]);
-assertNotDemoWrite(ctx);
+    const ctx = await requireOrganizationRole(["owner", "admin"]);
+    assertNotDemoWrite(ctx);
 
-const { activeMembership } = ctx;
-const activeOrganization = activeMembership.organizations;
-
-
+    const { activeMembership } = ctx;
+    const activeOrganization = activeMembership.organizations;
 
     if (!activeOrganization) {
       return NextResponse.json(
-        { error: "active organization not found" },
+        { error: text.activeOrganizationNotFound },
         { status: 400 }
       );
     }
 
     if (!body.cameraName || !body.cameraName.trim()) {
-      return NextResponse.json({ error: "cameraName required" }, { status: 400 });
+      return NextResponse.json(
+        { error: text.cameraNameRequired },
+        { status: 400 }
+      );
     }
 
     if (!body.method || !METHODS.has(body.method)) {
-      return NextResponse.json({ error: "invalid method" }, { status: 400 });
+      return NextResponse.json(
+        { error: text.invalidMethod },
+        { status: 400 }
+      );
     }
 
     if (!body.vendor || !VENDORS.has(body.vendor)) {
-      return NextResponse.json({ error: "invalid vendor" }, { status: 400 });
+      return NextResponse.json(
+        { error: text.invalidVendor },
+        { status: 400 }
+      );
     }
 
     if (
@@ -203,7 +250,7 @@ const activeOrganization = activeMembership.organizations;
         body.directionDeg >= 360)
     ) {
       return NextResponse.json(
-        { error: "directionDeg must be 0-359" },
+        { error: text.invalidDirectionDeg },
         { status: 400 }
       );
     }
@@ -227,7 +274,7 @@ const activeOrganization = activeMembership.organizations;
     if (subscriptionResult.error) {
       return NextResponse.json(
         {
-          error: "subscription check failed",
+          error: text.subscriptionCheckFailed,
           details: subscriptionResult.error.message,
         },
         { status: 500 }
@@ -236,7 +283,7 @@ const activeOrganization = activeMembership.organizations;
 
     if (!subscriptionResult.data) {
       return NextResponse.json(
-        { error: "no subscription found for active organization" },
+        { error: text.noSubscriptionFound },
         { status: 403 }
       );
     }
@@ -244,7 +291,7 @@ const activeOrganization = activeMembership.organizations;
     if (cameraCountResult.error) {
       return NextResponse.json(
         {
-          error: "camera usage check failed",
+          error: text.cameraUsageCheckFailed,
           details: cameraCountResult.error.message,
         },
         { status: 500 }
@@ -260,12 +307,13 @@ const activeOrganization = activeMembership.organizations;
       currentCameraCount: cameraCountResult.count ?? 0,
       activeMemberCount: 0,
       openInviteCount: 0,
+      language,
     });
 
     if (!cameraPolicy.allowed) {
       return NextResponse.json(
         {
-          error: "camera creation blocked",
+          error: text.cameraCreationBlocked,
           details: cameraPolicy.message,
           reason: cameraPolicy.reason,
         },
@@ -291,7 +339,7 @@ const activeOrganization = activeMembership.organizations;
 
     if (error) {
       return NextResponse.json(
-        { error: "provisioning failed", details: error.message },
+        { error: text.provisioningFailed, details: error.message },
         { status: 500 }
       );
     }
@@ -299,7 +347,10 @@ const activeOrganization = activeMembership.organizations;
     const row = (Array.isArray(data) ? data[0] : data) as ProvisioningRow | null;
 
     if (!row) {
-      return NextResponse.json({ error: "no provisioning result" }, { status: 500 });
+      return NextResponse.json(
+        { error: text.noProvisioningResult },
+        { status: 500 }
+      );
     }
 
     if (body.method === "ftp") {
@@ -316,8 +367,8 @@ const activeOrganization = activeMembership.organizations;
 
         return NextResponse.json(
           {
-            error: "ftp provisioning failed",
-            details: "missing ftp routing values",
+            error: text.ftpProvisioningFailed,
+            details: text.missingFtpRoutingValues,
           },
           { status: 500 }
         );
@@ -383,7 +434,7 @@ const activeOrganization = activeMembership.organizations;
 
         return NextResponse.json(
           {
-            error: "ftp provisioning failed",
+            error: text.ftpProvisioningFailed,
             details,
             camera: {
               id: row.camera_id,
@@ -434,7 +485,7 @@ const activeOrganization = activeMembership.organizations;
   } catch (e) {
     return NextResponse.json(
       {
-        error: "unexpected error",
+        error: text.unexpectedError,
         details: e instanceof Error ? e.message : String(e),
       },
       { status: 500 }

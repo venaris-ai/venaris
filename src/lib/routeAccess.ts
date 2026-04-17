@@ -1,4 +1,8 @@
-// src/lib/routeAccess.ts #3
+// src/lib/routeAccess.ts #5
+import type { AppLanguage } from "@/lib/i18n";
+
+export type { AppLanguage } from "@/lib/i18n";
+
 export type AppRole = "owner" | "admin" | "member" | "viewer";
 export type RouteMatch = "exact" | "startsWith";
 
@@ -70,7 +74,7 @@ export const SECTION_NAV_ITEMS = {
     { href: "/cameras/new", label: "New", match: "exact" },
     { href: "/cameras/ingest", label: "Ingest", match: "exact" },
     { href: "/cameras/import", label: "Import", match: "exact" },
-    { href: "/cameras/health", label: "Health", match: "exact" },
+    { href: "/cameras/health", label: "Status", match: "exact" },
   ] satisfies NavItem[],
 
   orga: [
@@ -78,7 +82,7 @@ export const SECTION_NAV_ITEMS = {
     { href: "/orga/account", label: "Mein Konto", match: "exact" },
     { href: "/orga/reviere", label: "Reviere", match: "exact" },
     { href: "/orga/members", label: "Members", match: "exact" },
-    { href: "/orga/subscription", label: "Subscription", match: "exact" },
+    { href: "/orga/subscription", label: "Abo", match: "exact" },
   ] satisfies NavItem[],
 } as const;
 
@@ -194,4 +198,74 @@ export function filterNavItemsByAccess(args: {
       isDemo: args.isDemo,
     })
   );
+}
+
+export function getMainNavItems(language: AppLanguage): NavItem[] {
+  return language === "en"
+    ? [
+        { href: "/", label: "Home", match: "exact" },
+        { href: "/wildlife", label: "Wildlife", match: "startsWith" },
+        { href: "/cameras", label: "Cameras", match: "startsWith" },
+        { href: "/orga", label: "Organization", match: "startsWith" },
+      ]
+    : [
+        { href: "/", label: "Home", match: "exact" },
+        { href: "/wildlife", label: "Wildlife", match: "startsWith" },
+        { href: "/cameras", label: "Kameras", match: "startsWith" },
+        { href: "/orga", label: "Organisation", match: "startsWith" },
+      ];
+}
+
+export function getSectionNavItems(language: AppLanguage) {
+  return language === "en"
+    ? {
+        wildlife: [
+          { href: "/wildlife", label: "Overview", match: "exact" },
+          { href: "/wildlife/species", label: "Species", match: "exact" },
+          { href: "/wildlife/wherewhen", label: "Where & When", match: "exact" },
+          { href: "/wildlife/activity", label: "Activity", match: "exact" },
+          { href: "/wildlife/popsim", label: "PopSim", match: "exact" },
+        ] satisfies NavItem[],
+
+        cameras: [
+          { href: "/cameras", label: "Overview", match: "exact" },
+          { href: "/cameras/new", label: "New", match: "exact" },
+          { href: "/cameras/ingest", label: "Ingest", match: "exact" },
+          { href: "/cameras/import", label: "Import", match: "exact" },
+          { href: "/cameras/health", label: "Status", match: "exact" },
+        ] satisfies NavItem[],
+
+        orga: [
+          { href: "/orga", label: "Overview", match: "exact" },
+          { href: "/orga/account", label: "My Account", match: "exact" },
+          { href: "/orga/reviere", label: "Grounds", match: "exact" },
+          { href: "/orga/members", label: "Members", match: "exact" },
+          { href: "/orga/subscription", label: "Abo", match: "exact" },
+        ] satisfies NavItem[],
+      }
+    : {
+        wildlife: [
+          { href: "/wildlife", label: "Übersicht", match: "exact" },
+          { href: "/wildlife/species", label: "Arten", match: "exact" },
+          { href: "/wildlife/wherewhen", label: "Wo & Wann", match: "exact" },
+          { href: "/wildlife/activity", label: "Aktivität", match: "exact" },
+          { href: "/wildlife/popsim", label: "PopSim", match: "exact" },
+        ] satisfies NavItem[],
+
+        cameras: [
+          { href: "/cameras", label: "Übersicht", match: "exact" },
+          { href: "/cameras/new", label: "Neu", match: "exact" },
+          { href: "/cameras/ingest", label: "Ingest", match: "exact" },
+          { href: "/cameras/import", label: "Import", match: "exact" },
+          { href: "/cameras/health", label: "Status", match: "exact" },
+        ] satisfies NavItem[],
+
+        orga: [
+          { href: "/orga", label: "Übersicht", match: "exact" },
+          { href: "/orga/account", label: "Mein Konto", match: "exact" },
+          { href: "/orga/reviere", label: "Reviere", match: "exact" },
+          { href: "/orga/members", label: "Mitglieder", match: "exact" },
+          { href: "/orga/subscription", label: "Abo", match: "exact" },
+        ] satisfies NavItem[],
+      };
 }

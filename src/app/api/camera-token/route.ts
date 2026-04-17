@@ -1,18 +1,32 @@
-// src/app/api/camera-token/route.ts #2
+// src/app/api/camera-token/route.ts #3
 export const runtime = "nodejs";
 
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabaseServer";
 import { assertNotDemoWrite, requireOrganizationRole } from "@/lib/auth";
+import { getLanguageFromRequest, type AppLanguage } from "@/lib/i18n";
 
-export async function GET(req: Request) {
+function t(language: AppLanguage) {
+  return language === "en"
+    ? {
+        activeOrganizationNotFound: "active organization not found",
+      }
+    : {
+        activeOrganizationNotFound: "aktive Organisation nicht gefunden",
+      };
+}
+
+export async function GET(req: NextRequest) {
+  const language = getLanguageFromRequest(req);
+  const text = t(language);
+
   try {
     const { activeMembership } = await requireOrganizationRole(["owner", "admin"]);
     const activeOrganization = activeMembership.organizations;
 
     if (!activeOrganization) {
       return NextResponse.json(
-        { error: "active organization not found" },
+        { error: text.activeOrganizationNotFound },
         { status: 400 }
       );
     }
@@ -67,8 +81,10 @@ export async function GET(req: Request) {
   }
 }
 
+export async function POST(req: NextRequest) {
+  const language = getLanguageFromRequest(req);
+  const text = t(language);
 
-export async function POST(req: Request) {
   try {
     const ctx = await requireOrganizationRole(["owner", "admin"]);
     assertNotDemoWrite(ctx);
@@ -76,13 +92,9 @@ export async function POST(req: Request) {
     const { activeMembership } = ctx;
     const activeOrganization = activeMembership.organizations;
 
-
-
-
-
     if (!activeOrganization) {
       return NextResponse.json(
-        { error: "active organization not found" },
+        { error: text.activeOrganizationNotFound },
         { status: 400 }
       );
     }

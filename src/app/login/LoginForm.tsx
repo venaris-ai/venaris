@@ -1,11 +1,10 @@
-// src/app/login/LoginForm.tsx #5
+// src/app/login/LoginForm.tsx #6
 "use client";
 
 import { useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
-
-type AppLanguage = "de" | "en";
+import type { AppLanguage } from "@/lib/i18n";
 
 function t(language: AppLanguage) {
   return language === "en"
@@ -33,11 +32,11 @@ function t(language: AppLanguage) {
       };
 }
 
-export default function LoginForm({
-  language,
-}: {
+type Props = {
   language: AppLanguage;
-}) {
+};
+
+export default function LoginForm({ language }: Props) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const supabase = supabaseBrowser();

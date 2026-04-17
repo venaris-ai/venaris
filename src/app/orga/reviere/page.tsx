@@ -1,5 +1,6 @@
-// src/app/orga/reviere/page.tsx #9
+// src/app/orga/reviere/page.tsx #12
 import Link from "next/link";
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { redirectIfDemoWrite } from "@/lib/auth";
@@ -7,6 +8,11 @@ import { requirePathAccess } from "@/lib/authz";
 import { supabaseServer } from "@/lib/supabaseServer";
 import RevierRowControls from "./RevierRowControls";
 import RevierRowActions from "./RevierRowActions";
+import {
+  LOCALE_COOKIE,
+  resolveLanguage,
+  type AppLanguage,
+} from "@/lib/i18n";
 
 type RevierStatus = "active" | "paused" | "archived";
 
@@ -24,6 +30,109 @@ type RevierRow = {
 
 function isRevierStatus(value: string): value is RevierStatus {
   return ["active", "paused", "archived"].includes(value);
+}
+
+async function resolveUiLanguageForProtectedPath(pathname: string) {
+  const ctx = await requirePathAccess(pathname);
+
+if (!ctx.user) {
+  throw new Error("Authenticated user required");
+}
+
+  const supabase = supabaseServer();
+  const cookieStore = await cookies();
+
+  const { data: profileData } = await supabase
+    .from("profiles")
+    .select("preferred_language")
+    .eq("id", ctx.user.id)
+    .maybeSingle();
+
+  const language = resolveLanguage({
+    cookieLanguage: cookieStore.get(LOCALE_COOKIE)?.value,
+    profileLanguage: profileData?.preferred_language,
+  });
+
+  return { ctx, supabase, language };
+}
+
+function t(language: AppLanguage) {
+  return language === "en"
+    ? {
+        missingTarget: "Missing target ground.",
+        nameRequired: "Ground name is required.",
+        areaRequired: "Area in ha is required.",
+        areaInvalid: "Area in ha must be a valid positive number.",
+        statusInvalid: "Invalid ground status.",
+        targetNotFound: "Target ground not found.",
+        saveFailedPrefix: "Failed to save ground changes:",
+        defaultDeleteBlocked: "The default ground cannot be deleted.",
+        deleteFailedPrefix: "Failed to delete ground:",
+        eyebrow: "Grounds",
+        title: "Grounds",
+        intro:
+          "Grounds are the operational area scope of your organization. They structure camera assignments, wildlife analytics and later population-related calculations within Venaris.",
+        demoReadOnly: "Demo mode: changes are disabled.",
+        created: "Ground was created successfully.",
+        updated: "Ground was updated successfully.",
+        deleted: "Ground was deleted successfully.",
+        activeTitle: "Active",
+        activeText:
+          "Productively used grounds in the current organization context.",
+        pausedTitle: "Paused",
+        pausedText: "Grounds temporarily taken out of active focus.",
+        archivedTitle: "Archived",
+        archivedText:
+          "Historically retained but no longer actively used grounds.",
+        listTitle: "Ground list",
+        listText: "Current grounds of the active organization.",
+        createGround: "Create ground",
+        emptyTitle: "No grounds created yet",
+        emptyText:
+          "There are currently no grounds for the active organization. Grounds define the operational scope for cameras, wildlife analytics and later population estimates.",
+        firstGround: "Create first ground",
+        nameCol: "Name",
+        areaCol: "Area",
+        statusCol: "Status",
+        actionsCol: "Actions",
+      }
+    : {
+missingTarget: "Ziel-Revier fehlt.",
+nameRequired: "Reviername ist erforderlich.",
+areaRequired: "Fläche in ha ist erforderlich.",
+areaInvalid: "Fläche in ha muss eine gültige positive Zahl sein.",
+statusInvalid: "Ungültiger Revierstatus.",
+targetNotFound: "Ziel-Revier wurde nicht gefunden.",
+saveFailedPrefix: "Fehler beim Speichern der Revieränderungen:",
+defaultDeleteBlocked: "Das Standard-Revier kann nicht gelöscht werden.",
+deleteFailedPrefix: "Fehler beim Löschen des Reviers:",
+eyebrow: "Reviere",
+title: "Reviere",
+intro:
+  "Reviere sind der fachliche Flächenscope Deiner Organisation. Sie strukturieren Kamerazuordnung, Wildlife-Auswertungen und spätere populationsbezogene Berechnungen innerhalb von Venaris.",
+demoReadOnly: "Demo-Modus: Änderungen sind deaktiviert.",
+created: "Revier wurde erfolgreich angelegt.",
+updated: "Revier wurde erfolgreich aktualisiert.",
+deleted: "Revier wurde erfolgreich gelöscht.",
+activeTitle: "Aktiv",
+activeText: "Produktiv genutzte Reviere im aktuellen Organisationskontext.",
+pausedTitle: "Pausiert",
+pausedText: "Vorübergehend aus dem aktiven Fokus genommene Reviere.",
+archivedTitle: "Archiviert",
+archivedText:
+  "Historisch erhaltene, aber nicht mehr aktiv genutzte Reviere.",
+listTitle: "Revierliste",
+listText: "Aktuelle Reviere der aktiven Organisation.",
+createGround: "Revier anlegen",
+emptyTitle: "Noch keine Reviere angelegt",
+emptyText:
+  "Für die aktive Organisation sind aktuell noch keine Reviere vorhanden. Reviere bilden den fachlichen Scope für Kameras, Wildlife-Auswertungen und spätere Populationsschätzungen.",
+firstGround: "Erstes Revier anlegen",
+nameCol: "Name",
+areaCol: "Fläche",
+statusCol: "Status",
+actionsCol: "Aktionen",
+      };
 }
 
 async function loadRevierForMutation(params: {
@@ -49,7 +158,9 @@ async function loadRevierForMutation(params: {
 async function saveRevierChanges(formData: FormData) {
   "use server";
 
-  const ctx = await requirePathAccess("/orga/reviere");
+  const { ctx, supabase, language } = await resolveUiLanguageForProtectedPath(
+    "/orga/reviere"
+  );
   redirectIfDemoWrite(ctx, "/orga/reviere?demo_read_only=1");
 
   if (!ctx.activeMembership) {
@@ -57,6 +168,8 @@ async function saveRevierChanges(formData: FormData) {
   }
 
   const organization = ctx.activeMembership.organizations;
+  const text = t(language);
+
   const revierId = String(formData.get("revier_id") ?? "").trim();
   const name = String(formData.get("name") ?? "").trim();
   const areaHaRaw = String(formData.get("area_ha") ?? "").trim();
@@ -67,25 +180,25 @@ async function saveRevierChanges(formData: FormData) {
   }
 
   if (!revierId) {
-    throw new Error("Missing target revier.");
+    throw new Error(text.missingTarget);
   }
 
   if (!name) {
-    throw new Error("Reviername ist erforderlich.");
+    throw new Error(text.nameRequired);
   }
 
   if (!areaHaRaw) {
-    throw new Error("Fläche in ha ist erforderlich.");
+    throw new Error(text.areaRequired);
   }
 
   const parsed = Number(areaHaRaw);
 
   if (!Number.isFinite(parsed) || parsed <= 0) {
-    throw new Error("Fläche in ha muss eine gültige positive Zahl sein.");
+    throw new Error(text.areaInvalid);
   }
 
   if (!isRevierStatus(statusRaw)) {
-    throw new Error("Ungültiger Revierstatus.");
+    throw new Error(text.statusInvalid);
   }
 
   const targetRevier = await loadRevierForMutation({
@@ -94,7 +207,7 @@ async function saveRevierChanges(formData: FormData) {
   });
 
   if (!targetRevier) {
-    throw new Error("Target revier not found.");
+    throw new Error(text.targetNotFound);
   }
 
   const areaHa = Math.round(parsed);
@@ -108,8 +221,6 @@ async function saveRevierChanges(formData: FormData) {
     redirect("/orga/reviere");
   }
 
-  const supabase = supabaseServer();
-
   const { error } = await supabase
     .from("reviers")
     .update({
@@ -121,7 +232,7 @@ async function saveRevierChanges(formData: FormData) {
     .eq("organization_id", organization.id);
 
   if (error) {
-    throw new Error(`Failed to save revier changes: ${error.message}`);
+    throw new Error(`${text.saveFailedPrefix} ${error.message}`);
   }
 
   revalidatePath("/orga/reviere");
@@ -132,7 +243,9 @@ async function saveRevierChanges(formData: FormData) {
 async function deleteRevier(formData: FormData) {
   "use server";
 
-  const ctx = await requirePathAccess("/orga/reviere");
+  const { ctx, supabase, language } = await resolveUiLanguageForProtectedPath(
+    "/orga/reviere"
+  );
   redirectIfDemoWrite(ctx, "/orga/reviere?demo_read_only=1");
 
   if (!ctx.activeMembership) {
@@ -140,6 +253,7 @@ async function deleteRevier(formData: FormData) {
   }
 
   const organization = ctx.activeMembership.organizations;
+  const text = t(language);
   const revierId = String(formData.get("revier_id") ?? "").trim();
 
   if (!organization) {
@@ -147,7 +261,7 @@ async function deleteRevier(formData: FormData) {
   }
 
   if (!revierId) {
-    throw new Error("Missing target revier.");
+    throw new Error(text.missingTarget);
   }
 
   const targetRevier = await loadRevierForMutation({
@@ -156,14 +270,12 @@ async function deleteRevier(formData: FormData) {
   });
 
   if (!targetRevier) {
-    throw new Error("Target revier not found.");
+    throw new Error(text.targetNotFound);
   }
 
   if (targetRevier.is_default) {
-    throw new Error("Das Default-Revier kann nicht gelöscht werden.");
+    throw new Error(text.defaultDeleteBlocked);
   }
-
-  const supabase = supabaseServer();
 
   const { error } = await supabase
     .from("reviers")
@@ -172,7 +284,7 @@ async function deleteRevier(formData: FormData) {
     .eq("organization_id", organization.id);
 
   if (error) {
-    throw new Error(`Failed to delete revier: ${error.message}`);
+    throw new Error(`${text.deleteFailedPrefix} ${error.message}`);
   }
 
   revalidatePath("/orga/reviere");
@@ -214,7 +326,9 @@ export default async function OrgaRevierePage({
   const deleted = params.deleted === "1";
   const demoReadOnly = params.demo_read_only === "1";
 
-  const ctx = await requirePathAccess("/orga/reviere");
+  const { ctx, supabase, language } = await resolveUiLanguageForProtectedPath(
+    "/orga/reviere"
+  );
 
   if (!ctx.activeMembership) {
     throw new Error("Active organization context required");
@@ -227,7 +341,7 @@ export default async function OrgaRevierePage({
     throw new Error("Active organization not found");
   }
 
-  const supabase = supabaseServer();
+  const text = t(language);
 
   const { data, error } = await supabase
     .from("reviers")
@@ -244,90 +358,78 @@ export default async function OrgaRevierePage({
 
   const activeCount = reviers.filter((revier) => revier.status === "active").length;
   const pausedCount = reviers.filter((revier) => revier.status === "paused").length;
-  const archivedCount = reviers.filter((revier) => revier.status === "archived").length;
+  const archivedCount = reviers.filter(
+    (revier) => revier.status === "archived"
+  ).length;
 
   return (
     <main className="space-y-8">
       <section className="rounded-[32px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(201,149,46,0.16),transparent_24%),linear-gradient(135deg,rgba(255,255,255,0.06),rgba(255,255,255,0.03))] p-6 backdrop-blur-sm">
         <div>
           <div className="text-xs font-medium uppercase tracking-[0.22em] text-amber-200/80">
-            Reviere
+            {text.eyebrow}
           </div>
           <h1 className="mt-3 text-3xl font-semibold tracking-tight text-white">
-            Reviere
+            {text.title}
           </h1>
-          <p className="mt-2 max-w-3xl text-sm text-white/68">
-            Reviere sind der fachliche Flächenscope Deiner Organisation. Sie
-            strukturieren Kamerazuordnung, Wildlife-Auswertungen und spätere
-            populationsbezogene Berechnungen innerhalb von Venaris.
-          </p>
+          <p className="mt-2 max-w-3xl text-sm text-white/68">{text.intro}</p>
         </div>
       </section>
 
       {demoReadOnly ? (
         <section className="rounded-[24px] border border-amber-300/20 bg-amber-300/10 p-4">
-          <p className="text-sm text-amber-100">
-            Demo-Modus: Änderungen sind deaktiviert.
-          </p>
+          <p className="text-sm text-amber-100">{text.demoReadOnly}</p>
         </section>
       ) : null}
 
       {created ? (
         <section className="rounded-[24px] border border-emerald-300/20 bg-emerald-300/10 p-4">
-          <p className="text-sm text-emerald-100">
-            Revier wurde erfolgreich angelegt.
-          </p>
+          <p className="text-sm text-emerald-100">{text.created}</p>
         </section>
       ) : null}
 
       {updated ? (
         <section className="rounded-[24px] border border-emerald-300/20 bg-emerald-300/10 p-4">
-          <p className="text-sm text-emerald-100">
-            Revier wurde erfolgreich aktualisiert.
-          </p>
+          <p className="text-sm text-emerald-100">{text.updated}</p>
         </section>
       ) : null}
 
       {deleted ? (
         <section className="rounded-[24px] border border-emerald-300/20 bg-emerald-300/10 p-4">
-          <p className="text-sm text-emerald-100">
-            Revier wurde erfolgreich gelöscht.
-          </p>
+          <p className="text-sm text-emerald-100">{text.deleted}</p>
         </section>
       ) : null}
 
       <section className="grid gap-4 md:grid-cols-3">
         <StatCard
-          title="Active"
+          title={text.activeTitle}
           value={activeCount}
-          text="Produktiv genutzte Reviere im aktuellen Organizationskontext."
+          text={text.activeText}
         />
         <StatCard
-          title="Paused"
+          title={text.pausedTitle}
           value={pausedCount}
-          text="Vorübergehend aus dem aktiven Fokus genommene Reviere."
+          text={text.pausedText}
         />
         <StatCard
-          title="Archived"
+          title={text.archivedTitle}
           value={archivedCount}
-          text="Historisch erhaltene, aber nicht mehr aktiv genutzte Reviere."
+          text={text.archivedText}
         />
       </section>
 
       <section className="rounded-[28px] border border-white/10 bg-white/5 backdrop-blur-sm">
         <div className="flex items-center justify-between border-b border-white/8 px-6 py-4">
           <div>
-            <h2 className="text-lg font-medium text-white">Revierliste</h2>
-            <p className="mt-1 text-sm text-white/65">
-              Aktuelle Reviere der aktiven Organisation.
-            </p>
+            <h2 className="text-lg font-medium text-white">{text.listTitle}</h2>
+            <p className="mt-1 text-sm text-white/65">{text.listText}</p>
           </div>
 
           <Link
             href="/orga/reviere/new"
             className="rounded-full border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/78 hover:border-amber-300/20 hover:bg-white/8 hover:text-white"
           >
-            Revier anlegen
+            {text.createGround}
           </Link>
         </div>
 
@@ -335,19 +437,17 @@ export default async function OrgaRevierePage({
           <div className="px-6 py-10">
             <div className="rounded-[24px] border border-dashed border-white/10 bg-white/5 p-8">
               <h3 className="text-base font-medium text-white">
-                Noch keine Reviere angelegt
+                {text.emptyTitle}
               </h3>
               <p className="mt-2 max-w-2xl text-sm leading-6 text-white/68">
-                Für die aktive Organisation sind aktuell noch keine Reviere
-                vorhanden. Reviere bilden den fachlichen Scope für Kameras,
-                Wildlife-Auswertungen und spätere Population Estimates.
+                {text.emptyText}
               </p>
               <div className="mt-5">
                 <Link
                   href="/orga/reviere/new"
                   className="rounded-full border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/78 hover:border-amber-300/20 hover:bg-white/8 hover:text-white"
                 >
-                  Erstes Revier anlegen
+                  {text.firstGround}
                 </Link>
               </div>
             </div>
@@ -357,11 +457,17 @@ export default async function OrgaRevierePage({
             <table className="min-w-full text-sm">
               <thead className="bg-white/5 text-left text-white/55">
                 <tr>
-                  <th className="px-6 py-3 font-medium whitespace-nowrap">Name</th>
-                  <th className="px-6 py-3 font-medium whitespace-nowrap">Fläche</th>
-                  <th className="px-6 py-3 font-medium whitespace-nowrap">Status</th>
+                  <th className="px-6 py-3 font-medium whitespace-nowrap">
+                    {text.nameCol}
+                  </th>
+                  <th className="px-6 py-3 font-medium whitespace-nowrap">
+                    {text.areaCol}
+                  </th>
+                  <th className="px-6 py-3 font-medium whitespace-nowrap">
+                    {text.statusCol}
+                  </th>
                   <th className="px-6 py-3 font-medium whitespace-nowrap text-right">
-                    Aktionen
+                    {text.actionsCol}
                   </th>
                 </tr>
               </thead>
@@ -375,6 +481,7 @@ export default async function OrgaRevierePage({
                       initialStatus={revier.status}
                       saveAction={saveRevierChanges}
                       isDemo={isDemo}
+                      language={language}
                     />
 
                     <RevierRowActions
@@ -382,6 +489,7 @@ export default async function OrgaRevierePage({
                       canDelete={!revier.is_default}
                       deleteAction={deleteRevier}
                       isDemo={isDemo}
+                      language={language}
                     />
                   </tr>
                 ))}

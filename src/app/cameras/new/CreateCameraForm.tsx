@@ -1,7 +1,8 @@
-// src/app/cameras/new/CreateCameraForm.tsx #8
+// src/app/cameras/new/CreateCameraForm.tsx #11
 "use client";
 
 import { useMemo, useState } from "react";
+import type { AppLanguage } from "@/lib/i18n";
 import type {
   SubscriptionActionPolicy,
   SubscriptionStatus,
@@ -30,6 +31,7 @@ type Props = {
   effectiveStatus: SubscriptionStatus;
   rawStatus: SubscriptionStatus;
   isDemo?: boolean;
+  language: AppLanguage;
 };
 
 type CreateResponse = {
@@ -74,11 +76,162 @@ const VENDORS = [
   "other",
 ] as const;
 
-const METHODS = [
-  { value: "smtp", label: "SMTP / E-Mail" },
-  { value: "ftp", label: "FTP" },
-  { value: "manual", label: "Manual Import" },
-] as const;
+function t(language: AppLanguage) {
+  if (language === "en") {
+    return {
+      methods: [
+        { value: "smtp", label: "SMTP / Email" },
+        { value: "ftp", label: "FTP" },
+        { value: "manual", label: "Manual import" },
+      ] as const,
+      usageTitle: "Camera usage",
+      usageNow: "Currently used:",
+      usageOf: "of",
+      cameras: "cameras",
+      trialExpiredHint:
+        "Note: the trial has already expired in business logic and is treated effectively as `expired`.",
+      demoReadOnly: "Demo mode: changes are disabled.",
+      organization: "Organization",
+      cameraName: "Camera name",
+      cameraNamePlaceholder: "e.g. Reolink North Edge",
+      method: "Method",
+      vendor: "Vendor",
+      ground: "Ground",
+      locationName: "Location name (optional)",
+      locationPlaceholder: "e.g. Forest edge west",
+      latitude: "Latitude (optional)",
+      longitude: "Longitude (optional)",
+      direction: "Direction (0–359, optional)",
+      notes: "Notes (optional)",
+      notesPlaceholder: "Optional setup notes",
+      selectGround: "Please select a ground.",
+      createFailed: "Failed to create camera",
+      unexpectedError: "Unexpected error",
+      copied: "copied.",
+      copyFailed: "Could not copy",
+      createBlocked: "Camera creation blocked",
+      creating: "Creating...",
+      createCamera: "Create camera",
+      demoMode: "Demo mode",
+      understood: "Understood",
+      provisioningTitle: "Provisioning result",
+      provisioningText:
+        "The camera has been created successfully. Save the provisioning data now.",
+      coreProvisioning: "Core provisioning",
+      coreProvisioningText: "Basic camera data for later reference.",
+      copyBlock: "Copy block",
+      cameraId: "Camera ID",
+      technicalName: "Technical name",
+      ingestToken: "Ingest token",
+      ftpSetup: "FTP setup",
+      ftpSetupText:
+        "Enter these values into the camera now. The password is shown only once.",
+      important:
+        "Important: store the FTP password now. It will not be shown again after this page.",
+      ftpServer: "FTP server",
+      ftpPort: "FTP port",
+      ftpUsername: "FTP username",
+      ftpPassword: "FTP password",
+      path: "Path",
+      passiveMode: "Passive mode",
+      enabled: "Enabled",
+      disabled: "Disabled",
+      smtpSetup: "SMTP setup",
+      smtpSetupText: "Use this email address in the camera configuration.",
+      smtpAlias: "SMTP alias",
+      manualSetup: "Manual import setup",
+      manualSetupText:
+        "This camera is ready for manual uploads in the Import section.",
+      manualLabel: "Manual label",
+      demoTitle: "Demo mode",
+      demoText:
+        "This is a demo account. Records cannot be deleted, added, or changed.",
+      paused: "Paused",
+      archived: "Archived",
+      coreProvisioningLabel: "Core provisioning",
+      ftpSetupLabel: "FTP setup",
+      smtpSetupLabel: "SMTP setup",
+      manualSetupLabel: "Manual import setup",
+    };
+  }
+
+  return {
+    methods: [
+      { value: "smtp", label: "SMTP / E-Mail" },
+      { value: "ftp", label: "FTP" },
+      { value: "manual", label: "Manueller Import" },
+    ] as const,
+    usageTitle: "Kamera-Nutzung",
+    usageNow: "Aktuell genutzt:",
+    usageOf: "von",
+    cameras: "Kameras",
+    trialExpiredHint:
+      "Hinweis: Der Trial ist fachlich bereits abgelaufen und wird effektiv als `expired` behandelt.",
+    demoReadOnly: "Demo-Modus: Änderungen sind deaktiviert.",
+    organization: "Organisation",
+    cameraName: "Kameraname",
+    cameraNamePlaceholder: "z. B. Reolink Nordkante",
+    method: "Methode",
+    vendor: "Hersteller",
+    ground: "Revier",
+    locationName: "Standortname (optional)",
+    locationPlaceholder: "z. B. Waldrand West",
+    latitude: "Breitengrad (optional)",
+    longitude: "Längengrad (optional)",
+    direction: "Richtung (0–359, optional)",
+    notes: "Notizen (optional)",
+    notesPlaceholder: "Optionale Setup-Notizen",
+    selectGround: "Bitte ein Revier auswählen.",
+    createFailed: "Kamera konnte nicht angelegt werden",
+    unexpectedError: "Unerwarteter Fehler",
+    copied: "kopiert.",
+    copyFailed: "Konnte nicht kopieren:",
+    createBlocked: "Kameraanlage gesperrt",
+    creating: "Wird angelegt...",
+    createCamera: "Kamera anlegen",
+    demoMode: "Demo-Modus",
+    understood: "Verstanden",
+    provisioningTitle: "Provisioning-Ergebnis",
+    provisioningText:
+      "Die Kamera wurde erfolgreich angelegt. Bitte speichere die Provisioning-Daten jetzt.",
+    coreProvisioning: "Core Provisioning",
+    coreProvisioningText: "Basisdaten dieser Kamera für spätere Referenz.",
+    copyBlock: "Block kopieren",
+    cameraId: "Kamera-ID",
+    technicalName: "Technical Name",
+    ingestToken: "Ingest-Token",
+    ftpSetup: "FTP-Setup",
+    ftpSetupText:
+      "Bitte diese Werte jetzt direkt in der Kamera eintragen. Das Passwort wird nur einmal angezeigt.",
+    important:
+      "Wichtig: Bitte das FTP-Passwort jetzt sichern. Nach Verlassen der Seite wird es nicht erneut angezeigt.",
+    ftpServer: "FTP-Server",
+    ftpPort: "FTP-Port",
+    ftpUsername: "FTP-Benutzername",
+    ftpPassword: "FTP-Passwort",
+    path: "Pfad",
+    passiveMode: "Passivmodus",
+    enabled: "Aktiviert",
+    disabled: "Deaktiviert",
+    smtpSetup: "SMTP-Setup",
+    smtpSetupText:
+      "Bitte diese E-Mail-Adresse in der Kamera-Konfiguration verwenden.",
+    smtpAlias: "SMTP-Alias",
+    manualSetup: "Setup manueller Import",
+    manualSetupText:
+      "Diese Kamera ist jetzt für manuelle Uploads im Import-Bereich bereit.",
+    manualLabel: "Manual Label",
+    demoTitle: "Demo-Modus",
+    demoText:
+      "Das ist ein Demo-Account. Datensätze können weder entfernt noch hinzugefügt oder geändert werden.",
+    paused: "Pausiert",
+    archived: "Archiviert",
+    coreProvisioningLabel: "Core Provisioning",
+    ftpSetupLabel: "FTP-Setup",
+    smtpSetupLabel: "SMTP-Setup",
+    manualSetupLabel: "Setup manueller Import",
+  };
+}
 
 function copyText(value: string) {
   return navigator.clipboard.writeText(value);
@@ -104,41 +257,58 @@ function badgeTone(allowed: boolean) {
       };
 }
 
-function buildCoreProvisioningCopy(camera: CreateResponse["camera"]) {
+function buildCoreProvisioningCopy(
+  camera: CreateResponse["camera"],
+  language: AppLanguage
+) {
+  const text = t(language);
+
   return [
-    "Provisioning Result",
-    `Camera ID: ${camera.id}`,
-    `Technical Name: ${camera.technicalName}`,
-    `Ingest Token: ${camera.ingestToken}`,
+    text.coreProvisioningLabel,
+    `${text.cameraId}: ${camera.id}`,
+    `${text.technicalName}: ${camera.technicalName}`,
+    `${text.ingestToken}: ${camera.ingestToken}`,
   ].join("\n");
 }
 
 function buildFtpProvisioningCopy(
-  ftpProvisioning: NonNullable<CreateResponse["ftpProvisioning"]>
+  ftpProvisioning: NonNullable<CreateResponse["ftpProvisioning"]>,
+  language: AppLanguage
 ) {
+  const text = t(language);
+
   return [
-    "FTP Setup",
-    `FTP Server: ${ftpProvisioning.host}`,
-    `FTP Port: ${ftpProvisioning.port}`,
-    `FTP Username: ${ftpProvisioning.username}`,
-    `FTP Password: ${ftpProvisioning.password}`,
-    `Path: ${ftpProvisioning.path}`,
-    `Passive Mode: ${ftpProvisioning.passiveMode ? "Enabled" : "Disabled"}`,
+    text.ftpSetupLabel,
+    `${text.ftpServer}: ${ftpProvisioning.host}`,
+    `${text.ftpPort}: ${ftpProvisioning.port}`,
+    `${text.ftpUsername}: ${ftpProvisioning.username}`,
+    `${text.ftpPassword}: ${ftpProvisioning.password}`,
+    `${text.path}: ${ftpProvisioning.path}`,
+    `${text.passiveMode}: ${ftpProvisioning.passiveMode ? text.enabled : text.disabled}`,
   ].join("\n");
 }
 
-function buildSmtpProvisioningCopy(smtpAlias: string) {
-  return ["SMTP Setup", `SMTP Alias: ${smtpAlias}`].join("\n");
+function buildSmtpProvisioningCopy(smtpAlias: string, language: AppLanguage) {
+  const text = t(language);
+  return [text.smtpSetupLabel, `${text.smtpAlias}: ${smtpAlias}`].join("\n");
 }
 
-function buildManualProvisioningCopy(manualLabel: string) {
-  return ["Manual Import Setup", `Manual Label: ${manualLabel}`].join("\n");
+function buildManualProvisioningCopy(
+  manualLabel: string,
+  language: AppLanguage
+) {
+  const text = t(language);
+  return [text.manualSetupLabel, `${text.manualLabel}: ${manualLabel}`].join(
+    "\n"
+  );
 }
 
-function formatRevierLabel(revier: Revier) {
+function formatRevierLabel(revier: Revier, language: AppLanguage) {
+  const text = t(language);
+
   if (revier.status === "active") return revier.name;
-  if (revier.status === "paused") return `${revier.name} (Paused)`;
-  if (revier.status === "archived") return `${revier.name} (Archived)`;
+  if (revier.status === "paused") return `${revier.name} (${text.paused})`;
+  if (revier.status === "archived") return `${revier.name} (${text.archived})`;
   return revier.name;
 }
 
@@ -151,11 +321,13 @@ export default function CreateCameraForm({
   effectiveStatus,
   rawStatus,
   isDemo = false,
+  language,
 }: Props) {
+  const text = t(language);
   const organizationId = organization.id;
 
   const filteredReviers = useMemo(() => {
-    return reviers.filter((r) => r.organization_id === organizationId);
+    return reviers.filter((revier) => revier.organization_id === organizationId);
   }, [reviers, organizationId]);
 
   const defaultRevierId = useMemo(() => {
@@ -197,7 +369,7 @@ export default function CreateCameraForm({
     }
 
     if (!revierId) {
-      setError("Bitte ein Revier auswählen.");
+      setError(text.selectGround);
       return;
     }
 
@@ -229,7 +401,7 @@ export default function CreateCameraForm({
       const json = await res.json();
 
       if (!res.ok) {
-        setError(json?.details || json?.error || "Failed to create camera");
+        setError(json?.details || json?.error || text.createFailed);
         return;
       }
 
@@ -243,7 +415,7 @@ export default function CreateCameraForm({
       setNotes("");
       setRevierId(defaultRevierId);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Unexpected error");
+      setError(err instanceof Error ? err.message : text.unexpectedError);
     } finally {
       setLoading(false);
     }
@@ -251,12 +423,13 @@ export default function CreateCameraForm({
 
   async function handleCopy(label: string, value: string | null | undefined) {
     if (!value) return;
+
     try {
       await copyText(value);
-      setCopyMsg(`${label} copied.`);
+      setCopyMsg(`${label} ${text.copied}`);
       window.setTimeout(() => setCopyMsg(""), 2000);
     } catch {
-      setCopyMsg(`Could not copy ${label.toLowerCase()}.`);
+      setCopyMsg(`${text.copyFailed} ${label.toLowerCase()}.`);
       window.setTimeout(() => setCopyMsg(""), 2000);
     }
   }
@@ -270,12 +443,12 @@ export default function CreateCameraForm({
       <section className={`rounded-[28px] border p-5 backdrop-blur-sm ${tone.wrap}`}>
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
-            <h2 className={`text-base font-semibold ${tone.title}`}>Kamera-Nutzung</h2>
+            <h2 className={`text-base font-semibold ${tone.title}`}>{text.usageTitle}</h2>
             <p className={`mt-1 text-sm leading-6 ${tone.text}`}>
               {cameraPolicy.message}
             </p>
             <p className={`mt-1 text-xs ${tone.hint}`}>
-              Aktuell genutzt: {currentCameraCount} von {maxCameras} Kameras.
+              {text.usageNow} {currentCameraCount} {text.usageOf} {maxCameras} {text.cameras}.
             </p>
           </div>
 
@@ -292,18 +465,13 @@ export default function CreateCameraForm({
         </div>
 
         {effectiveStatus !== rawStatus ? (
-          <p className="mt-3 text-xs text-rose-200">
-            Hinweis: Der Trial ist fachlich bereits abgelaufen und wird effektiv als
-            `expired` behandelt.
-          </p>
+          <p className="mt-3 text-xs text-rose-200">{text.trialExpiredHint}</p>
         ) : null}
       </section>
 
       {isDemo ? (
         <section className="rounded-[24px] border border-amber-300/20 bg-amber-300/10 p-4">
-          <p className="text-sm text-amber-100">
-            Demo-Modus: Änderungen sind deaktiviert.
-          </p>
+          <p className="text-sm text-amber-100">{text.demoReadOnly}</p>
         </section>
       ) : null}
 
@@ -313,74 +481,78 @@ export default function CreateCameraForm({
       >
         <div className="grid gap-5 md:grid-cols-2">
           <div className="md:col-span-2">
-            <label className="mb-1 block text-sm font-medium text-white">Organization</label>
+            <label className="mb-1 block text-sm font-medium text-white">{text.organization}</label>
             <div className="w-full rounded-[14px] border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/72">
               {organization.name} ({organization.slug})
             </div>
           </div>
 
           <div className="md:col-span-2">
-            <label className="mb-1 block text-sm font-medium text-white">Camera Name</label>
+            <label className="mb-1 block text-sm font-medium text-white">{text.cameraName}</label>
             <input
               value={cameraName}
               onChange={(e) => setCameraName(e.target.value)}
               className="w-full rounded-[14px] border border-white/10 bg-white/5 px-3 py-2 text-white outline-none placeholder:text-white/35 disabled:bg-white/5 disabled:text-white/35"
-              placeholder="e.g. Reolink North Edge"
+              placeholder={text.cameraNamePlaceholder}
               required
               disabled={formDisabled}
-              title={isDemo ? "Demo-Modus: Änderungen sind deaktiviert." : ""}
+              title={isDemo ? text.demoReadOnly : ""}
             />
           </div>
 
           <div>
-            <label className="mb-1 block text-sm font-medium text-white">Method</label>
+            <label className="mb-1 block text-sm font-medium text-white">{text.method}</label>
             <select
               value={method}
               onChange={(e) => setMethod(e.target.value as "smtp" | "ftp" | "manual")}
               className="w-full rounded-[14px] border border-white/10 bg-white/5 px-3 py-2 text-white outline-none disabled:bg-white/5 disabled:text-white/35"
               required
               disabled={formDisabled}
-              title={isDemo ? "Demo-Modus: Änderungen sind deaktiviert." : ""}
+              title={isDemo ? text.demoReadOnly : ""}
             >
-              {METHODS.map((m) => (
-                <option key={m.value} value={m.value} className="bg-[#102018] text-white">
-                  {m.label}
+              {text.methods.map((methodOption) => (
+                <option
+                  key={methodOption.value}
+                  value={methodOption.value}
+                  className="bg-[#102018] text-white"
+                >
+                  {methodOption.label}
                 </option>
               ))}
             </select>
           </div>
 
           <div>
-            <label className="mb-1 block text-sm font-medium text-white">Vendor</label>
+            <label className="mb-1 block text-sm font-medium text-white">{text.vendor}</label>
             <select
               value={vendor}
               onChange={(e) => setVendor(e.target.value as (typeof VENDORS)[number])}
               className="w-full rounded-[14px] border border-white/10 bg-white/5 px-3 py-2 text-white outline-none disabled:bg-white/5 disabled:text-white/35"
               required
               disabled={formDisabled}
-              title={isDemo ? "Demo-Modus: Änderungen sind deaktiviert." : ""}
+              title={isDemo ? text.demoReadOnly : ""}
             >
-              {VENDORS.map((v) => (
-                <option key={v} value={v} className="bg-[#102018] text-white">
-                  {v}
+              {VENDORS.map((vendorOption) => (
+                <option key={vendorOption} value={vendorOption} className="bg-[#102018] text-white">
+                  {vendorOption}
                 </option>
               ))}
             </select>
           </div>
 
           <div className="md:col-span-2">
-            <label className="mb-1 block text-sm font-medium text-white">Revier</label>
+            <label className="mb-1 block text-sm font-medium text-white">{text.ground}</label>
             <select
               value={revierId}
               onChange={(e) => setRevierId(e.target.value)}
               className="w-full rounded-[14px] border border-white/10 bg-white/5 px-3 py-2 text-white outline-none disabled:bg-white/5 disabled:text-white/35"
               required
               disabled={formDisabled || filteredReviers.length === 0}
-              title={isDemo ? "Demo-Modus: Änderungen sind deaktiviert." : ""}
+              title={isDemo ? text.demoReadOnly : ""}
             >
               {filteredReviers.map((revier) => (
                 <option key={revier.id} value={revier.id} className="bg-[#102018] text-white">
-                  {formatRevierLabel(revier)}
+                  {formatRevierLabel(revier, language)}
                 </option>
               ))}
             </select>
@@ -388,21 +560,21 @@ export default function CreateCameraForm({
 
           <div className="md:col-span-2">
             <label className="mb-1 block text-sm font-medium text-white">
-              Location Name (optional)
+              {text.locationName}
             </label>
             <input
               value={locationName}
               onChange={(e) => setLocationName(e.target.value)}
               className="w-full rounded-[14px] border border-white/10 bg-white/5 px-3 py-2 text-white outline-none placeholder:text-white/35 disabled:bg-white/5 disabled:text-white/35"
-              placeholder="e.g. Forest edge west"
+              placeholder={text.locationPlaceholder}
               disabled={formDisabled}
-              title={isDemo ? "Demo-Modus: Änderungen sind deaktiviert." : ""}
+              title={isDemo ? text.demoReadOnly : ""}
             />
           </div>
 
           <div>
             <label className="mb-1 block text-sm font-medium text-white">
-              Latitude (optional)
+              {text.latitude}
             </label>
             <input
               type="number"
@@ -412,13 +584,13 @@ export default function CreateCameraForm({
               className="w-full rounded-[14px] border border-white/10 bg-white/5 px-3 py-2 text-white outline-none placeholder:text-white/35 disabled:bg-white/5 disabled:text-white/35"
               placeholder="52.123456"
               disabled={formDisabled}
-              title={isDemo ? "Demo-Modus: Änderungen sind deaktiviert." : ""}
+              title={isDemo ? text.demoReadOnly : ""}
             />
           </div>
 
           <div>
             <label className="mb-1 block text-sm font-medium text-white">
-              Longitude (optional)
+              {text.longitude}
             </label>
             <input
               type="number"
@@ -428,13 +600,13 @@ export default function CreateCameraForm({
               className="w-full rounded-[14px] border border-white/10 bg-white/5 px-3 py-2 text-white outline-none placeholder:text-white/35 disabled:bg-white/5 disabled:text-white/35"
               placeholder="8.123456"
               disabled={formDisabled}
-              title={isDemo ? "Demo-Modus: Änderungen sind deaktiviert." : ""}
+              title={isDemo ? text.demoReadOnly : ""}
             />
           </div>
 
           <div>
             <label className="mb-1 block text-sm font-medium text-white">
-              Direction (0–359, optional)
+              {text.direction}
             </label>
             <input
               type="number"
@@ -446,19 +618,19 @@ export default function CreateCameraForm({
               className="w-full rounded-[14px] border border-white/10 bg-white/5 px-3 py-2 text-white outline-none placeholder:text-white/35 disabled:bg-white/5 disabled:text-white/35"
               placeholder="180"
               disabled={formDisabled}
-              title={isDemo ? "Demo-Modus: Änderungen sind deaktiviert." : ""}
+              title={isDemo ? text.demoReadOnly : ""}
             />
           </div>
 
           <div className="md:col-span-2">
-            <label className="mb-1 block text-sm font-medium text-white">Notes (optional)</label>
+            <label className="mb-1 block text-sm font-medium text-white">{text.notes}</label>
             <textarea
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               className="min-h-[100px] w-full rounded-[14px] border border-white/10 bg-white/5 px-3 py-2 text-white outline-none placeholder:text-white/35 disabled:bg-white/5 disabled:text-white/35"
-              placeholder="Optional setup notes"
+              placeholder={text.notesPlaceholder}
               disabled={formDisabled}
-              title={isDemo ? "Demo-Modus: Änderungen sind deaktiviert." : ""}
+              title={isDemo ? text.demoReadOnly : ""}
             />
           </div>
         </div>
@@ -476,12 +648,12 @@ export default function CreateCameraForm({
             className="rounded-[14px] bg-[#c9952e] px-4 py-2 text-sm font-medium text-[#102018] disabled:opacity-50"
           >
             {isDemo
-              ? "Demo-Modus"
+              ? text.demoMode
               : !cameraPolicy.allowed
-                ? "Kameraanlage gesperrt"
+                ? text.createBlocked
                 : loading
-                  ? "Creating..."
-                  : "Create Camera"}
+                  ? text.creating
+                  : text.createCamera}
           </button>
         </div>
       </form>
@@ -489,11 +661,8 @@ export default function CreateCameraForm({
       {showDemoModal ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="w-full max-w-md rounded-[20px] border border-white/10 bg-[#102018] p-6 shadow-2xl">
-            <h3 className="text-lg font-semibold text-white">Demo-Modus</h3>
-            <p className="mt-2 text-sm text-white/70">
-              Das ist ein Demo-Account. Datensätze können weder entfernt noch
-              hinzugefügt oder geändert werden.
-            </p>
+            <h3 className="text-lg font-semibold text-white">{text.demoTitle}</h3>
+            <p className="mt-2 text-sm text-white/70">{text.demoText}</p>
 
             <div className="mt-5 flex items-center justify-end gap-3">
               <button
@@ -501,7 +670,7 @@ export default function CreateCameraForm({
                 onClick={() => setShowDemoModal(false)}
                 className="rounded-[10px] border border-white/10 bg-white/5 px-4 py-2 text-sm text-white/78 hover:bg-white/8 hover:text-white"
               >
-                Verstanden
+                {text.understood}
               </button>
             </div>
           </div>
@@ -511,10 +680,8 @@ export default function CreateCameraForm({
       {camera ? (
         <div className="space-y-5 rounded-[28px] border border-white/10 bg-white/5 p-6 backdrop-blur-sm">
           <div>
-            <h2 className="text-lg font-semibold text-white">Provisioning Result</h2>
-            <p className="mt-1 text-sm text-white/68">
-              The camera has been created successfully. Save the provisioning data now.
-            </p>
+            <h2 className="text-lg font-semibold text-white">{text.provisioningTitle}</h2>
+            <p className="mt-1 text-sm text-white/68">{text.provisioningText}</p>
           </div>
 
           {copyMsg ? (
@@ -526,31 +693,29 @@ export default function CreateCameraForm({
           <div className="space-y-3 rounded-[24px] border border-white/10 bg-white/5 p-5">
             <div className="flex items-start justify-between gap-3">
               <div>
-                <h3 className="text-base font-semibold text-white">Core Provisioning</h3>
-                <p className="mt-1 text-sm text-white/68">
-                  Basisdaten dieser Kamera für spätere Referenz.
-                </p>
+                <h3 className="text-base font-semibold text-white">{text.coreProvisioning}</h3>
+                <p className="mt-1 text-sm text-white/68">{text.coreProvisioningText}</p>
               </div>
               <button
                 type="button"
                 onClick={() =>
-                  handleCopy("Core provisioning", buildCoreProvisioningCopy(camera))
+                  handleCopy(text.coreProvisioning, buildCoreProvisioningCopy(camera, language))
                 }
                 className="rounded-[10px] border border-white/10 bg-white/5 px-3 py-2 text-xs text-white/78 hover:border-amber-300/20 hover:bg-white/8 hover:text-white"
               >
-                Copy block
+                {text.copyBlock}
               </button>
             </div>
 
             <div className="grid gap-2 text-sm text-white/78">
               <div>
-                <span className="font-medium text-white">Camera ID:</span> {camera.id}
+                <span className="font-medium text-white">{text.cameraId}:</span> {camera.id}
               </div>
               <div>
-                <span className="font-medium text-white">Technical Name:</span> {camera.technicalName}
+                <span className="font-medium text-white">{text.technicalName}:</span> {camera.technicalName}
               </div>
               <div className="break-all">
-                <span className="font-medium text-white">Ingest Token:</span> {camera.ingestToken}
+                <span className="font-medium text-white">{text.ingestToken}:</span> {camera.ingestToken}
               </div>
             </div>
           </div>
@@ -559,45 +724,43 @@ export default function CreateCameraForm({
             <div className="space-y-4 rounded-[24px] border border-white/10 bg-white/5 p-5">
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <h3 className="text-base font-semibold text-white">FTP Setup</h3>
-                  <p className="mt-1 text-sm text-white/68">
-                    Enter these values into the camera now. The password is shown only once.
-                  </p>
+                  <h3 className="text-base font-semibold text-white">{text.ftpSetup}</h3>
+                  <p className="mt-1 text-sm text-white/68">{text.ftpSetupText}</p>
                 </div>
                 <button
                   type="button"
                   onClick={() =>
-                    handleCopy("FTP setup", buildFtpProvisioningCopy(ftpProvisioning))
+                    handleCopy(text.ftpSetup, buildFtpProvisioningCopy(ftpProvisioning, language))
                   }
                   className="rounded-[10px] border border-white/10 bg-white/5 px-3 py-2 text-xs text-white/78 hover:border-amber-300/20 hover:bg-white/8 hover:text-white"
                 >
-                  Copy block
+                  {text.copyBlock}
                 </button>
               </div>
 
               <div className="rounded-[14px] border border-amber-300/20 bg-amber-300/10 px-3 py-2 text-sm text-amber-100">
-                Important: store the FTP password now. It will not be shown again after this page.
+                {text.important}
               </div>
 
               <div className="grid gap-2 text-sm text-white/78">
                 <div>
-                  <span className="font-medium text-white">FTP Server:</span> {ftpProvisioning.host}
+                  <span className="font-medium text-white">{text.ftpServer}:</span> {ftpProvisioning.host}
                 </div>
                 <div>
-                  <span className="font-medium text-white">FTP Port:</span> {ftpProvisioning.port}
+                  <span className="font-medium text-white">{text.ftpPort}:</span> {ftpProvisioning.port}
                 </div>
                 <div>
-                  <span className="font-medium text-white">FTP Username:</span> {ftpProvisioning.username}
+                  <span className="font-medium text-white">{text.ftpUsername}:</span> {ftpProvisioning.username}
                 </div>
                 <div className="rounded-[14px] border border-white/10 bg-white/5 px-3 py-3 text-white">
-                  <span className="font-medium">FTP Password:</span> {ftpProvisioning.password}
+                  <span className="font-medium">{text.ftpPassword}:</span> {ftpProvisioning.password}
                 </div>
                 <div>
-                  <span className="font-medium text-white">Path:</span> {ftpProvisioning.path}
+                  <span className="font-medium text-white">{text.path}:</span> {ftpProvisioning.path}
                 </div>
                 <div>
-                  <span className="font-medium text-white">Passive Mode:</span>{" "}
-                  {ftpProvisioning.passiveMode ? "Enabled" : "Disabled"}
+                  <span className="font-medium text-white">{text.passiveMode}:</span>{" "}
+                  {ftpProvisioning.passiveMode ? text.enabled : text.disabled}
                 </div>
               </div>
             </div>
@@ -607,30 +770,28 @@ export default function CreateCameraForm({
             <div className="space-y-4 rounded-[24px] border border-white/10 bg-white/5 p-5">
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <h3 className="text-base font-semibold text-white">SMTP Setup</h3>
-                  <p className="mt-1 text-sm text-white/68">
-                    Use this e-mail address in the camera configuration.
-                  </p>
+                  <h3 className="text-base font-semibold text-white">{text.smtpSetup}</h3>
+                  <p className="mt-1 text-sm text-white/68">{text.smtpSetupText}</p>
                 </div>
                 <button
                   type="button"
                   onClick={() =>
                     camera.routing.smtpAlias
                       ? handleCopy(
-                          "SMTP setup",
-                          buildSmtpProvisioningCopy(camera.routing.smtpAlias)
+                          text.smtpSetup,
+                          buildSmtpProvisioningCopy(camera.routing.smtpAlias, language)
                         )
                       : undefined
                   }
                   className="rounded-[10px] border border-white/10 bg-white/5 px-3 py-2 text-xs text-white/78 hover:border-amber-300/20 hover:bg-white/8 hover:text-white"
                 >
-                  Copy block
+                  {text.copyBlock}
                 </button>
               </div>
 
               <div className="grid gap-2 text-sm text-white/78">
                 <div>
-                  <span className="font-medium text-white">SMTP Alias:</span> {camera.routing.smtpAlias}
+                  <span className="font-medium text-white">{text.smtpAlias}:</span> {camera.routing.smtpAlias}
                 </div>
               </div>
             </div>
@@ -640,30 +801,28 @@ export default function CreateCameraForm({
             <div className="space-y-4 rounded-[24px] border border-white/10 bg-white/5 p-5">
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <h3 className="text-base font-semibold text-white">Manual Import Setup</h3>
-                  <p className="mt-1 text-sm text-white/68">
-                    This camera is ready for manual uploads in the Import section.
-                  </p>
+                  <h3 className="text-base font-semibold text-white">{text.manualSetup}</h3>
+                  <p className="mt-1 text-sm text-white/68">{text.manualSetupText}</p>
                 </div>
                 <button
                   type="button"
                   onClick={() =>
                     camera.routing.manualLabel
                       ? handleCopy(
-                          "Manual import setup",
-                          buildManualProvisioningCopy(camera.routing.manualLabel)
+                          text.manualSetup,
+                          buildManualProvisioningCopy(camera.routing.manualLabel, language)
                         )
                       : undefined
                   }
                   className="rounded-[10px] border border-white/10 bg-white/5 px-3 py-2 text-xs text-white/78 hover:border-amber-300/20 hover:bg-white/8 hover:text-white"
                 >
-                  Copy block
+                  {text.copyBlock}
                 </button>
               </div>
 
               <div className="grid gap-2 text-sm text-white/78">
                 <div>
-                  <span className="font-medium text-white">Manual Label:</span> {camera.routing.manualLabel}
+                  <span className="font-medium text-white">{text.manualLabel}:</span> {camera.routing.manualLabel}
                 </div>
               </div>
             </div>

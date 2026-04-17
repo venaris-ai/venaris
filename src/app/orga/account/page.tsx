@@ -1,9 +1,15 @@
-// src/app/orga/account/page.tsx #4
+// src/app/orga/account/page.tsx #7
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { redirectIfDemoWrite } from "@/lib/auth";
 import { requirePathAccess } from "@/lib/authz";
 import { supabaseServer } from "@/lib/supabaseServer";
 import SubmitButton from "@/components/SubmitButton";
+import {
+  LOCALE_COOKIE,
+  resolveLanguage,
+  type AppLanguage,
+} from "@/lib/i18n";
 
 type OrganizationRow = {
   id: string;
@@ -41,8 +47,8 @@ function formatStatus(status: string) {
   return status;
 }
 
-function formatDate(value: string) {
-  return new Intl.DateTimeFormat("de-DE", {
+function formatDate(value: string, language: AppLanguage) {
+  return new Intl.DateTimeFormat(language === "en" ? "en-GB" : "de-DE", {
     dateStyle: "medium",
     timeStyle: "short",
   }).format(new Date(value));
@@ -52,17 +58,128 @@ function show(value: string | null) {
   return value?.trim() ? value : "—";
 }
 
+function t(language: AppLanguage) {
+  return language === "en"
+    ? {
+        accountRequired: "Organization name is required.",
+        billingEmailInvalid: "Billing email is invalid.",
+        saveFailedPrefix: "Failed to save organization account:",
+        eyebrow: "Account",
+        title: "My Account",
+        intro:
+          "Maintain your organization master data here. Operational organization and billing fields are editable, while technical system fields remain read-only.",
+        demoReadOnly: "Demo mode: changes are disabled.",
+        saved: "Changes were saved successfully.",
+        statName: "Name",
+        statNameText: "Display name of the active organization.",
+        statSlug: "Slug",
+        statSlugText: "Technical short name, currently read-only.",
+        statKind: "Kind",
+        statKindText: "Tenant classification in Venaris.",
+        statStatus: "Status",
+        statStatusText: "Lifecycle of the organization, currently read-only.",
+        editTitle: "Edit organization data",
+        nameLabel: "Organization name *",
+        legalNameLabel: "Legal name",
+        legalFormLabel: "Legal form",
+        legalFormPlaceholder: "e.g. GmbH",
+        contactPersonLabel: "Contact person",
+        billingEmailLabel: "Billing email",
+        customerReferenceLabel: "Customer reference",
+        streetLabel: "Street / house number",
+        postalCodeLabel: "Postal code",
+        cityLabel: "City",
+        countryLabel: "Country",
+        vatIdLabel: "VAT ID / Tax ID",
+        notesLabel: "Notes",
+        saveIdle: "Save changes",
+        savePending: "Saving...",
+        demoMode: "Demo mode",
+        readOnlyTitle: "Read-only system data",
+        organizationId: "Organization ID",
+        slugLabel: "Slug",
+        kindLabel: "Kind",
+        statusLabel: "Status",
+        ownerUserId: "Owner user ID",
+        createdAt: "Created at",
+        logoUrl: "Logo URL",
+      }
+    : {
+        accountRequired: "Organisationsname ist erforderlich.",
+        billingEmailInvalid: "Rechnungs-E-Mail ist ungültig.",
+        saveFailedPrefix: "Failed to save organization account:",
+        eyebrow: "Mein Konto",
+        title: "Mein Konto",
+        intro:
+          "Pflege hier die Stammdaten Deiner Organisation. Editierbar sind die fachlichen Organisations- und Rechnungsfelder, während technische Systemfelder bewusst schreibgeschützt bleiben.",
+        demoReadOnly: "Demo-Modus: Änderungen sind deaktiviert.",
+        saved: "Änderungen wurden erfolgreich gespeichert.",
+        statName: "Name",
+        statNameText: "Anzeigename der aktiven Organisation.",
+        statSlug: "Slug",
+        statSlugText: "Technischer Kurzname, aktuell schreibgeschützt.",
+        statKind: "Kind",
+        statKindText: "Typisierung des Tenants in Venaris.",
+        statStatus: "Status",
+        statStatusText: "Lebenszyklus der Organisation, aktuell schreibgeschützt.",
+        editTitle: "Organisationsdaten bearbeiten",
+        nameLabel: "Organisationsname *",
+        legalNameLabel: "Rechtlicher Name",
+        legalFormLabel: "Rechtsform",
+        legalFormPlaceholder: "z. B. GmbH",
+        contactPersonLabel: "Ansprechpartner",
+        billingEmailLabel: "Rechnungs-E-Mail",
+        customerReferenceLabel: "Kundenreferenz",
+        streetLabel: "Straße / Hausnummer",
+        postalCodeLabel: "PLZ",
+        cityLabel: "Ort",
+        countryLabel: "Land",
+        vatIdLabel: "USt-ID / Steuer-ID",
+        notesLabel: "Notizen",
+        saveIdle: "Änderungen speichern",
+        savePending: "Speichert...",
+        demoMode: "Demo-Modus",
+        readOnlyTitle: "Systemdaten (schreibgeschützt)",
+        organizationId: "Organisation ID",
+        slugLabel: "Slug",
+        kindLabel: "Kind",
+        statusLabel: "Status",
+        ownerUserId: "Owner-User-ID",
+        createdAt: "Angelegt am",
+        logoUrl: "Logo URL",
+      };
+}
+
 async function saveOrganizationAccount(formData: FormData) {
   "use server";
 
   const ctx = await requirePathAccess("/orga/account");
   redirectIfDemoWrite(ctx, "/orga/account?demo_read_only=1");
 
+  if (!ctx.user) {
+    throw new Error("Authenticated user required");
+  }
+
   if (!ctx.activeMembership) {
     throw new Error("Active organization context required");
   }
 
   const organization = ctx.activeMembership.organizations;
+  const supabase = supabaseServer();
+  const cookieStore = await cookies();
+
+  const { data: profileData } = await supabase
+    .from("profiles")
+    .select("preferred_language")
+    .eq("id", ctx.user.id)
+    .maybeSingle();
+
+  const language = resolveLanguage({
+    cookieLanguage: cookieStore.get(LOCALE_COOKIE)?.value,
+    profileLanguage: profileData?.preferred_language,
+  });
+
+  const text = t(language);
 
   if (!organization) {
     throw new Error("Active organization not found");
@@ -83,14 +200,12 @@ async function saveOrganizationAccount(formData: FormData) {
   const notes = String(formData.get("notes") ?? "").trim();
 
   if (!name) {
-    throw new Error("Organisationsname ist erforderlich.");
+    throw new Error(text.accountRequired);
   }
 
   if (billingEmail && !billingEmail.includes("@")) {
-    throw new Error("Billing E-Mail ist ungültig.");
+    throw new Error(text.billingEmailInvalid);
   }
-
-  const supabase = supabaseServer();
 
   const { error } = await supabase
     .from("organizations")
@@ -111,7 +226,7 @@ async function saveOrganizationAccount(formData: FormData) {
     .eq("id", organization.id);
 
   if (error) {
-    throw new Error(`Failed to save organization account: ${error.message}`);
+    throw new Error(`${text.saveFailedPrefix} ${error.message}`);
   }
 
   redirect("/orga/account?saved=1");
@@ -158,6 +273,20 @@ export default async function OrgaAccountPage({
   }
 
   const supabase = supabaseServer();
+  const cookieStore = await cookies();
+
+  const { data: profileData } = await supabase
+    .from("profiles")
+    .select("preferred_language")
+    .eq("id", ctx.user.id)
+    .maybeSingle();
+
+  const language = resolveLanguage({
+    cookieLanguage: cookieStore.get(LOCALE_COOKIE)?.value,
+    profileLanguage: profileData?.preferred_language,
+  });
+
+  const text = t(language);
 
   const { data, error } = await supabase
     .from("organizations")
@@ -198,70 +327,53 @@ export default async function OrgaAccountPage({
       <section className="rounded-[32px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(201,149,46,0.16),transparent_24%),linear-gradient(135deg,rgba(255,255,255,0.06),rgba(255,255,255,0.03))] p-6 backdrop-blur-sm">
         <div>
           <div className="text-xs font-medium uppercase tracking-[0.22em] text-amber-200/80">
-            Account
+            {text.eyebrow}
           </div>
           <h1 className="mt-3 text-3xl font-semibold tracking-tight text-white">
-            Mein Konto
+            {text.title}
           </h1>
           <p className="mt-2 max-w-3xl text-sm text-white/68">
-            Pflege hier die Stammdaten Deiner Organisation. Editierbar sind die
-            fachlichen Organisations- und Rechnungsfelder, während technische
-            Systemfelder bewusst read-only bleiben.
+            {text.intro}
           </p>
         </div>
       </section>
 
       {demoReadOnly ? (
         <section className="rounded-[24px] border border-amber-300/20 bg-amber-300/10 p-4">
-          <p className="text-sm text-amber-100">
-            Demo-Modus: Änderungen sind deaktiviert.
-          </p>
+          <p className="text-sm text-amber-100">{text.demoReadOnly}</p>
         </section>
       ) : null}
 
       {saved ? (
         <section className="rounded-[24px] border border-emerald-300/20 bg-emerald-300/10 p-4">
-          <p className="text-sm text-emerald-100">
-            Änderungen wurden erfolgreich gespeichert.
-          </p>
+          <p className="text-sm text-emerald-100">{text.saved}</p>
         </section>
       ) : null}
 
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <StatCard title={text.statName} value={org.name} text={text.statNameText} />
+        <StatCard title={text.statSlug} value={org.slug} text={text.statSlugText} />
         <StatCard
-          title="Name"
-          value={org.name}
-          text="Anzeigename der aktiven Organisation."
-        />
-
-        <StatCard
-          title="Slug"
-          value={org.slug}
-          text="Technischer Kurzname, aktuell read-only."
-        />
-
-        <StatCard
-          title="Kind"
+          title={text.statKind}
           value={formatKind(org.kind)}
-          text="Typisierung des Tenants in Venaris."
+          text={text.statKindText}
         />
-
         <StatCard
-          title="Status"
+          title={text.statStatus}
           value={formatStatus(org.status)}
-          text="Lebenszyklus der Organisation, aktuell read-only."
+          text={text.statStatusText}
         />
       </section>
 
       <section className="grid gap-4 xl:grid-cols-3">
         <section className="rounded-[28px] border border-white/10 bg-white/5 p-6 backdrop-blur-sm xl:col-span-2">
-          <h2 className="text-lg font-medium text-white">Organisationsdaten bearbeiten</h2>
+          <h2 className="text-lg font-medium text-white">{text.editTitle}</h2>
 
           <form action={saveOrganizationAccount} className="mt-6 space-y-6">
             <div className="grid gap-4 md:grid-cols-2">
               <div>
                 <label htmlFor="name" className="mb-2 block text-sm font-medium text-white">
-                  Organisationsname *
+                  {text.nameLabel}
                 </label>
                 <input
                   id="name"
@@ -270,7 +382,7 @@ export default async function OrgaAccountPage({
                   required
                   defaultValue={org.name}
                   disabled={isDemo}
-                  title={isDemo ? "Demo-Modus: Änderungen sind deaktiviert." : ""}
+                  title={isDemo ? text.demoReadOnly : ""}
                   className="w-full rounded-[10px] border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none placeholder:text-white/35 disabled:bg-white/5 disabled:text-white/35"
                 />
               </div>
@@ -280,7 +392,7 @@ export default async function OrgaAccountPage({
                   htmlFor="legal_name"
                   className="mb-2 block text-sm font-medium text-white"
                 >
-                  Legal Name
+                  {text.legalNameLabel}
                 </label>
                 <input
                   id="legal_name"
@@ -288,7 +400,7 @@ export default async function OrgaAccountPage({
                   type="text"
                   defaultValue={org.legal_name ?? ""}
                   disabled={isDemo}
-                  title={isDemo ? "Demo-Modus: Änderungen sind deaktiviert." : ""}
+                  title={isDemo ? text.demoReadOnly : ""}
                   className="w-full rounded-[10px] border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none placeholder:text-white/35 disabled:bg-white/5 disabled:text-white/35"
                 />
               </div>
@@ -298,7 +410,7 @@ export default async function OrgaAccountPage({
                   htmlFor="legal_form"
                   className="mb-2 block text-sm font-medium text-white"
                 >
-                  Rechtsform
+                  {text.legalFormLabel}
                 </label>
                 <input
                   id="legal_form"
@@ -306,9 +418,9 @@ export default async function OrgaAccountPage({
                   type="text"
                   defaultValue={org.legal_form ?? ""}
                   disabled={isDemo}
-                  title={isDemo ? "Demo-Modus: Änderungen sind deaktiviert." : ""}
+                  title={isDemo ? text.demoReadOnly : ""}
                   className="w-full rounded-[10px] border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none placeholder:text-white/35 disabled:bg-white/5 disabled:text-white/35"
-                  placeholder="z. B. GmbH"
+                  placeholder={text.legalFormPlaceholder}
                 />
               </div>
 
@@ -317,7 +429,7 @@ export default async function OrgaAccountPage({
                   htmlFor="contact_person"
                   className="mb-2 block text-sm font-medium text-white"
                 >
-                  Ansprechpartner
+                  {text.contactPersonLabel}
                 </label>
                 <input
                   id="contact_person"
@@ -325,7 +437,7 @@ export default async function OrgaAccountPage({
                   type="text"
                   defaultValue={org.contact_person ?? ""}
                   disabled={isDemo}
-                  title={isDemo ? "Demo-Modus: Änderungen sind deaktiviert." : ""}
+                  title={isDemo ? text.demoReadOnly : ""}
                   className="w-full rounded-[10px] border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none placeholder:text-white/35 disabled:bg-white/5 disabled:text-white/35"
                 />
               </div>
@@ -335,7 +447,7 @@ export default async function OrgaAccountPage({
                   htmlFor="billing_email"
                   className="mb-2 block text-sm font-medium text-white"
                 >
-                  Billing E-Mail
+                  {text.billingEmailLabel}
                 </label>
                 <input
                   id="billing_email"
@@ -343,7 +455,7 @@ export default async function OrgaAccountPage({
                   type="email"
                   defaultValue={org.billing_email ?? ""}
                   disabled={isDemo}
-                  title={isDemo ? "Demo-Modus: Änderungen sind deaktiviert." : ""}
+                  title={isDemo ? text.demoReadOnly : ""}
                   className="w-full rounded-[10px] border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none placeholder:text-white/35 disabled:bg-white/5 disabled:text-white/35"
                 />
               </div>
@@ -353,7 +465,7 @@ export default async function OrgaAccountPage({
                   htmlFor="customer_reference"
                   className="mb-2 block text-sm font-medium text-white"
                 >
-                  Kundenreferenz
+                  {text.customerReferenceLabel}
                 </label>
                 <input
                   id="customer_reference"
@@ -361,7 +473,7 @@ export default async function OrgaAccountPage({
                   type="text"
                   defaultValue={org.customer_reference ?? ""}
                   disabled={isDemo}
-                  title={isDemo ? "Demo-Modus: Änderungen sind deaktiviert." : ""}
+                  title={isDemo ? text.demoReadOnly : ""}
                   className="w-full rounded-[10px] border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none placeholder:text-white/35 disabled:bg-white/5 disabled:text-white/35"
                 />
               </div>
@@ -371,7 +483,7 @@ export default async function OrgaAccountPage({
                   htmlFor="billing_street"
                   className="mb-2 block text-sm font-medium text-white"
                 >
-                  Straße / Hausnummer
+                  {text.streetLabel}
                 </label>
                 <input
                   id="billing_street"
@@ -379,7 +491,7 @@ export default async function OrgaAccountPage({
                   type="text"
                   defaultValue={org.billing_street ?? ""}
                   disabled={isDemo}
-                  title={isDemo ? "Demo-Modus: Änderungen sind deaktiviert." : ""}
+                  title={isDemo ? text.demoReadOnly : ""}
                   className="w-full rounded-[10px] border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none placeholder:text-white/35 disabled:bg-white/5 disabled:text-white/35"
                 />
               </div>
@@ -389,7 +501,7 @@ export default async function OrgaAccountPage({
                   htmlFor="billing_postal_code"
                   className="mb-2 block text-sm font-medium text-white"
                 >
-                  PLZ
+                  {text.postalCodeLabel}
                 </label>
                 <input
                   id="billing_postal_code"
@@ -397,7 +509,7 @@ export default async function OrgaAccountPage({
                   type="text"
                   defaultValue={org.billing_postal_code ?? ""}
                   disabled={isDemo}
-                  title={isDemo ? "Demo-Modus: Änderungen sind deaktiviert." : ""}
+                  title={isDemo ? text.demoReadOnly : ""}
                   className="w-full rounded-[10px] border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none placeholder:text-white/35 disabled:bg-white/5 disabled:text-white/35"
                 />
               </div>
@@ -407,7 +519,7 @@ export default async function OrgaAccountPage({
                   htmlFor="billing_city"
                   className="mb-2 block text-sm font-medium text-white"
                 >
-                  Ort
+                  {text.cityLabel}
                 </label>
                 <input
                   id="billing_city"
@@ -415,7 +527,7 @@ export default async function OrgaAccountPage({
                   type="text"
                   defaultValue={org.billing_city ?? ""}
                   disabled={isDemo}
-                  title={isDemo ? "Demo-Modus: Änderungen sind deaktiviert." : ""}
+                  title={isDemo ? text.demoReadOnly : ""}
                   className="w-full rounded-[10px] border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none placeholder:text-white/35 disabled:bg-white/5 disabled:text-white/35"
                 />
               </div>
@@ -425,7 +537,7 @@ export default async function OrgaAccountPage({
                   htmlFor="billing_country"
                   className="mb-2 block text-sm font-medium text-white"
                 >
-                  Land
+                  {text.countryLabel}
                 </label>
                 <input
                   id="billing_country"
@@ -433,14 +545,14 @@ export default async function OrgaAccountPage({
                   type="text"
                   defaultValue={org.billing_country ?? "DE"}
                   disabled={isDemo}
-                  title={isDemo ? "Demo-Modus: Änderungen sind deaktiviert." : ""}
+                  title={isDemo ? text.demoReadOnly : ""}
                   className="w-full rounded-[10px] border border-white/10 bg-white/5 px-3 py-2 text-sm uppercase text-white outline-none placeholder:text-white/35 disabled:bg-white/5 disabled:text-white/35"
                 />
               </div>
 
               <div>
                 <label htmlFor="vat_id" className="mb-2 block text-sm font-medium text-white">
-                  USt-ID / Steuer-ID
+                  {text.vatIdLabel}
                 </label>
                 <input
                   id="vat_id"
@@ -448,7 +560,7 @@ export default async function OrgaAccountPage({
                   type="text"
                   defaultValue={org.vat_id ?? ""}
                   disabled={isDemo}
-                  title={isDemo ? "Demo-Modus: Änderungen sind deaktiviert." : ""}
+                  title={isDemo ? text.demoReadOnly : ""}
                   className="w-full rounded-[10px] border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none placeholder:text-white/35 disabled:bg-white/5 disabled:text-white/35"
                 />
               </div>
@@ -456,7 +568,7 @@ export default async function OrgaAccountPage({
 
             <div>
               <label htmlFor="notes" className="mb-2 block text-sm font-medium text-white">
-                Notizen
+                {text.notesLabel}
               </label>
               <textarea
                 id="notes"
@@ -464,58 +576,58 @@ export default async function OrgaAccountPage({
                 rows={5}
                 defaultValue={org.notes ?? ""}
                 disabled={isDemo}
-                title={isDemo ? "Demo-Modus: Änderungen sind deaktiviert." : ""}
+                title={isDemo ? text.demoReadOnly : ""}
                 className="w-full rounded-[10px] border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none placeholder:text-white/35 disabled:bg-white/5 disabled:text-white/35"
               />
             </div>
 
             <div className="flex flex-wrap items-center gap-3">
               <SubmitButton
-                idleLabel={isDemo ? "Demo-Modus" : "Änderungen speichern"}
-                pendingLabel="Speichert..."
+                idleLabel={isDemo ? text.demoMode : text.saveIdle}
+                pendingLabel={text.savePending}
               />
             </div>
           </form>
         </section>
 
         <aside className="rounded-[28px] border border-white/10 bg-white/5 p-6 backdrop-blur-sm">
-          <h2 className="text-lg font-medium text-white">Read-only Systemdaten</h2>
+          <h2 className="text-lg font-medium text-white">{text.readOnlyTitle}</h2>
 
           <dl className="mt-4 divide-y divide-white/8">
             <div className="grid gap-2 py-3">
-              <dt className="text-sm font-medium text-white/45">Organisation ID</dt>
+              <dt className="text-sm font-medium text-white/45">{text.organizationId}</dt>
               <dd className="text-sm break-all text-white">{org.id}</dd>
             </div>
 
             <div className="grid gap-2 py-3">
-              <dt className="text-sm font-medium text-white/45">Slug</dt>
+              <dt className="text-sm font-medium text-white/45">{text.slugLabel}</dt>
               <dd className="text-sm text-white">{org.slug}</dd>
             </div>
 
             <div className="grid gap-2 py-3">
-              <dt className="text-sm font-medium text-white/45">Kind</dt>
+              <dt className="text-sm font-medium text-white/45">{text.kindLabel}</dt>
               <dd className="text-sm text-white">{formatKind(org.kind)}</dd>
             </div>
 
             <div className="grid gap-2 py-3">
-              <dt className="text-sm font-medium text-white/45">Status</dt>
+              <dt className="text-sm font-medium text-white/45">{text.statusLabel}</dt>
               <dd className="text-sm text-white">{formatStatus(org.status)}</dd>
             </div>
 
             <div className="grid gap-2 py-3">
-              <dt className="text-sm font-medium text-white/45">Owner User ID</dt>
+              <dt className="text-sm font-medium text-white/45">{text.ownerUserId}</dt>
               <dd className="text-sm break-all text-white">
                 {show(org.owner_user_id)}
               </dd>
             </div>
 
             <div className="grid gap-2 py-3">
-              <dt className="text-sm font-medium text-white/45">Angelegt am</dt>
-              <dd className="text-sm text-white">{formatDate(org.created_at)}</dd>
+              <dt className="text-sm font-medium text-white/45">{text.createdAt}</dt>
+              <dd className="text-sm text-white">{formatDate(org.created_at, language)}</dd>
             </div>
 
             <div className="grid gap-2 py-3">
-              <dt className="text-sm font-medium text-white/45">Logo URL</dt>
+              <dt className="text-sm font-medium text-white/45">{text.logoUrl}</dt>
               <dd className="text-sm break-all text-white">
                 {show(org.logo_url)}
               </dd>

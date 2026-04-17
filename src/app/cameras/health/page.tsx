@@ -1,7 +1,8 @@
-// src/app/cameras/health/page.tsx #8
+// src/app/cameras/health/page.tsx #10
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
+import { cookies } from "next/headers";
 import { redirectIfDemoWrite } from "@/lib/auth";
 import { requirePathAccess } from "@/lib/authz";
 import { supabaseServer } from "@/lib/supabaseServer";
@@ -10,6 +11,11 @@ import {
   resolveRevierScope,
   type RevierOption,
 } from "@/lib/intelligence/revierScope";
+import {
+  LOCALE_COOKIE,
+  resolveLanguage,
+  type AppLanguage,
+} from "@/lib/i18n";
 import CameraRowFields from "./CameraRowFields";
 import CameraRowActions from "./CameraRowActions";
 
@@ -76,36 +82,189 @@ type SubscriptionPolicyRow = {
   max_members: number;
 };
 
-function formatAgo(value: string | null) {
+function t(language: AppLanguage) {
+  if (language === "en") {
+    return {
+      eyebrow: "Camera status",
+      title: "Camera status",
+      intro:
+        "Monitor the cameras of the active organization within the current ground scope.",
+      activeOrganizationNotFound: "Active organization not found.",
+      loadGroundsFailed: "Failed to load grounds:",
+      loadCamerasFailed: "Failed to load cameras:",
+      loadHealthFailed: "Failed to load camera status:",
+      noActiveGrounds:
+        "There are currently no active grounds for the active organization.",
+      allActiveGrounds: "All active grounds",
+      oneGround: "One ground",
+      demoReadOnly: "Demo mode: changes are disabled.",
+      statusSaved: "Camera status was saved.",
+      cameraRemoved: "Camera was permanently removed.",
+      cameraListTitle: "Camera list",
+      cameraListText:
+        "Visible cameras of the active organization within the valid ground scope.",
+      addCamera: "Add camera",
+      noCamerasInScopeTitle: "No cameras in current scope",
+      noCamerasInScopeText:
+        "There are no cameras in the current ground scope.",
+      online: "Online",
+      stale: "Stale",
+      offline: "Offline",
+      unknown: "Unknown",
+      onlineText: "Cameras with a recent signal inside the online window.",
+      staleText: "Cameras with a delayed but not yet critical status.",
+      offlineText: "Cameras without signal beyond the offline window.",
+      unknownText: "Cameras without a usable last signal.",
+      cameraCol: "Camera",
+      groundCol: "Ground",
+      methodCol: "Method",
+      healthCol: "Health",
+      statusCol: "Status",
+      lastFeedCol: "Ingest",
+      actionsCol: "Actions",
+      healthRulesPrefix: "* Health rules in current scope:",
+      staleFrom: "stale from",
+      offlineFrom: "offline from",
+      min: "min",
+      justNow: "just now",
+      agoMin: "min ago",
+      agoHour: "h ago",
+      agoDay: "d ago",
+      active: "Active",
+      disabled: "Disabled",
+      manual: "Manual",
+      targetCameraMissing: "Missing target camera.",
+      invalidTargetStatus: "Invalid target status.",
+      targetCameraNotFound: "Target camera not found.",
+      actorNotAllowed: "Only owner or admin can manage cameras.",
+      activeOrganizationRequired: "Active organization context required",
+      activeOrganizationMissing: "Active organization not found",
+      loadTargetCameraFailed: "Failed to load target camera:",
+      saveCameraStatusFailed: "Failed to save camera status:",
+      removeCameraFailed: "Failed to remove camera:",
+      noSubscriptionFound: "No subscription found for active organization",
+      loadSubscriptionPolicyFailed: "Failed to load subscription camera policy:",
+      loadActiveCameraUsageFailed: "Failed to load active camera usage:",
+    };
+  }
+
+  return {
+    eyebrow: "Kamerastatus",
+    title: "Kamerastatus",
+    intro:
+      "Überwache hier die Kameras der aktiven Organisation im aktuellen Revier-Scope.",
+    activeOrganizationNotFound: "Aktive Organisation nicht gefunden.",
+    loadGroundsFailed: "Fehler beim Laden der Reviere:",
+    loadCamerasFailed: "Fehler beim Laden der Kameras:",
+    loadHealthFailed: "Fehler beim Laden des Kamerastatus:",
+    noActiveGrounds:
+      "Für die aktive Organisation sind derzeit keine aktiven Reviere vorhanden.",
+    allActiveGrounds: "Alle aktiven Reviere",
+    oneGround: "Ein Revier",
+    demoReadOnly: "Demo-Modus: Änderungen sind deaktiviert.",
+    statusSaved: "Kamera-Status wurde gespeichert.",
+    cameraRemoved: "Kamera wurde dauerhaft entfernt.",
+    cameraListTitle: "Kameraliste",
+    cameraListText:
+      "Sichtbare Kameras der aktiven Organisation im gültigen Revier-Scope.",
+    addCamera: "Kamera hinzufügen",
+    noCamerasInScopeTitle: "Keine Kameras im aktuellen Scope",
+    noCamerasInScopeText:
+      "Für den aktuellen Revier-Scope sind keine Kameras vorhanden.",
+    online: "Online",
+    stale: "Veraltet",
+    offline: "Offline",
+    unknown: "Unbekannt",
+    onlineText:
+      "Kameras mit aktuellem Lebenszeichen innerhalb des Online-Fensters.",
+    staleText:
+      "Kameras mit verspätetem, aber noch nicht kritischem Status.",
+    offlineText:
+      "Kameras ohne Lebenszeichen jenseits des Offline-Fensters.",
+    unknownText:
+      "Kameras ohne verwertbares letztes Lebenszeichen.",
+    cameraCol: "Kamera",
+    groundCol: "Revier",
+    methodCol: "Methode",
+    healthCol: "Leben",
+    statusCol: "Status",
+    lastFeedCol: "Ingest",
+    actionsCol: "Aktionen",
+    healthRulesPrefix: "* Lebenszeichen-Regeln im aktuellen Scope:",
+    staleFrom: "veraltet ab",
+    offlineFrom: "offline ab",
+    min: "min",
+    justNow: "gerade eben",
+    agoMin: "vor {n} min",
+    agoHour: "vor {n} h",
+    agoDay: "vor {n} d",
+    active: "Aktiv",
+    disabled: "Deaktiviert",
+    manual: "Manuell",
+    targetCameraMissing: "Fehlende Ziel-Kamera.",
+    invalidTargetStatus: "Ungültiger Ziel-Status.",
+    targetCameraNotFound: "Ziel-Kamera nicht gefunden.",
+    actorNotAllowed: "Nur Owner oder Admin dürfen Kameras verwalten.",
+    activeOrganizationRequired: "Aktiver Organisationskontext erforderlich",
+    activeOrganizationMissing: "Aktive Organisation nicht gefunden",
+    loadTargetCameraFailed: "Fehler beim Laden der Ziel-Kamera:",
+    saveCameraStatusFailed: "Fehler beim Speichern des Kamera-Status:",
+    removeCameraFailed: "Fehler beim Entfernen der Kamera:",
+    noSubscriptionFound:
+      "Kein Abo für die aktive Organisation gefunden",
+    loadSubscriptionPolicyFailed:
+      "Fehler beim Laden der Abo-Kameraregeln:",
+    loadActiveCameraUsageFailed:
+      "Fehler beim Laden der aktiven Kamera-Nutzung:",
+  };
+}
+
+function formatAgo(value: string | null, language: AppLanguage) {
+  const text = t(language);
+
   if (!value) return "—";
 
   const ts = new Date(value).getTime();
   const diffMs = Date.now() - ts;
   const diffMinutes = Math.floor(diffMs / 60000);
 
-  if (diffMinutes < 2) return "gerade eben";
-  if (diffMinutes < 60) return `vor ${diffMinutes} min`;
+  if (diffMinutes < 2) return text.justNow;
+  if (diffMinutes < 60) {
+    return language === "en"
+      ? `${diffMinutes} ${text.agoMin.replace(" ago", "")} ago`
+      : text.agoMin.replace("{n}", String(diffMinutes));
+  }
 
   const diffHours = Math.floor(diffMinutes / 60);
-  if (diffHours < 24) return `vor ${diffHours} h`;
+  if (diffHours < 24) {
+    return language === "en"
+      ? `${diffHours} ${text.agoHour.replace(" ago", "")} ago`
+      : text.agoHour.replace("{n}", String(diffHours));
+  }
 
   const diffDays = Math.floor(diffHours / 24);
-  return `vor ${diffDays} d`;
+  return language === "en"
+    ? `${diffDays} ${text.agoDay.replace(" ago", "")} ago`
+    : text.agoDay.replace("{n}", String(diffDays));
 }
 
-function formatMethod(value: string | null) {
+function formatMethod(value: string | null, language: AppLanguage) {
+  const text = t(language);
+
   if (!value) return "—";
   if (value === "smtp") return "SMTP";
   if (value === "ftp") return "FTP";
-  if (value === "manual") return "Manual";
+  if (value === "manual") return text.manual;
   return value;
 }
 
-function formatHealthLabel(value: string) {
-  if (value === "online") return "Online";
-  if (value === "stale") return "Stale";
-  if (value === "offline") return "Offline";
-  if (value === "unknown") return "Unknown";
+function formatHealthLabel(value: string, language: AppLanguage) {
+  const text = t(language);
+
+  if (value === "online") return text.online;
+  if (value === "stale") return text.stale;
+  if (value === "offline") return text.offline;
+  if (value === "unknown") return text.unknown;
   return value;
 }
 
@@ -117,7 +276,10 @@ function extractRevierName(
   return value.name ?? "—";
 }
 
-function buildHealthRules(rows: CameraHealthListRow[]): HealthRuleRow[] {
+function buildHealthRules(
+  rows: CameraHealthListRow[],
+  language: AppLanguage
+): HealthRuleRow[] {
   const seen = new Map<string, HealthRuleRow>();
 
   for (const row of rows) {
@@ -132,14 +294,14 @@ function buildHealthRules(rows: CameraHealthListRow[]): HealthRuleRow[] {
 
     seen.set(ruleKey, {
       methodKey,
-      methodLabel: formatMethod(row.import_method),
+      methodLabel: formatMethod(row.import_method, language),
       staleAfterMinutes: row.stale_after_minutes,
       offlineAfterMinutes: row.offline_after_minutes,
     });
   }
 
   return Array.from(seen.values()).sort((a, b) =>
-    a.methodLabel.localeCompare(b.methodLabel, "de")
+    a.methodLabel.localeCompare(b.methodLabel, language === "en" ? "en" : "de")
   );
 }
 
@@ -184,10 +346,31 @@ async function saveCameraStatus(formData: FormData) {
   "use server";
 
   const ctx = await requirePathAccess("/cameras/health");
+if (!ctx.user) {
+  throw new Error("Authenticated user required");
+}
+
+
+  const cookieStore = await cookies();
+  const supabase = supabaseServer();
+
+  const { data: profileData } = await supabase
+    .from("profiles")
+    .select("preferred_language")
+    .eq("id", ctx.user.id)
+    .maybeSingle();
+
+  const language = resolveLanguage({
+    cookieLanguage: cookieStore.get(LOCALE_COOKIE)?.value,
+    profileLanguage: profileData?.preferred_language,
+  });
+
+  const text = t(language);
+
   redirectIfDemoWrite(ctx, buildReturnUrl({ demoReadOnly: true }));
 
   if (!ctx.activeMembership) {
-    throw new Error("Active organization context required");
+    throw new Error(text.activeOrganizationRequired);
   }
 
   const actorRole = ctx.activeMembership.role;
@@ -197,19 +380,19 @@ async function saveCameraStatus(formData: FormData) {
   const returnRevier = String(formData.get("return_revier") ?? "").trim();
 
   if (!activeOrganization) {
-    throw new Error("Active organization not found");
+    throw new Error(text.activeOrganizationMissing);
   }
 
   if (!(actorRole === "owner" || actorRole === "admin")) {
-    throw new Error("Nur Owner oder Admin dürfen Kameras verwalten.");
+    throw new Error(text.actorNotAllowed);
   }
 
   if (!cameraId) {
-    throw new Error("Missing target camera.");
+    throw new Error(text.targetCameraMissing);
   }
 
   if (!["active", "disabled"].includes(nextStatus)) {
-    throw new Error("Invalid target status.");
+    throw new Error(text.invalidTargetStatus);
   }
 
   const targetCamera = await loadCameraForMutation({
@@ -218,7 +401,7 @@ async function saveCameraStatus(formData: FormData) {
   });
 
   if (!targetCamera) {
-    throw new Error("Target camera not found.");
+    throw new Error(text.targetCameraNotFound);
   }
 
   const nextIsActive = nextStatus === "active";
@@ -229,8 +412,6 @@ async function saveCameraStatus(formData: FormData) {
   }
 
   if (!targetCamera.is_active && nextIsActive) {
-    const supabase = supabaseServer();
-
     const [subscriptionResult, activeCameraCountResult] = await Promise.all([
       supabase
         .from("organization_subscriptions")
@@ -247,17 +428,17 @@ async function saveCameraStatus(formData: FormData) {
 
     if (subscriptionResult.error) {
       throw new Error(
-        `Failed to load subscription camera policy: ${subscriptionResult.error.message}`
+        `${text.loadSubscriptionPolicyFailed} ${subscriptionResult.error.message}`
       );
     }
 
     if (!subscriptionResult.data) {
-      throw new Error("No subscription found for active organization");
+      throw new Error(text.noSubscriptionFound);
     }
 
     if (activeCameraCountResult.error) {
       throw new Error(
-        `Failed to load active camera usage: ${activeCameraCountResult.error.message}`
+        `${text.loadActiveCameraUsageFailed} ${activeCameraCountResult.error.message}`
       );
     }
 
@@ -277,8 +458,6 @@ async function saveCameraStatus(formData: FormData) {
     }
   }
 
-  const supabase = supabaseServer();
-
   const { error } = await supabase
     .from("cameras")
     .update({ is_active: nextIsActive })
@@ -286,7 +465,7 @@ async function saveCameraStatus(formData: FormData) {
     .eq("id", cameraId);
 
   if (error) {
-    throw new Error(`Failed to save camera status: ${error.message}`);
+    throw new Error(`${text.saveCameraStatusFailed} ${error.message}`);
   }
 
   revalidatePath("/cameras/health");
@@ -303,10 +482,33 @@ async function removeCamera(formData: FormData) {
   "use server";
 
   const ctx = await requirePathAccess("/cameras/health");
+if (!ctx.user) {
+  throw new Error("Authenticated user required");
+}
+
+
+
+
+  const cookieStore = await cookies();
+  const supabase = supabaseServer();
+
+  const { data: profileData } = await supabase
+    .from("profiles")
+    .select("preferred_language")
+    .eq("id", ctx.user.id)
+    .maybeSingle();
+
+  const language = resolveLanguage({
+    cookieLanguage: cookieStore.get(LOCALE_COOKIE)?.value,
+    profileLanguage: profileData?.preferred_language,
+  });
+
+  const text = t(language);
+
   redirectIfDemoWrite(ctx, buildReturnUrl({ demoReadOnly: true }));
 
   if (!ctx.activeMembership) {
-    throw new Error("Active organization context required");
+    throw new Error(text.activeOrganizationRequired);
   }
 
   const actorRole = ctx.activeMembership.role;
@@ -315,15 +517,15 @@ async function removeCamera(formData: FormData) {
   const returnRevier = String(formData.get("return_revier") ?? "").trim();
 
   if (!activeOrganization) {
-    throw new Error("Active organization not found");
+    throw new Error(text.activeOrganizationMissing);
   }
 
   if (!(actorRole === "owner" || actorRole === "admin")) {
-    throw new Error("Nur Owner oder Admin dürfen Kameras verwalten.");
+    throw new Error(text.actorNotAllowed);
   }
 
   if (!cameraId) {
-    throw new Error("Missing target camera.");
+    throw new Error(text.targetCameraMissing);
   }
 
   const targetCamera = await loadCameraForMutation({
@@ -332,10 +534,8 @@ async function removeCamera(formData: FormData) {
   });
 
   if (!targetCamera) {
-    throw new Error("Target camera not found.");
+    throw new Error(text.targetCameraNotFound);
   }
-
-  const supabase = supabaseServer();
 
   const { error } = await supabase
     .from("cameras")
@@ -344,7 +544,7 @@ async function removeCamera(formData: FormData) {
     .eq("id", cameraId);
 
   if (error) {
-    throw new Error(`Failed to remove camera: ${error.message}`);
+    throw new Error(`${text.removeCameraFailed} ${error.message}`);
   }
 
   revalidatePath("/cameras/health");
@@ -357,7 +557,13 @@ async function removeCamera(formData: FormData) {
   );
 }
 
-function HealthBadge({ status }: { status: string }) {
+function HealthBadge({
+  status,
+  language,
+}: {
+  status: string;
+  language: AppLanguage;
+}) {
   const className =
     status === "online"
       ? "border-emerald-300/25 bg-emerald-300/10 text-emerald-200"
@@ -371,7 +577,7 @@ function HealthBadge({ status }: { status: string }) {
     <span
       className={`inline-flex rounded-full border px-2.5 py-0.5 text-xs font-medium ${className}`}
     >
-      {formatHealthLabel(status)}
+      {formatHealthLabel(status, language)}
     </span>
   );
 }
@@ -399,8 +605,29 @@ export default async function CamerasHealthPage(props: {
 }) {
   const ctx = await requirePathAccess("/cameras/health");
 
+if (!ctx.user) {
+  throw new Error("Authenticated user required");
+}
+
+
+  const cookieStore = await cookies();
+  const supabase = supabaseServer();
+
+  const { data: profileData } = await supabase
+    .from("profiles")
+    .select("preferred_language")
+    .eq("id", ctx.user.id)
+    .maybeSingle();
+
+  const language = resolveLanguage({
+    cookieLanguage: cookieStore.get(LOCALE_COOKIE)?.value,
+    profileLanguage: profileData?.preferred_language,
+  });
+
+  const text = t(language);
+
   if (!ctx.activeMembership) {
-    throw new Error("Active organization context required");
+    throw new Error(text.activeOrganizationRequired);
   }
 
   const activeOrganization = ctx.activeMembership.organizations;
@@ -422,24 +649,19 @@ export default async function CamerasHealthPage(props: {
       <main className="space-y-8">
         <section className="rounded-[32px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(201,149,46,0.16),transparent_24%),linear-gradient(135deg,rgba(255,255,255,0.06),rgba(255,255,255,0.03))] p-6 backdrop-blur-sm">
           <div className="text-xs font-medium uppercase tracking-[0.22em] text-amber-200/80">
-            Camera Health
+            {text.eyebrow}
           </div>
           <h1 className="mt-3 text-3xl font-semibold tracking-tight text-white">
-            Camera Health
+            {text.title}
           </h1>
-          <p className="mt-2 max-w-3xl text-sm text-white/68">
-            Überwache hier die Kameras der aktiven Organisation im aktuellen
-            Revier-Scope.
-          </p>
+          <p className="mt-2 max-w-3xl text-sm text-white/68">{text.intro}</p>
         </section>
         <div className="rounded-[24px] border border-rose-300/20 bg-rose-300/10 p-4 text-sm text-rose-100">
-          Active organization not found.
+          {text.activeOrganizationNotFound}
         </div>
       </main>
     );
   }
-
-  const supabase = supabaseServer();
 
   const { data: reviersData, error: reviersError } = await supabase
     .from("reviers")
@@ -453,18 +675,15 @@ export default async function CamerasHealthPage(props: {
       <main className="space-y-8">
         <section className="rounded-[32px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(201,149,46,0.16),transparent_24%),linear-gradient(135deg,rgba(255,255,255,0.06),rgba(255,255,255,0.03))] p-6 backdrop-blur-sm">
           <div className="text-xs font-medium uppercase tracking-[0.22em] text-amber-200/80">
-            Camera Health
+            {text.eyebrow}
           </div>
           <h1 className="mt-3 text-3xl font-semibold tracking-tight text-white">
-            Camera Health
+            {text.title}
           </h1>
-          <p className="mt-2 max-w-3xl text-sm text-white/68">
-            Überwache hier die Kameras der aktiven Organisation im aktuellen
-            Revier-Scope.
-          </p>
+          <p className="mt-2 max-w-3xl text-sm text-white/68">{text.intro}</p>
         </section>
         <div className="rounded-[24px] border border-rose-300/20 bg-rose-300/10 p-4 text-sm text-rose-100">
-          Fehler beim Laden der Reviere: {reviersError.message}
+          {text.loadGroundsFailed} {reviersError.message}
         </div>
       </main>
     );
@@ -480,8 +699,9 @@ export default async function CamerasHealthPage(props: {
 
   const scopeLabel =
     revierScope.type === "single"
-      ? reviers.find((r) => r.id === revierScope.revierId)?.name ?? "Ein Revier"
-      : "Alle aktiven Reviere";
+      ? reviers.find((revier) => revier.id === revierScope.revierId)?.name ??
+        text.oneGround
+      : text.allActiveGrounds;
 
   if (allowedRevierIds.length === 0) {
     return (
@@ -490,15 +710,12 @@ export default async function CamerasHealthPage(props: {
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
               <div className="text-xs font-medium uppercase tracking-[0.22em] text-amber-200/80">
-                Camera Health
+                {text.eyebrow}
               </div>
               <h1 className="mt-3 text-3xl font-semibold tracking-tight text-white">
-                Camera Health
+                {text.title}
               </h1>
-              <p className="mt-2 max-w-3xl text-sm text-white/68">
-                Überwache hier die Kameras der aktiven Organisation im aktuellen
-                Revier-Scope.
-              </p>
+              <p className="mt-2 max-w-3xl text-sm text-white/68">{text.intro}</p>
             </div>
             <div className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-white/72">
               {scopeLabel}
@@ -506,7 +723,7 @@ export default async function CamerasHealthPage(props: {
           </div>
         </section>
         <div className="rounded-[24px] border border-white/10 bg-white/5 p-4 text-sm text-white/68">
-          Für die aktive Organisation sind derzeit keine aktiven Reviere vorhanden.
+          {text.noActiveGrounds}
         </div>
       </main>
     );
@@ -530,18 +747,15 @@ export default async function CamerasHealthPage(props: {
       <main className="space-y-8">
         <section className="rounded-[32px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(201,149,46,0.16),transparent_24%),linear-gradient(135deg,rgba(255,255,255,0.06),rgba(255,255,255,0.03))] p-6 backdrop-blur-sm">
           <div className="text-xs font-medium uppercase tracking-[0.22em] text-amber-200/80">
-            Camera Health
+            {text.eyebrow}
           </div>
           <h1 className="mt-3 text-3xl font-semibold tracking-tight text-white">
-            Camera Health
+            {text.title}
           </h1>
-          <p className="mt-2 max-w-3xl text-sm text-white/68">
-            Überwache hier die Kameras der aktiven Organisation im aktuellen
-            Revier-Scope.
-          </p>
+          <p className="mt-2 max-w-3xl text-sm text-white/68">{text.intro}</p>
         </section>
         <div className="rounded-[24px] border border-rose-300/20 bg-rose-300/10 p-4 text-sm text-rose-100">
-          Fehler beim Laden der Kameras: {camerasError.message}
+          {text.loadCamerasFailed} {camerasError.message}
         </div>
       </main>
     );
@@ -557,15 +771,12 @@ export default async function CamerasHealthPage(props: {
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
               <div className="text-xs font-medium uppercase tracking-[0.22em] text-amber-200/80">
-                Camera Health
+                {text.eyebrow}
               </div>
               <h1 className="mt-3 text-3xl font-semibold tracking-tight text-white">
-                Camera Health
+                {text.title}
               </h1>
-              <p className="mt-2 max-w-3xl text-sm text-white/68">
-                Überwache hier die Kameras der aktiven Organisation im aktuellen
-                Revier-Scope.
-              </p>
+              <p className="mt-2 max-w-3xl text-sm text-white/68">{text.intro}</p>
             </div>
             <div className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-white/72">
               {scopeLabel}
@@ -575,47 +786,43 @@ export default async function CamerasHealthPage(props: {
 
         {demoReadOnly ? (
           <section className="rounded-[24px] border border-amber-300/20 bg-amber-300/10 p-4">
-            <p className="text-sm text-amber-100">
-              Demo-Modus: Änderungen sind deaktiviert.
-            </p>
+            <p className="text-sm text-amber-100">{text.demoReadOnly}</p>
           </section>
         ) : null}
 
         {changed ? (
           <section className="rounded-[24px] border border-emerald-300/20 bg-emerald-300/10 p-4">
-            <p className="text-sm text-emerald-100">Kamera-Status wurde gespeichert.</p>
+            <p className="text-sm text-emerald-100">{text.statusSaved}</p>
           </section>
         ) : null}
 
         {removed ? (
           <section className="rounded-[24px] border border-emerald-300/20 bg-emerald-300/10 p-4">
-            <p className="text-sm text-emerald-100">Kamera wurde dauerhaft entfernt.</p>
+            <p className="text-sm text-emerald-100">{text.cameraRemoved}</p>
           </section>
         ) : null}
 
         <section className="rounded-[28px] border border-white/10 bg-white/5 backdrop-blur-sm">
           <div className="flex items-center justify-between border-b border-white/8 px-6 py-4">
             <div>
-              <h2 className="text-lg font-medium text-white">Kameraliste</h2>
-              <p className="mt-1 text-sm text-white/65">
-                Sichtbare Kameras der aktiven Organisation im gültigen Revier-Scope.
-              </p>
+              <h2 className="text-lg font-medium text-white">{text.cameraListTitle}</h2>
+              <p className="mt-1 text-sm text-white/65">{text.cameraListText}</p>
             </div>
             <Link
               href="/cameras/new"
               className="rounded-full border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/78 hover:border-amber-300/20 hover:bg-white/8 hover:text-white"
             >
-              Kamera hinzufügen
+              {text.addCamera}
             </Link>
           </div>
 
           <div className="px-6 py-10">
             <div className="rounded-[24px] border border-dashed border-white/10 bg-white/5 p-8">
               <h3 className="text-base font-medium text-white">
-                Keine Kameras im aktuellen Scope
+                {text.noCamerasInScopeTitle}
               </h3>
               <p className="mt-2 max-w-2xl text-sm leading-6 text-white/68">
-                Für den aktuellen Revier-Scope sind keine Kameras vorhanden.
+                {text.noCamerasInScopeText}
               </p>
             </div>
           </div>
@@ -636,18 +843,15 @@ export default async function CamerasHealthPage(props: {
       <main className="space-y-8">
         <section className="rounded-[32px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(201,149,46,0.16),transparent_24%),linear-gradient(135deg,rgba(255,255,255,0.06),rgba(255,255,255,0.03))] p-6 backdrop-blur-sm">
           <div className="text-xs font-medium uppercase tracking-[0.22em] text-amber-200/80">
-            Camera Health
+            {text.eyebrow}
           </div>
           <h1 className="mt-3 text-3xl font-semibold tracking-tight text-white">
-            Camera Health
+            {text.title}
           </h1>
-          <p className="mt-2 max-w-3xl text-sm text-white/68">
-            Überwache hier die Kameras der aktiven Organisation im aktuellen
-            Revier-Scope.
-          </p>
+          <p className="mt-2 max-w-3xl text-sm text-white/68">{text.intro}</p>
         </section>
         <div className="rounded-[24px] border border-rose-300/20 bg-rose-300/10 p-4 text-sm text-rose-100">
-          Fehler beim Laden des Kamera-Health-Status: {healthError.message}
+          {text.loadHealthFailed} {healthError.message}
         </div>
       </main>
     );
@@ -678,13 +882,13 @@ export default async function CamerasHealthPage(props: {
   const offlineCount = rows.filter((row) => row.health_status === "offline").length;
   const unknownCount = rows.filter((row) => row.health_status === "unknown").length;
 
-  const healthRules = buildHealthRules(rows);
+  const healthRules = buildHealthRules(rows, language);
   const healthRuleHint =
     healthRules.length > 0
       ? healthRules
           .map(
             (rule) =>
-              `${rule.methodLabel}: stale ab ${rule.staleAfterMinutes} min, offline ab ${rule.offlineAfterMinutes} min`
+              `${rule.methodLabel}: ${text.staleFrom} ${rule.staleAfterMinutes} ${text.min}, ${text.offlineFrom} ${rule.offlineAfterMinutes} ${text.min}`
           )
           .join(" · ")
       : null;
@@ -695,15 +899,12 @@ export default async function CamerasHealthPage(props: {
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <div className="text-xs font-medium uppercase tracking-[0.22em] text-amber-200/80">
-              Camera Health
+              {text.eyebrow}
             </div>
             <h1 className="mt-3 text-3xl font-semibold tracking-tight text-white">
-              Camera Health
+              {text.title}
             </h1>
-            <p className="mt-2 max-w-3xl text-sm text-white/68">
-              Überwache hier die Kameras der aktiven Organisation im aktuellen
-              Revier-Scope.
-            </p>
+            <p className="mt-2 max-w-3xl text-sm text-white/68">{text.intro}</p>
           </div>
           <div className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-white/72">
             {scopeLabel}
@@ -713,61 +914,41 @@ export default async function CamerasHealthPage(props: {
 
       {demoReadOnly ? (
         <section className="rounded-[24px] border border-amber-300/20 bg-amber-300/10 p-4">
-          <p className="text-sm text-amber-100">
-            Demo-Modus: Änderungen sind deaktiviert.
-          </p>
+          <p className="text-sm text-amber-100">{text.demoReadOnly}</p>
         </section>
       ) : null}
 
       {changed ? (
         <section className="rounded-[24px] border border-emerald-300/20 bg-emerald-300/10 p-4">
-          <p className="text-sm text-emerald-100">Kamera-Status wurde gespeichert.</p>
+          <p className="text-sm text-emerald-100">{text.statusSaved}</p>
         </section>
       ) : null}
 
       {removed ? (
         <section className="rounded-[24px] border border-emerald-300/20 bg-emerald-300/10 p-4">
-          <p className="text-sm text-emerald-100">Kamera wurde dauerhaft entfernt.</p>
+          <p className="text-sm text-emerald-100">{text.cameraRemoved}</p>
         </section>
       ) : null}
 
       <section className="grid gap-4 md:grid-cols-4">
-        <StatCard
-          title="Online"
-          value={onlineCount}
-          text="Kameras mit aktuellem Lebenszeichen innerhalb des Online-Fensters."
-        />
-        <StatCard
-          title="Stale"
-          value={staleCount}
-          text="Kameras mit verspätetem, aber noch nicht kritischem Status."
-        />
-        <StatCard
-          title="Offline"
-          value={offlineCount}
-          text="Kameras ohne Lebenszeichen jenseits des Offline-Fensters."
-        />
-        <StatCard
-          title="Unknown"
-          value={unknownCount}
-          text="Kameras ohne verwertbares letztes Lebenszeichen."
-        />
+        <StatCard title={text.online} value={onlineCount} text={text.onlineText} />
+        <StatCard title={text.stale} value={staleCount} text={text.staleText} />
+        <StatCard title={text.offline} value={offlineCount} text={text.offlineText} />
+        <StatCard title={text.unknown} value={unknownCount} text={text.unknownText} />
       </section>
 
       <section className="rounded-[28px] border border-white/10 bg-white/5 backdrop-blur-sm">
         <div className="flex items-center justify-between border-b border-white/8 px-6 py-4">
           <div>
-            <h2 className="text-lg font-medium text-white">Kameraliste</h2>
-            <p className="mt-1 text-sm text-white/65">
-              Sichtbare Kameras der aktiven Organisation im gültigen Revier-Scope.
-            </p>
+            <h2 className="text-lg font-medium text-white">{text.cameraListTitle}</h2>
+            <p className="mt-1 text-sm text-white/65">{text.cameraListText}</p>
           </div>
 
           <Link
             href="/cameras/new"
             className="rounded-full border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/78 hover:border-amber-300/20 hover:bg-white/8 hover:text-white"
           >
-            Kamera hinzufügen
+            {text.addCamera}
           </Link>
         </div>
 
@@ -775,14 +956,14 @@ export default async function CamerasHealthPage(props: {
           <table className="min-w-full text-sm">
             <thead className="bg-white/5 text-left text-white/55">
               <tr>
-                <th className="px-6 py-3 font-medium whitespace-nowrap">Kamera</th>
-                <th className="px-6 py-3 font-medium whitespace-nowrap">Revier</th>
-                <th className="px-6 py-3 font-medium whitespace-nowrap">Methode</th>
-                <th className="px-6 py-3 font-medium whitespace-nowrap">Health</th>
-                <th className="px-6 py-3 font-medium whitespace-nowrap">Status</th>
-                <th className="px-6 py-3 font-medium whitespace-nowrap">Last Feed</th>
+                <th className="px-6 py-3 font-medium whitespace-nowrap">{text.cameraCol}</th>
+                <th className="px-6 py-3 font-medium whitespace-nowrap">{text.groundCol}</th>
+                <th className="px-6 py-3 font-medium whitespace-nowrap">{text.methodCol}</th>
+                <th className="px-6 py-3 font-medium whitespace-nowrap">{text.healthCol}</th>
+                <th className="px-6 py-3 font-medium whitespace-nowrap">{text.statusCol}</th>
+                <th className="px-6 py-3 font-medium whitespace-nowrap">{text.lastFeedCol}</th>
                 <th className="px-6 py-3 font-medium whitespace-nowrap text-right">
-                  Aktionen
+                  {text.actionsCol}
                 </th>
               </tr>
             </thead>
@@ -799,11 +980,11 @@ export default async function CamerasHealthPage(props: {
                   </td>
 
                   <td className="px-6 py-4 text-white/68 whitespace-nowrap">
-                    {formatMethod(row.import_method)}
+                    {formatMethod(row.import_method, language)}
                   </td>
 
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <HealthBadge status={row.health_status} />
+                    <HealthBadge status={row.health_status} language={language} />
                   </td>
 
                   <CameraRowFields
@@ -813,10 +994,11 @@ export default async function CamerasHealthPage(props: {
                     returnRevier={rawRevier ?? ""}
                     saveAction={saveCameraStatus}
                     isDemo={isDemo}
+                    language={language}
                   />
 
                   <td className="px-6 py-4 text-white/68 whitespace-nowrap">
-                    {formatAgo(row.last_seen_at)}
+                    {formatAgo(row.last_seen_at, language)}
                   </td>
 
                   <CameraRowActions
@@ -825,6 +1007,7 @@ export default async function CamerasHealthPage(props: {
                     removeAction={removeCamera}
                     returnRevier={rawRevier ?? ""}
                     isDemo={isDemo}
+                    language={language}
                   />
                 </tr>
               ))}
@@ -834,7 +1017,7 @@ export default async function CamerasHealthPage(props: {
 
         {healthRuleHint ? (
           <div className="border-t border-white/8 px-6 py-3 text-xs text-white/45">
-            * Health-Regeln im aktuellen Scope: {healthRuleHint}
+            {text.healthRulesPrefix} {healthRuleHint}
           </div>
         ) : null}
       </section>

@@ -1,9 +1,28 @@
-// src/app/cameras/health/CameraRowFields.tsx #4
+// src/app/cameras/health/CameraRowFields.tsx #6
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { type AppLanguage } from "@/lib/i18n";
 
 type CameraStatus = "active" | "disabled";
+
+function t(language: AppLanguage) {
+  if (language === "en") {
+    return {
+      active: "Active",
+      disabled: "Disabled",
+      demoReadOnly: "Demo mode: changes are disabled.",
+      notAllowed: "Only owner or admin can manage cameras.",
+    };
+  }
+
+  return {
+    active: "Aktiv",
+    disabled: "Deaktiviert",
+    demoReadOnly: "Demo-Modus: Änderungen sind deaktiviert.",
+    notAllowed: "Nur Owner oder Admin dürfen Kameras verwalten.",
+  };
+}
 
 function emitDirtyState(cameraId: string, dirty: boolean) {
   window.dispatchEvent(
@@ -20,6 +39,7 @@ export default function CameraRowFields({
   returnRevier,
   saveAction,
   isDemo = false,
+  language,
 }: {
   cameraId: string;
   initialStatus: CameraStatus;
@@ -27,7 +47,9 @@ export default function CameraRowFields({
   returnRevier: string;
   saveAction: (formData: FormData) => void | Promise<void>;
   isDemo?: boolean;
+  language: AppLanguage;
 }) {
+  const text = t(language);
   const [status, setStatus] = useState<CameraStatus>(initialStatus);
   const formId = useMemo(() => `camera-controls-${cameraId}`, [cameraId]);
   const isDirty = status !== initialStatus;
@@ -54,17 +76,17 @@ export default function CameraRowFields({
           className="rounded-[10px] border border-white/10 bg-white/5 px-2.5 py-1.5 text-sm text-white outline-none disabled:bg-white/5 disabled:text-white/35"
           title={
             isDemo
-              ? "Demo-Modus: Änderungen sind deaktiviert."
+              ? text.demoReadOnly
               : !canManage
-                ? "Nur Owner oder Admin dürfen Kameras verwalten."
+                ? text.notAllowed
                 : ""
           }
         >
           <option value="active" className="bg-[#102018] text-white">
-            Active
+            {text.active}
           </option>
           <option value="disabled" className="bg-[#102018] text-white">
-            Disabled
+            {text.disabled}
           </option>
         </select>
       </form>

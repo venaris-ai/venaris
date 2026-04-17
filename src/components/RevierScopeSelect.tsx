@@ -1,7 +1,8 @@
-// src/components/RevierScopeSelect.tsx #2
+// src/components/RevierScopeSelect.tsx #4
 "use client";
 
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import type { AppLanguage } from "@/lib/i18n";
 
 type RevierOption = {
   id: string;
@@ -11,9 +12,10 @@ type RevierOption = {
 type Props = {
   reviers: RevierOption[];
   value: string;
+  language: AppLanguage;
 };
 
-export default function RevierScopeSelect({ reviers, value }: Props) {
+export default function RevierScopeSelect({ reviers, value, language }: Props) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -31,7 +33,7 @@ export default function RevierScopeSelect({ reviers, value }: Props) {
       className="bg-transparent px-0 py-0 text-xs text-white outline-none"
     >
       <option value="all" className="bg-[#102018] text-white">
-        All Reviers
+        {language === "en" ? "All grounds" : "Alle Reviere"}
       </option>
       {reviers.map((revier) => (
         <option

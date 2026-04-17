@@ -1,11 +1,17 @@
-// src/app/orga/reviere/[id]/edit/page.tsx #6
+// src/app/orga/reviere/[id]/edit/page.tsx #9
 import Link from "next/link";
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { redirectIfDemoWrite } from "@/lib/auth";
 import { requirePathAccess } from "@/lib/authz";
 import { supabaseServer } from "@/lib/supabaseServer";
 import SubmitButton from "@/components/SubmitButton";
+import {
+  LOCALE_COOKIE,
+  resolveLanguage,
+  type AppLanguage,
+} from "@/lib/i18n";
 
 type RevierRow = {
   id: string;
@@ -18,10 +24,87 @@ type RevierRow = {
   organization_id: string;
 };
 
+async function resolveUiLanguageForProtectedPath(pathname: string) {
+  const ctx = await requirePathAccess(pathname);
+
+if (!ctx.user) {
+  throw new Error("Authenticated user required");
+}
+
+  const supabase = supabaseServer();
+  const cookieStore = await cookies();
+
+  const { data: profileData } = await supabase
+    .from("profiles")
+    .select("preferred_language")
+    .eq("id", ctx.user.id)
+    .maybeSingle();
+
+  const language = resolveLanguage({
+    cookieLanguage: cookieStore.get(LOCALE_COOKIE)?.value,
+    profileLanguage: profileData?.preferred_language,
+  });
+
+  return { ctx, supabase, language };
+}
+
+function t(language: AppLanguage) {
+  return language === "en"
+    ? {
+        nameRequired: "Ground name is required.",
+        areaRequired: "Area in ha is required.",
+        areaInvalid: "Area in ha must be a valid positive number.",
+        updateFailedPrefix: "Failed to update ground:",
+        eyebrow: "Edit ground",
+        title: "Edit ground",
+        intro: "Edit the master data and status of the selected ground here.",
+        demoReadOnly: "Demo mode: changes are disabled.",
+        nameLabel: "Ground name *",
+        areaLabel: "Area in ha *",
+        regionLabel: "Region",
+        countryLabel: "Country",
+        statusLabel: "Status",
+        notesLabel: "Notes",
+        active: "Active",
+        paused: "Paused",
+        archived: "Archived",
+        saveIdle: "Save changes",
+        savePending: "Saving...",
+        demoMode: "Demo mode",
+        cancel: "Cancel",
+      }
+    : {
+        nameRequired: "Reviername ist erforderlich.",
+        areaRequired: "Fläche in ha ist erforderlich.",
+        areaInvalid: "Fläche in ha muss eine gültige positive Zahl sein.",
+        updateFailedPrefix: "Failed to update revier:",
+        eyebrow: "Revier bearbeiten",
+        title: "Revier bearbeiten",
+        intro:
+          "Bearbeite hier die Stammdaten und den Status des ausgewählten Reviers.",
+        demoReadOnly: "Demo-Modus: Änderungen sind deaktiviert.",
+        nameLabel: "Reviername *",
+        areaLabel: "Fläche in ha *",
+        regionLabel: "Region",
+        countryLabel: "Land",
+        statusLabel: "Status",
+        notesLabel: "Notizen",
+        active: "Active",
+        paused: "Paused",
+        archived: "Archived",
+        saveIdle: "Änderungen speichern",
+        savePending: "Speichert...",
+        demoMode: "Demo-Modus",
+        cancel: "Abbrechen",
+      };
+}
+
 async function updateRevier(revierId: string, formData: FormData) {
   "use server";
 
-  const ctx = await requirePathAccess(`/orga/reviere/${revierId}/edit`);
+  const { ctx, supabase, language } = await resolveUiLanguageForProtectedPath(
+    `/orga/reviere/${revierId}/edit`
+  );
   redirectIfDemoWrite(ctx, `/orga/reviere/${revierId}/edit?demo_read_only=1`);
 
   if (!ctx.activeMembership) {
@@ -29,6 +112,7 @@ async function updateRevier(revierId: string, formData: FormData) {
   }
 
   const organization = ctx.activeMembership.organizations;
+  const text = t(language);
 
   if (!organization) {
     throw new Error("Active organization not found");
@@ -42,22 +126,20 @@ async function updateRevier(revierId: string, formData: FormData) {
   const notes = String(formData.get("notes") ?? "").trim();
 
   if (!name) {
-    throw new Error("Reviername ist erforderlich.");
+    throw new Error(text.nameRequired);
   }
 
   if (!areaHaRaw) {
-    throw new Error("Fläche in ha ist erforderlich.");
+    throw new Error(text.areaRequired);
   }
 
   const parsed = Number(areaHaRaw);
 
   if (!Number.isFinite(parsed) || parsed <= 0) {
-    throw new Error("Fläche in ha muss eine gültige positive Zahl sein.");
+    throw new Error(text.areaInvalid);
   }
 
   const areaHa = Math.round(parsed);
-
-  const supabase = supabaseServer();
 
   const { error } = await supabase
     .from("reviers")
@@ -73,12 +155,11 @@ async function updateRevier(revierId: string, formData: FormData) {
     .eq("organization_id", organization.id);
 
   if (error) {
-    throw new Error(`Failed to update revier: ${error.message}`);
+    throw new Error(`${text.updateFailedPrefix} ${error.message}`);
   }
 
   revalidatePath("/orga/reviere");
   revalidatePath("/", "layout");
-
   redirect("/orga/reviere?updated=1");
 }
 
@@ -93,7 +174,9 @@ export default async function EditRevierPage({
   const search = (await searchParams) ?? {};
   const demoReadOnly = search.demo_read_only === "1";
 
-  const ctx = await requirePathAccess(`/orga/reviere/${id}/edit`);
+  const { ctx, supabase, language } = await resolveUiLanguageForProtectedPath(
+    `/orga/reviere/${id}/edit`
+  );
 
   if (!ctx.activeMembership) {
     throw new Error("Active organization context required");
@@ -106,7 +189,7 @@ export default async function EditRevierPage({
     throw new Error("Active organization not found");
   }
 
-  const supabase = supabaseServer();
+  const text = t(language);
 
   const { data, error } = await supabase
     .from("reviers")
@@ -126,22 +209,20 @@ export default async function EditRevierPage({
       <section className="rounded-[32px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(201,149,46,0.16),transparent_24%),linear-gradient(135deg,rgba(255,255,255,0.06),rgba(255,255,255,0.03))] p-6 backdrop-blur-sm">
         <div>
           <div className="text-xs font-medium uppercase tracking-[0.22em] text-amber-200/80">
-            Revier bearbeiten
+            {text.eyebrow}
           </div>
           <h1 className="mt-3 text-3xl font-semibold tracking-tight text-white">
-            Revier bearbeiten
+            {text.title}
           </h1>
           <p className="mt-2 max-w-3xl text-sm text-white/68">
-            Bearbeite hier die Stammdaten und den Status des ausgewählten Reviers.
+            {text.intro}
           </p>
         </div>
       </section>
 
       {demoReadOnly ? (
         <section className="rounded-[24px] border border-amber-300/20 bg-amber-300/10 p-4">
-          <p className="text-sm text-amber-100">
-            Demo-Modus: Änderungen sind deaktiviert.
-          </p>
+          <p className="text-sm text-amber-100">{text.demoReadOnly}</p>
         </section>
       ) : null}
 
@@ -153,7 +234,7 @@ export default async function EditRevierPage({
                 htmlFor="name"
                 className="mb-2 block text-sm font-medium text-white"
               >
-                Reviername *
+                {text.nameLabel}
               </label>
               <input
                 id="name"
@@ -163,7 +244,7 @@ export default async function EditRevierPage({
                 defaultValue={revier.name}
                 disabled={isDemo}
                 className="w-full rounded-[10px] border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none ring-0 placeholder:text-white/35 disabled:bg-white/5 disabled:text-white/35"
-                title={isDemo ? "Demo-Modus: Änderungen sind deaktiviert." : ""}
+                title={isDemo ? text.demoReadOnly : ""}
               />
             </div>
 
@@ -172,7 +253,7 @@ export default async function EditRevierPage({
                 htmlFor="area_ha"
                 className="mb-2 block text-sm font-medium text-white"
               >
-                Fläche in ha *
+                {text.areaLabel}
               </label>
               <input
                 id="area_ha"
@@ -184,7 +265,7 @@ export default async function EditRevierPage({
                 defaultValue={revier.area_ha}
                 disabled={isDemo}
                 className="w-full rounded-[10px] border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none ring-0 disabled:bg-white/5 disabled:text-white/35"
-                title={isDemo ? "Demo-Modus: Änderungen sind deaktiviert." : ""}
+                title={isDemo ? text.demoReadOnly : ""}
               />
             </div>
 
@@ -193,7 +274,7 @@ export default async function EditRevierPage({
                 htmlFor="region"
                 className="mb-2 block text-sm font-medium text-white"
               >
-                Region
+                {text.regionLabel}
               </label>
               <input
                 id="region"
@@ -202,7 +283,7 @@ export default async function EditRevierPage({
                 defaultValue={revier.region ?? ""}
                 disabled={isDemo}
                 className="w-full rounded-[10px] border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none ring-0 placeholder:text-white/35 disabled:bg-white/5 disabled:text-white/35"
-                title={isDemo ? "Demo-Modus: Änderungen sind deaktiviert." : ""}
+                title={isDemo ? text.demoReadOnly : ""}
               />
             </div>
 
@@ -211,7 +292,7 @@ export default async function EditRevierPage({
                 htmlFor="country"
                 className="mb-2 block text-sm font-medium text-white"
               >
-                Land
+                {text.countryLabel}
               </label>
               <input
                 id="country"
@@ -220,7 +301,7 @@ export default async function EditRevierPage({
                 defaultValue={revier.country ?? "DE"}
                 disabled={isDemo}
                 className="w-full rounded-[10px] border border-white/10 bg-white/5 px-3 py-2 text-sm uppercase text-white outline-none ring-0 placeholder:text-white/35 disabled:bg-white/5 disabled:text-white/35"
-                title={isDemo ? "Demo-Modus: Änderungen sind deaktiviert." : ""}
+                title={isDemo ? text.demoReadOnly : ""}
               />
             </div>
 
@@ -229,7 +310,7 @@ export default async function EditRevierPage({
                 htmlFor="status"
                 className="mb-2 block text-sm font-medium text-white"
               >
-                Status
+                {text.statusLabel}
               </label>
               <select
                 id="status"
@@ -237,16 +318,16 @@ export default async function EditRevierPage({
                 defaultValue={revier.status}
                 disabled={isDemo}
                 className="w-full rounded-[10px] border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none ring-0 disabled:bg-white/5 disabled:text-white/35"
-                title={isDemo ? "Demo-Modus: Änderungen sind deaktiviert." : ""}
+                title={isDemo ? text.demoReadOnly : ""}
               >
                 <option value="active" className="bg-[#102018] text-white">
-                  Active
+                  {text.active}
                 </option>
                 <option value="paused" className="bg-[#102018] text-white">
-                  Paused
+                  {text.paused}
                 </option>
                 <option value="archived" className="bg-[#102018] text-white">
-                  Archived
+                  {text.archived}
                 </option>
               </select>
             </div>
@@ -257,7 +338,7 @@ export default async function EditRevierPage({
               htmlFor="notes"
               className="mb-2 block text-sm font-medium text-white"
             >
-              Notizen
+              {text.notesLabel}
             </label>
             <textarea
               id="notes"
@@ -266,21 +347,21 @@ export default async function EditRevierPage({
               defaultValue={revier.notes ?? ""}
               disabled={isDemo}
               className="w-full rounded-[10px] border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none ring-0 placeholder:text-white/35 disabled:bg-white/5 disabled:text-white/35"
-              title={isDemo ? "Demo-Modus: Änderungen sind deaktiviert." : ""}
+              title={isDemo ? text.demoReadOnly : ""}
             />
           </div>
 
           <div className="flex flex-wrap items-center gap-3">
             <SubmitButton
-              idleLabel={isDemo ? "Demo-Modus" : "Änderungen speichern"}
-              pendingLabel="Speichert..."
+              idleLabel={isDemo ? text.demoMode : text.saveIdle}
+              pendingLabel={text.savePending}
             />
 
             <Link
               href="/orga/reviere"
               className="rounded-[10px] border border-white/10 bg-white/5 px-4 py-2 text-sm text-white/78 hover:border-amber-300/20 hover:bg-white/8 hover:text-white"
             >
-              Abbrechen
+              {text.cancel}
             </Link>
           </div>
         </form>

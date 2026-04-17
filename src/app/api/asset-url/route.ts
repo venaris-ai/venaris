@@ -1,10 +1,11 @@
-// src/app/api/asset-url/route.ts #3
+// src/app/api/asset-url/route.ts #4
 export const runtime = "nodejs";
 
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabaseServer";
 import { requireOrganizationRole } from "@/lib/auth";
 import { resolveAssetPreviewUrl } from "@/lib/demoAssetResolver";
+import { getLanguageFromRequest, type AppLanguage } from "@/lib/i18n";
 
 function isStorageObjectMissing(message: string | undefined) {
   const value = (message ?? "").toLowerCase();
@@ -17,7 +18,28 @@ function isStorageObjectMissing(message: string | undefined) {
   );
 }
 
-export async function GET(req: Request) {
+function t(language: AppLanguage) {
+  return language === "en"
+    ? {
+        activeOrganizationNotFound: "active organization not found",
+        pathRequired: "path required",
+        assetNotFound: "asset not found",
+        notAllowed: "not allowed",
+        storageObjectNotFound: "storage object not found",
+      }
+    : {
+        activeOrganizationNotFound: "aktive Organisation nicht gefunden",
+        pathRequired: "path ist erforderlich",
+        assetNotFound: "Asset nicht gefunden",
+        notAllowed: "nicht erlaubt",
+        storageObjectNotFound: "Storage-Objekt nicht gefunden",
+      };
+}
+
+export async function GET(req: NextRequest) {
+  const language = getLanguageFromRequest(req);
+  const text = t(language);
+
   try {
     const { activeMembership } = await requireOrganizationRole([
       "owner",
@@ -28,7 +50,7 @@ export async function GET(req: Request) {
 
     if (!activeOrganization) {
       return NextResponse.json(
-        { error: "active organization not found" },
+        { error: text.activeOrganizationNotFound },
         { status: 400 }
       );
     }
@@ -38,7 +60,7 @@ export async function GET(req: Request) {
     const path = searchParams.get("path");
 
     if (!path) {
-      return NextResponse.json({ error: "path required" }, { status: 400 });
+      return NextResponse.json({ error: text.pathRequired }, { status: 400 });
     }
 
     const { data: asset, error: assetError } = await supabase
@@ -52,7 +74,7 @@ export async function GET(req: Request) {
     }
 
     if (!asset) {
-      return NextResponse.json({ error: "asset not found" }, { status: 404 });
+      return NextResponse.json({ error: text.assetNotFound }, { status: 404 });
     }
 
     const { data: camera, error: cameraError } = await supabase
@@ -66,7 +88,7 @@ export async function GET(req: Request) {
     }
 
     if (!camera || camera.organization_id !== activeOrganization.id) {
-      return NextResponse.json({ error: "not allowed" }, { status: 403 });
+      return NextResponse.json({ error: text.notAllowed }, { status: 403 });
     }
 
     const url = await resolveAssetPreviewUrl({
@@ -80,7 +102,7 @@ export async function GET(req: Request) {
 
     if (!url) {
       return NextResponse.json(
-        { error: "storage object not found" },
+        { error: text.storageObjectNotFound },
         { status: 404 }
       );
     }
@@ -91,7 +113,7 @@ export async function GET(req: Request) {
 
     if (isStorageObjectMissing(message)) {
       return NextResponse.json(
-        { error: "storage object not found" },
+        { error: text.storageObjectNotFound },
         { status: 404 }
       );
     }

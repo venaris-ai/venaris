@@ -1,4 +1,5 @@
-// src/app/orga/subscription/page.tsx #16
+// src/app/orga/subscription/page.tsx #19
+import { cookies } from "next/headers";
 import { requirePathAccess } from "@/lib/authz";
 import { supabaseServer } from "@/lib/supabaseServer";
 import { BILLING_PLANS, type BillingCycle } from "@/lib/billing/plans";
@@ -7,6 +8,11 @@ import {
   type SubscriptionStatus,
 } from "@/lib/billing/subscriptionPolicy";
 import PlanSelectionCards from "@/components/PlanSelectionCards";
+import {
+  LOCALE_COOKIE,
+  resolveLanguage,
+  type AppLanguage,
+} from "@/lib/i18n";
 
 type SubscriptionRow = {
   plan_key: "starter" | "pro" | "enterprise";
@@ -28,26 +34,74 @@ type OpenRequestRow = {
   created_at: string | null;
 };
 
-function formatDate(value: string | null) {
+async function resolveUiLanguageForProtectedPath(pathname: string) {
+  const ctx = await requirePathAccess(pathname);
+
+if (!ctx.user) {
+  throw new Error("Authenticated user required");
+}
+
+
+  const supabase = supabaseServer();
+  const cookieStore = await cookies();
+
+  const { data: profileData } = await supabase
+    .from("profiles")
+    .select("preferred_language")
+    .eq("id", ctx.user.id)
+    .maybeSingle();
+
+  const language = resolveLanguage({
+    cookieLanguage: cookieStore.get(LOCALE_COOKIE)?.value,
+    profileLanguage: profileData?.preferred_language,
+  });
+
+  return { ctx, supabase, language };
+}
+
+function formatDate(value: string | null, language: AppLanguage) {
   if (!value) return "—";
 
-  return new Intl.DateTimeFormat("de-DE", {
+  return new Intl.DateTimeFormat(language === "en" ? "en-GB" : "de-DE", {
     dateStyle: "medium",
   }).format(new Date(value));
 }
 
-function formatMoney(amountCents: number, currency: string) {
-  return new Intl.NumberFormat("de-DE", {
+function formatMoney(
+  amountCents: number,
+  currency: string,
+  language: AppLanguage
+) {
+  return new Intl.NumberFormat(language === "en" ? "en-GB" : "de-DE", {
     style: "currency",
     currency,
   }).format(amountCents / 100);
 }
 
-function billingCycleLabel(cycle: BillingCycle) {
+function billingCycleLabel(cycle: BillingCycle, language: AppLanguage) {
+  if (language === "en") {
+    return cycle === "yearly" ? "Yearly" : "Monthly";
+  }
   return cycle === "yearly" ? "Jährlich" : "Monatlich";
 }
 
-function billingProviderLabel(provider: SubscriptionRow["billing_provider"]) {
+function billingProviderLabel(
+  provider: SubscriptionRow["billing_provider"],
+  language: AppLanguage
+) {
+  if (language === "en") {
+    switch (provider) {
+      case "manual":
+        return "Manual";
+      case "stripe":
+        return "Stripe";
+      case "none":
+        return "No billing";
+      default:
+        return provider;
+    }
+  }
+
   switch (provider) {
     case "manual":
       return "Manuell";
@@ -60,9 +114,16 @@ function billingProviderLabel(provider: SubscriptionRow["billing_provider"]) {
   }
 }
 
-function planPriceText(subscription: SubscriptionRow) {
+function planPriceText(
+  subscription: SubscriptionRow,
+  language: AppLanguage
+) {
   if (subscription.price_amount_cents > 0) {
-    return formatMoney(subscription.price_amount_cents, subscription.price_currency);
+    return formatMoney(
+      subscription.price_amount_cents,
+      subscription.price_currency,
+      language
+    );
   }
 
   const plan = BILLING_PLANS[subscription.plan_key];
@@ -72,13 +133,49 @@ function planPriceText(subscription: SubscriptionRow) {
       : plan.monthlyPriceCents;
 
   if (cents == null) {
-    return "Individuell";
+    return language === "en" ? "Custom" : "Individuell";
   }
 
-  return formatMoney(cents, subscription.price_currency);
+  return formatMoney(cents, subscription.price_currency, language);
 }
 
-function statusUi(status: SubscriptionStatus) {
+function statusUi(status: SubscriptionStatus, language: AppLanguage) {
+  if (language === "en") {
+    switch (status) {
+      case "trialing":
+        return {
+          label: "Trialing",
+          badgeClass: "border-sky-300/25 bg-sky-300/10 text-sky-200",
+        };
+      case "active":
+        return {
+          label: "Active",
+          badgeClass:
+            "border-emerald-300/25 bg-emerald-300/10 text-emerald-200",
+        };
+      case "past_due":
+        return {
+          label: "Past Due",
+          badgeClass: "border-amber-300/25 bg-amber-300/10 text-amber-200",
+        };
+      case "canceled":
+        return {
+          label: "Canceled",
+          badgeClass: "border-orange-300/25 bg-orange-300/10 text-orange-200",
+        };
+      case "expired":
+        return {
+          label: "Expired",
+          badgeClass: "border-rose-300/25 bg-rose-300/10 text-rose-200",
+        };
+      default:
+        return {
+          label: status,
+          badgeClass: "border-white/10 bg-white/5 text-white/72",
+        };
+    }
+  }
+
   switch (status) {
     case "trialing":
       return {
@@ -113,6 +210,68 @@ function statusUi(status: SubscriptionStatus) {
   }
 }
 
+function t(language: AppLanguage) {
+  return language === "en"
+    ? {
+        eyebrow: "Abo",
+        pageTitle: "Abo",
+        pageText:
+          "Status, current plan and available plan options for the active organization.",
+        missingPageText:
+          "No subscription was found for this organization yet.",
+        missingSectionTitle: "Abo",
+        missingSectionText:
+          "No subscription was found for this organization yet.",
+        missingBoxText:
+          "Please review the subscription configuration in the database.",
+        currentSectionTitle: "Abo",
+        currentSectionText:
+          "Status, current plan and available plan options for the active organization.",
+        usageTitle: "Current usage",
+        priceLabel: "Price",
+        billingLabel: "Billing",
+        trialEndsLabel: "Trial ends",
+        periodUntilLabel: "Current period until",
+        camerasLabel: "Cameras",
+        membersWithInvitesLabel: "Members incl. open invites",
+        activeMembersLabel: "Active members",
+        openInvitesLabel: "Open invites",
+        choosePlanTitle: "Choose plan",
+        choosePlanText:
+          "Choose the right plan for your organization. Smaller plans can only be selected if current usage fits the target limits.",
+        inclVat: "incl. VAT",
+      }
+    : {
+        eyebrow: "Abo",
+        pageTitle: "Abo",
+        pageText:
+          "Status, aktueller Plan und verfügbare Planoptionen der aktiven Organization.",
+        missingPageText:
+          "Für diese Organisation wurde noch kein Abo gefunden.",
+        missingSectionTitle: "Abo",
+        missingSectionText:
+          "Für diese Organisation wurde noch kein Abo gefunden.",
+        missingBoxText:
+          "Bitte prüfe die Abo-Konfiguration in der Datenbank.",
+        currentSectionTitle: "Abo",
+        currentSectionText:
+          "Status, aktueller Plan und verfügbare Planoptionen der aktiven Organization.",
+        usageTitle: "Aktuelle Nutzung",
+        priceLabel: "Preis",
+        billingLabel: "Abrechnung",
+        trialEndsLabel: "Trial endet",
+        periodUntilLabel: "Periode bis",
+        camerasLabel: "Kameras",
+        membersWithInvitesLabel: "Members inkl. offene Invites",
+        activeMembersLabel: "Aktive Members",
+        openInvitesLabel: "Offene Invites",
+        choosePlanTitle: "Plan auswählen",
+        choosePlanText:
+          "Wähle den passenden Plan für Deine Organization. Kleinere Pläne sind nur auswählbar, wenn die aktuelle Nutzung in die Ziel-Limits passt.",
+        inclVat: "inkl. MwSt.",
+      };
+}
+
 function Section({
   title,
   text,
@@ -134,19 +293,22 @@ function Section({
 }
 
 export default async function SubscriptionPage() {
-  const ctx = await requirePathAccess("/orga/subscription");
+  const { ctx, supabase, language } = await resolveUiLanguageForProtectedPath(
+    "/orga/subscription"
+  );
 
   if (!ctx.activeMembership) {
     throw new Error("Active organization context required");
   }
 
-  const supabase = supabaseServer();
   const organization = ctx.activeMembership.organizations;
   const nowIso = new Date().toISOString();
 
   if (!organization) {
     throw new Error("Active organization not found");
   }
+
+  const text = t(language);
 
   const [
     subscriptionResult,
@@ -244,23 +406,23 @@ export default async function SubscriptionPage() {
         <section className="rounded-[32px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(201,149,46,0.16),transparent_24%),linear-gradient(135deg,rgba(255,255,255,0.06),rgba(255,255,255,0.03))] p-6 backdrop-blur-sm">
           <div>
             <div className="text-xs font-medium uppercase tracking-[0.22em] text-amber-200/80">
-              Subscription
+              {text.eyebrow}
             </div>
             <h1 className="mt-3 text-3xl font-semibold tracking-tight text-white">
-              Subscription
+              {text.pageTitle}
             </h1>
             <p className="mt-2 max-w-3xl text-sm text-white/68">
-              Für diese Organization wurde noch keine Subscription gefunden.
+              {text.missingPageText}
             </p>
           </div>
         </section>
 
         <Section
-          title="Subscription"
-          text="Für diese Organization wurde noch keine Subscription gefunden."
+          title={text.missingSectionTitle}
+          text={text.missingSectionText}
         >
           <div className="rounded-[24px] border border-amber-300/20 bg-amber-300/10 p-5 text-sm text-amber-100">
-            Bitte prüfe die Subscription-Konfiguration in der Datenbank.
+            {text.missingBoxText}
           </div>
         </Section>
       </main>
@@ -278,27 +440,27 @@ export default async function SubscriptionPage() {
     openInviteCount,
   });
 
-  const effectiveStatus = statusUi(resolved.effectiveStatus);
+  const effectiveStatus = statusUi(resolved.effectiveStatus, language);
 
   return (
     <main className="space-y-8">
       <section className="rounded-[32px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(201,149,46,0.16),transparent_24%),linear-gradient(135deg,rgba(255,255,255,0.06),rgba(255,255,255,0.03))] p-6 backdrop-blur-sm">
         <div>
           <div className="text-xs font-medium uppercase tracking-[0.22em] text-amber-200/80">
-            Subscription
+            {text.eyebrow}
           </div>
           <h1 className="mt-3 text-3xl font-semibold tracking-tight text-white">
-            Subscription
+            {text.pageTitle}
           </h1>
           <p className="mt-2 max-w-3xl text-sm text-white/68">
-            Status, aktueller Plan und verfügbare Planoptionen der aktiven Organization.
+            {text.pageText}
           </p>
         </div>
       </section>
 
       <Section
-        title="Subscription"
-        text="Status, aktueller Plan und verfügbare Planoptionen der aktiven Organization."
+        title={text.currentSectionTitle}
+        text={text.currentSectionText}
       >
         <div className="grid gap-4 md:grid-cols-2">
           <div className="rounded-[24px] border border-white/10 bg-white/5 p-5">
@@ -315,39 +477,46 @@ export default async function SubscriptionPage() {
 
             <div className="mt-4 space-y-2 text-sm text-white/72">
               <div>
-                Preis: {planPriceText(subscription)} inkl. MwSt. ·{" "}
-                {billingCycleLabel(subscription.billing_cycle)}
+                {text.priceLabel}: {planPriceText(subscription, language)}{" "}
+                {text.inclVat} ·{" "}
+                {billingCycleLabel(subscription.billing_cycle, language)}
               </div>
-              <div>Abrechnung: {billingProviderLabel(subscription.billing_provider)}</div>
-              <div>Trial endet: {formatDate(subscription.trial_ends_at)}</div>
-              <div>Periode bis: {formatDate(subscription.current_period_end)}</div>
+              <div>
+                {text.billingLabel}:{" "}
+                {billingProviderLabel(subscription.billing_provider, language)}
+              </div>
+              <div>
+                {text.trialEndsLabel}:{" "}
+                {formatDate(subscription.trial_ends_at, language)}
+              </div>
+              <div>
+                {text.periodUntilLabel}:{" "}
+                {formatDate(subscription.current_period_end, language)}
+              </div>
             </div>
           </div>
 
           <div className="rounded-[24px] border border-white/10 bg-white/5 p-5">
             <div className="text-sm font-medium text-white/50">
-              Aktuelle Nutzung
+              {text.usageTitle}
             </div>
 
             <div className="mt-4 space-y-2 text-sm text-white/72">
               <div>
-                Kameras: {currentCameraCount} / {subscription.max_cameras}
+                {text.camerasLabel}: {currentCameraCount} / {subscription.max_cameras}
               </div>
               <div>
-                Members inkl. offene Invites: {currentMemberUsage} /{" "}
+                {text.membersWithInvitesLabel}: {currentMemberUsage} /{" "}
                 {subscription.max_members}
               </div>
-              <div>Aktive Members: {activeMemberCount}</div>
-              <div>Offene Invites: {openInviteCount}</div>
+              <div>{text.activeMembersLabel}: {activeMemberCount}</div>
+              <div>{text.openInvitesLabel}: {openInviteCount}</div>
             </div>
           </div>
         </div>
       </Section>
 
-      <Section
-        title="Plan auswählen"
-        text="Wähle den passenden Plan für Deine Organization. Kleinere Pläne sind nur auswählbar, wenn die aktuelle Nutzung in die Ziel-Limits passt."
-      >
+      <Section title={text.choosePlanTitle} text={text.choosePlanText}>
         <PlanSelectionCards
           currentPlanKey={subscription.plan_key}
           billingCycle={subscription.billing_cycle}
@@ -365,6 +534,7 @@ export default async function SubscriptionPage() {
                 }
               : null
           }
+          language={language}
         />
       </Section>
     </main>

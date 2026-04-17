@@ -1,13 +1,24 @@
-// src/app/wildlife/page.tsx #2b
+// src/app/wildlife/page.tsx #5
 export const runtime = "nodejs";
 
 import Link from "next/link";
+import { cookies } from "next/headers";
 import { supabaseServer } from "@/lib/supabaseServer";
-import { requireActiveOrganization } from "@/lib/auth";
+import { requirePathAccess } from "@/lib/authz";
+import {
+  LOCALE_COOKIE,
+  resolveLanguage,
+  type AppLanguage,
+} from "@/lib/i18n";
 import {
   resolveRevierScope,
   type RevierOption,
 } from "@/lib/intelligence/revierScope";
+import {
+  buildSpeciesMetaMap,
+  getSpeciesLabel,
+  loadSpeciesMeta,
+} from "@/lib/speciesMeta";
 
 type SearchParams = {
   revier?: string;
@@ -17,11 +28,8 @@ type EventFeedRow = {
   id: string;
   camera_id: string;
   start_at: string | null;
-  end_at: string | null;
   top_species: string | null;
-  top_count: number | null;
   relevance_score: number | null;
-  asset_count: number | null;
 };
 
 type EventSpeciesSummaryRow = {
@@ -43,19 +51,8 @@ type RevierRow = {
   name: string;
 };
 
-function prettySpecies(value: string | null | undefined) {
-  if (!value) return "—";
-  return value.replaceAll("_", " ");
-}
-
-function titleCase(value: string | null | undefined) {
-  const s = prettySpecies(value);
-  return s.replace(/\b\w/g, (m) => m.toUpperCase());
-}
-
-function fmtTs(ts: string | null) {
-  if (!ts) return "—";
-  return new Date(ts).toLocaleString("de-DE");
+function locale(language: AppLanguage) {
+  return language === "en" ? "en-GB" : "de-DE";
 }
 
 function fmtHour(hour: number) {
@@ -64,8 +61,10 @@ function fmtHour(hour: number) {
 
 function fmtWindow(startHour: number, spanHours = 2) {
   const endHour = (startHour + spanHours) % 24;
-  return `${String(startHour).padStart(2, "0")}:00–${String(endHour)
-    .padStart(2, "0")}:00`;
+  return `${String(startHour).padStart(2, "0")}:00–${String(endHour).padStart(
+    2,
+    "0"
+  )}:00`;
 }
 
 function bucket2h(hour: number) {
@@ -106,6 +105,117 @@ async function fetchEventSpeciesSummaryChunked(
   }
 
   return rows;
+}
+
+function t(language: AppLanguage) {
+  if (language === "en") {
+    return {
+      eyebrow: "Wildlife",
+      title: "Wildlife Dashboard",
+      intro:
+        "Species, activity, first patterns and model-based population signals for the current scope.",
+      activeOrganizationNotFound: "Active organization not found.",
+      reviersLoadFailed: "Failed to load grounds:",
+      activeGroundsMissing:
+        "There are currently no active grounds for the active organization.",
+      camerasLoadFailed: "Failed to load cameras:",
+      noCamerasInScope:
+        "There are no cameras for the current ground scope.",
+      eventsLoadFailed: "Failed to load events:",
+      speciesSummaryLoadFailed: "Failed to load species summary:",
+      unknownError: "unknown error",
+      allActiveGrounds: "All active grounds",
+      oneGround: "One ground",
+      cameras: "Cameras",
+      currentGroundScope: "current ground scope",
+      wildlifeEvents: "Wildlife Events",
+      last30Days: "last 30 days",
+      observedSpecies: "Observed Species",
+      avgAnimalsPerEvent: "Avg Animals / Event",
+      wildlifeOnly: "wildlife only",
+      peakActivity: "Peak Activity",
+      events: "events",
+      speciesSnapshot: "Species Snapshot",
+      speciesSnapshotText: "Most frequent species in the current period.",
+      more: "More",
+      topCamera: "Top camera",
+      totalAnimals: "animals total",
+      noSpeciesSignalsYet: "No species signals yet.",
+      whereWhenHint: "Where & When Hint",
+      whereWhenHintText: "Condensed hint from camera and time window.",
+      strongestHint: "Current strongest hint",
+      near: "Near",
+      timeWindow: "Time window",
+      basis: "Basis",
+      noWhereWhenHint:
+        "No robust where-and-when hint available yet.",
+      activitySnapshot: "Activity Snapshot",
+      activitySnapshotText:
+        "Wildlife activity by hour, condensed for the dashboard.",
+      popsim: "PopSim",
+      popsimText:
+        "Model-based population signals for more grounded assessment, target pictures and management decisions in the ground.",
+      popsimEyebrow: "Stock. Trends. Guidance.",
+      popsimBody1:
+        "PopSim condenses events and patterns into model-based population signals for more grounded decisions in the ground.",
+      popsimBody2:
+        "Not an exact census, but a model-based view that helps connect camera observations with broader wildlife management interpretation.",
+    };
+  }
+
+  return {
+    eyebrow: "Wildlife",
+    title: "Wildlife Dashboard",
+    intro:
+      "Arten, Aktivität, erste Muster und modellgestützte Populationssignale für den aktuellen Scope.",
+    activeOrganizationNotFound: "Aktive Organisation nicht gefunden.",
+    reviersLoadFailed: "Fehler beim Laden der Reviere:",
+    activeGroundsMissing:
+      "Für die aktive Organisation sind derzeit keine aktiven Reviere vorhanden.",
+    camerasLoadFailed: "Fehler beim Laden der Kameras:",
+    noCamerasInScope:
+      "Für den aktuellen Revier-Scope sind keine Kameras vorhanden.",
+    eventsLoadFailed: "Fehler beim Laden der Ereignisse:",
+    speciesSummaryLoadFailed: "Fehler beim Laden der Artenzusammenfassung:",
+    unknownError: "Unbekannter Fehler",
+    allActiveGrounds: "Alle aktiven Reviere",
+    oneGround: "Ein Revier",
+    cameras: "Kameras",
+    currentGroundScope: "Aktueller Revier-Scope",
+    wildlifeEvents: "Wildtier-Ereignisse",
+    last30Days: "Letzte 30 Tage",
+    observedSpecies: "Beobachtete Arten",
+    avgAnimalsPerEvent: "Ø Tiere / Ereignis",
+    wildlifeOnly: "nur Wildlife",
+    peakActivity: "Aktivitätsspitze",
+    events: "Ereignisse",
+    speciesSnapshot: "Arten-Snapshot",
+    speciesSnapshotText: "Häufigste Arten im aktuellen Zeitraum.",
+    more: "Mehr",
+    topCamera: "Top-Kamera",
+    totalAnimals: "Tiere gesamt",
+    noSpeciesSignalsYet: "Noch keine Artensignale vorhanden.",
+    whereWhenHint: "Wo-&-Wann-Hinweis",
+    whereWhenHintText:
+      "Verdichteter Hinweis aus Kamera- und Zeitfenster.",
+    strongestHint: "Aktuell stärkster Hinweis",
+    near: "Nähe",
+    timeWindow: "Zeitfenster",
+    basis: "Basis",
+    noWhereWhenHint:
+      "Noch kein belastbarer Wo-und-Wann-Hinweis verfügbar.",
+    activitySnapshot: "Aktivitäts-Snapshot",
+    activitySnapshotText:
+      "Wildlife-Aktivität nach Stunde, verdichtet für das Dashboard.",
+    popsim: "PopSim",
+    popsimText:
+      "Modellgestützte Populationssignale für fundiertere Einschätzungen, Zielbilder und Management-Entscheidungen im Revier.",
+    popsimEyebrow: "Bestand. Tendenzen. Ableitungen.",
+    popsimBody1:
+      "PopSim verdichtet Ereignisse und Muster zu modellgestützten Populationssignalen für fundiertere Entscheidungen im Revier.",
+    popsimBody2:
+      "Kein exakter Zensus, sondern eine modellgestützte Sicht, die Kamera-Beobachtungen mit einer breiteren wildbiologischen Einordnung verbindet.",
+  };
 }
 
 function StatCard({
@@ -156,8 +266,30 @@ function EmptyState({ message }: { message: string }) {
 export default async function WildlifePage(props: {
   searchParams?: Promise<SearchParams> | SearchParams;
 }) {
-  const { activeMembership } = await requireActiveOrganization();
-  const activeOrganization = activeMembership.organizations;
+  const ctx = await requirePathAccess("/wildlife");
+
+  if (!ctx.user) {
+    throw new Error("Authenticated user required");
+  }
+
+  const cookieStore = await cookies();
+  const supabase = supabaseServer();
+
+  const { data: profileData } = await supabase
+    .from("profiles")
+    .select("preferred_language")
+    .eq("id", ctx.user.id)
+    .maybeSingle();
+
+  const language = resolveLanguage({
+    cookieLanguage: cookieStore.get(LOCALE_COOKIE)?.value,
+    profileLanguage: profileData?.preferred_language,
+  });
+
+  const text = t(language);
+  const activeOrganization = ctx.activeMembership?.organizations;
+  const speciesMetaRows = await loadSpeciesMeta();
+  const speciesMetaMap = buildSpeciesMetaMap(speciesMetaRows);
 
   const searchParams = props?.searchParams
     ? await Promise.resolve(props.searchParams)
@@ -168,23 +300,17 @@ export default async function WildlifePage(props: {
       <main className="space-y-8">
         <section className="rounded-[32px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(201,149,46,0.16),transparent_24%),linear-gradient(135deg,rgba(255,255,255,0.06),rgba(255,255,255,0.03))] p-6 backdrop-blur-sm">
           <div className="text-xs font-medium uppercase tracking-[0.22em] text-amber-200/80">
-            Wildlife
+            {text.eyebrow}
           </div>
-          <h1 className="mt-3 text-3xl font-semibold text-white">
-            Wildlife Dashboard
-          </h1>
-          <p className="mt-2 text-sm text-white/68">
-            Arten, Aktivität, erste Muster und modellgestützte Populationssignale
-            für den aktuellen Scope.
-          </p>
+          <h1 className="mt-3 text-3xl font-semibold text-white">{text.title}</h1>
+          <p className="mt-2 text-sm text-white/68">{text.intro}</p>
         </section>
 
-        <ErrorState message="Active organization not found." />
+        <ErrorState message={text.activeOrganizationNotFound} />
       </main>
     );
   }
 
-  const supabase = supabaseServer();
   const { startAt, endAt } = resolveLast30DaysRange();
 
   const { data: reviersData, error: reviersError } = await supabase
@@ -199,18 +325,13 @@ export default async function WildlifePage(props: {
       <main className="space-y-8">
         <section className="rounded-[32px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(201,149,46,0.16),transparent_24%),linear-gradient(135deg,rgba(255,255,255,0.06),rgba(255,255,255,0.03))] p-6 backdrop-blur-sm">
           <div className="text-xs font-medium uppercase tracking-[0.22em] text-amber-200/80">
-            Wildlife
+            {text.eyebrow}
           </div>
-          <h1 className="mt-3 text-3xl font-semibold text-white">
-            Wildlife Dashboard
-          </h1>
-          <p className="mt-2 text-sm text-white/68">
-            Arten, Aktivität, erste Muster und modellgestützte Populationssignale
-            für den aktuellen Scope.
-          </p>
+          <h1 className="mt-3 text-3xl font-semibold text-white">{text.title}</h1>
+          <p className="mt-2 text-sm text-white/68">{text.intro}</p>
         </section>
 
-        <ErrorState message={`Fehler beim Laden der Reviere: ${reviersError.message}`} />
+        <ErrorState message={`${text.reviersLoadFailed} ${reviersError.message}`} />
       </main>
     );
   }
@@ -227,8 +348,8 @@ export default async function WildlifePage(props: {
 
   const scopeLabel =
     currentRevierValue === "all"
-      ? "Alle aktiven Reviere"
-      : reviers.find((r) => r.id === currentRevierValue)?.name ?? "Ein Revier";
+      ? text.allActiveGrounds
+      : reviers.find((r) => r.id === currentRevierValue)?.name ?? text.oneGround;
 
   const allowedRevierIds = allowedReviers.map((r) => r.id);
 
@@ -237,18 +358,13 @@ export default async function WildlifePage(props: {
       <main className="space-y-8">
         <section className="rounded-[32px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(201,149,46,0.16),transparent_24%),linear-gradient(135deg,rgba(255,255,255,0.06),rgba(255,255,255,0.03))] p-6 backdrop-blur-sm">
           <div className="text-xs font-medium uppercase tracking-[0.22em] text-amber-200/80">
-            Wildlife
+            {text.eyebrow}
           </div>
-          <h1 className="mt-3 text-3xl font-semibold text-white">
-            Wildlife Dashboard
-          </h1>
-          <p className="mt-2 text-sm text-white/68">
-            Arten, Aktivität, erste Muster und modellgestützte Populationssignale
-            für den aktuellen Scope.
-          </p>
+          <h1 className="mt-3 text-3xl font-semibold text-white">{text.title}</h1>
+          <p className="mt-2 text-sm text-white/68">{text.intro}</p>
         </section>
 
-        <EmptyState message="Für die aktive Organisation sind derzeit keine aktiven Reviere vorhanden." />
+        <EmptyState message={text.activeGroundsMissing} />
       </main>
     );
   }
@@ -271,18 +387,13 @@ export default async function WildlifePage(props: {
       <main className="space-y-8">
         <section className="rounded-[32px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(201,149,46,0.16),transparent_24%),linear-gradient(135deg,rgba(255,255,255,0.06),rgba(255,255,255,0.03))] p-6 backdrop-blur-sm">
           <div className="text-xs font-medium uppercase tracking-[0.22em] text-amber-200/80">
-            Wildlife
+            {text.eyebrow}
           </div>
-          <h1 className="mt-3 text-3xl font-semibold text-white">
-            Wildlife Dashboard
-          </h1>
-          <p className="mt-2 text-sm text-white/68">
-            Arten, Aktivität, erste Muster und modellgestützte Populationssignale
-            für den aktuellen Scope.
-          </p>
+          <h1 className="mt-3 text-3xl font-semibold text-white">{text.title}</h1>
+          <p className="mt-2 text-sm text-white/68">{text.intro}</p>
         </section>
 
-        <ErrorState message={`Fehler beim Laden der Kameras: ${camerasError.message}`} />
+        <ErrorState message={`${text.camerasLoadFailed} ${camerasError.message}`} />
       </main>
     );
   }
@@ -303,15 +414,10 @@ export default async function WildlifePage(props: {
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
               <div className="text-xs font-medium uppercase tracking-[0.22em] text-amber-200/80">
-                Wildlife
+                {text.eyebrow}
               </div>
-              <h1 className="mt-3 text-3xl font-semibold text-white">
-                Wildlife Dashboard
-              </h1>
-              <p className="mt-2 text-sm text-white/68">
-                Arten, Aktivität, erste Muster und modellgestützte Populationssignale
-                für den aktuellen Scope.
-              </p>
+              <h1 className="mt-3 text-3xl font-semibold text-white">{text.title}</h1>
+              <p className="mt-2 text-sm text-white/68">{text.intro}</p>
             </div>
             <div className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-white/72">
               {scopeLabel}
@@ -320,38 +426,32 @@ export default async function WildlifePage(props: {
         </section>
 
         <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <StatCard title={text.cameras} value="0" subline={text.currentGroundScope} />
           <StatCard
-            title="Cameras"
+            title={text.wildlifeEvents}
             value="0"
-            subline="aktueller Revier-Scope"
+            subline={text.last30Days}
           />
           <StatCard
-            title="Wildlife Events"
+            title={text.observedSpecies}
             value="0"
-            subline="letzte 30 Tage"
+            subline={text.last30Days}
           />
           <StatCard
-            title="Observed Species"
-            value="0"
-            subline="letzte 30 Tage"
-          />
-          <StatCard
-            title="Avg Animals / Event"
+            title={text.avgAnimalsPerEvent}
             value="0.00"
-            subline="noch keine Daten"
+            subline={text.noSpeciesSignalsYet}
           />
         </section>
 
-        <EmptyState message="Für den aktuellen Revier-Scope sind keine Kameras vorhanden." />
+        <EmptyState message={text.noCamerasInScope} />
       </main>
     );
   }
 
   const { data: eventsData, error: eventsError } = await supabase
     .from("event_feed")
-    .select(
-      "id,camera_id,start_at,end_at,top_species,top_count,relevance_score,asset_count"
-    )
+    .select("id,camera_id,start_at,top_species,relevance_score")
     .in("camera_id", cameraIds)
     .gte("start_at", startAt)
     .lt("start_at", endAt)
@@ -362,18 +462,13 @@ export default async function WildlifePage(props: {
       <main className="space-y-8">
         <section className="rounded-[32px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(201,149,46,0.16),transparent_24%),linear-gradient(135deg,rgba(255,255,255,0.06),rgba(255,255,255,0.03))] p-6 backdrop-blur-sm">
           <div className="text-xs font-medium uppercase tracking-[0.22em] text-amber-200/80">
-            Wildlife
+            {text.eyebrow}
           </div>
-          <h1 className="mt-3 text-3xl font-semibold text-white">
-            Wildlife Dashboard
-          </h1>
-          <p className="mt-2 text-sm text-white/68">
-            Arten, Aktivität, erste Muster und modellgestützte Populationssignale
-            für den aktuellen Scope.
-          </p>
+          <h1 className="mt-3 text-3xl font-semibold text-white">{text.title}</h1>
+          <p className="mt-2 text-sm text-white/68">{text.intro}</p>
         </section>
 
-        <ErrorState message={`Fehler beim Laden der Events: ${eventsError.message}`} />
+        <ErrorState message={`${text.eventsLoadFailed} ${eventsError.message}`} />
       </main>
     );
   }
@@ -391,20 +486,15 @@ export default async function WildlifePage(props: {
         <main className="space-y-8">
           <section className="rounded-[32px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(201,149,46,0.16),transparent_24%),linear-gradient(135deg,rgba(255,255,255,0.06),rgba(255,255,255,0.03))] p-6 backdrop-blur-sm">
             <div className="text-xs font-medium uppercase tracking-[0.22em] text-amber-200/80">
-              Wildlife
+              {text.eyebrow}
             </div>
-            <h1 className="mt-3 text-3xl font-semibold text-white">
-              Wildlife Dashboard
-            </h1>
-            <p className="mt-2 text-sm text-white/68">
-              Arten, Aktivität, erste Muster und modellgestützte Populationssignale
-              für den aktuellen Scope.
-            </p>
+            <h1 className="mt-3 text-3xl font-semibold text-white">{text.title}</h1>
+            <p className="mt-2 text-sm text-white/68">{text.intro}</p>
           </section>
 
           <ErrorState
-            message={`Fehler beim Laden der Species-Zusammenfassung: ${
-              err instanceof Error ? err.message : "unknown error"
+            message={`${text.speciesSummaryLoadFailed} ${
+              err instanceof Error ? err.message : text.unknownError
             }`}
           />
         </main>
@@ -498,20 +588,9 @@ export default async function WildlifePage(props: {
 
   const totalSelectedSpeciesEvents = selectedSpeciesEvents.length;
 
-  const cameraSpeciesCounts = new Map<string, number>();
-  const windowSpeciesCounts = new Map<number, number>();
   const comboCounts = new Map<string, number>();
 
   for (const row of selectedSpeciesEvents) {
-    cameraSpeciesCounts.set(
-      row.cameraId,
-      (cameraSpeciesCounts.get(row.cameraId) ?? 0) + 1
-    );
-    windowSpeciesCounts.set(
-      row.window2h,
-      (windowSpeciesCounts.get(row.window2h) ?? 0) + 1
-    );
-
     const comboKey = `${row.cameraId}__${row.window2h}`;
     comboCounts.set(comboKey, (comboCounts.get(comboKey) ?? 0) + 1);
   }
@@ -559,14 +638,11 @@ export default async function WildlifePage(props: {
       count: 0,
     };
 
-  const latestEvents = wildlifeEvents
-    .slice()
-    .sort((a, b) => {
-      const ta = a.start_at ? new Date(a.start_at).getTime() : 0;
-      const tb = b.start_at ? new Date(b.start_at).getTime() : 0;
-      return tb - ta;
-    })
-    .slice(0, 6);
+  const selectedSpeciesLabel = getSpeciesLabel(
+    selectedSpecies,
+    language,
+    speciesMetaMap
+  );
 
   return (
     <main className="space-y-8">
@@ -574,15 +650,10 @@ export default async function WildlifePage(props: {
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <div className="text-xs font-medium uppercase tracking-[0.22em] text-amber-200/80">
-              Wildlife
+              {text.eyebrow}
             </div>
-            <h1 className="mt-3 text-3xl font-semibold text-white">
-              Wildlife Dashboard
-            </h1>
-            <p className="mt-2 max-w-3xl text-sm text-white/68">
-              Arten, Aktivität, erste Muster und modellgestützte Populationssignale
-              für den aktuellen Scope.
-            </p>
+            <h1 className="mt-3 text-3xl font-semibold text-white">{text.title}</h1>
+            <p className="mt-2 max-w-3xl text-sm text-white/68">{text.intro}</p>
           </div>
           <div className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-white/72">
             {scopeLabel}
@@ -592,33 +663,29 @@ export default async function WildlifePage(props: {
 
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
         <StatCard
-          title="Cameras"
+          title={text.cameras}
           value={String(cameraList.length)}
-          subline="aktueller Revier-Scope"
+          subline={text.currentGroundScope}
         />
-
         <StatCard
-          title="Wildlife Events"
+          title={text.wildlifeEvents}
           value={String(totalWildlifeEvents)}
-          subline="letzte 30 Tage"
+          subline={text.last30Days}
         />
-
         <StatCard
-          title="Observed Species"
+          title={text.observedSpecies}
           value={String(speciesOverview.length)}
-          subline="letzte 30 Tage"
+          subline={text.last30Days}
         />
-
         <StatCard
-          title="Avg Animals / Event"
+          title={text.avgAnimalsPerEvent}
           value={avgAnimalsPerWildlifeEvent.toFixed(2)}
-          subline="wildlife only"
+          subline={text.wildlifeOnly}
         />
-
         <StatCard
-          title="Peak Activity"
+          title={text.peakActivity}
           value={fmtHour(peakHour.hour)}
-          subline={`${peakHour.count} Events`}
+          subline={`${peakHour.count} ${text.events}`}
         />
       </section>
 
@@ -626,12 +693,10 @@ export default async function WildlifePage(props: {
         <div className="rounded-[28px] border border-white/10 bg-white/5 p-5 backdrop-blur-sm">
           <div className="mb-4 flex items-center justify-between">
             <div>
-              <h2 className="text-lg font-medium text-white">Species Snapshot</h2>
-              <p className="text-sm text-white/65">
-                Häufigste Arten im aktuellen Zeitraum.
-              </p>
+              <h2 className="text-lg font-medium text-white">{text.speciesSnapshot}</h2>
+              <p className="text-sm text-white/65">{text.speciesSnapshotText}</p>
             </div>
-            <ActionLink href="/wildlife/species" label="Mehr" />
+            <ActionLink href="/wildlife/species" label={text.more} />
           </div>
 
           <div className="space-y-3">
@@ -643,10 +708,10 @@ export default async function WildlifePage(props: {
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <div className="font-medium text-white">
-                      {titleCase(row.species)}
+                      {getSpeciesLabel(row.species, language, speciesMetaMap)}
                     </div>
                     <div className="mt-1 text-xs text-white/45">
-                      Top Camera:{" "}
+                      {text.topCamera}:{" "}
                       {row.topCameraId
                         ? cameraLabelById[row.topCameraId] ?? row.topCameraId
                         : "—"}
@@ -655,10 +720,10 @@ export default async function WildlifePage(props: {
 
                   <div className="text-right">
                     <div className="font-medium text-white">
-                      {row.eventCount} Events
+                      {row.eventCount} {text.events}
                     </div>
                     <div className="text-xs text-white/45">
-                      {row.observedAnimals} Tiere gesamt
+                      {row.observedAnimals} {text.totalAnimals}
                     </div>
                   </div>
                 </div>
@@ -666,9 +731,7 @@ export default async function WildlifePage(props: {
             ))}
 
             {topSpecies.length === 0 && (
-              <div className="text-sm text-white/68">
-                Noch keine Species-Signale vorhanden.
-              </div>
+              <div className="text-sm text-white/68">{text.noSpeciesSignalsYet}</div>
             )}
           </div>
         </div>
@@ -676,41 +739,36 @@ export default async function WildlifePage(props: {
         <div className="rounded-[28px] border border-white/10 bg-white/5 p-5 backdrop-blur-sm">
           <div className="mb-4 flex items-center justify-between">
             <div>
-              <h2 className="text-lg font-medium text-white">
-                Where &amp; When Hint
-              </h2>
-              <p className="text-sm text-white/65">
-                Verdichteter Hinweis aus Kamera- und Zeitfenster.
-              </p>
+              <h2 className="text-lg font-medium text-white">{text.whereWhenHint}</h2>
+              <p className="text-sm text-white/65">{text.whereWhenHintText}</p>
             </div>
-            <ActionLink href="/wildlife/wherewhen" label="Mehr" />
+            <ActionLink href="/wildlife/wherewhen" label={text.more} />
           </div>
 
           {!selectedSpecies || !topComboEntry ? (
-            <div className="text-sm text-white/68">
-              Noch kein belastbarer Where-&amp;-When-Hinweis verfügbar.
-            </div>
+            <div className="text-sm text-white/68">{text.noWhereWhenHint}</div>
           ) : (
             <div className="space-y-3">
-              <div className="text-sm text-white/50">Aktuell stärkster Hinweis</div>
+              <div className="text-sm text-white/50">{text.strongestHint}</div>
               <div className="text-xl font-semibold text-white">
-                {titleCase(selectedSpecies)}
+                {selectedSpeciesLabel}
               </div>
               <div className="text-sm text-white/72">
-                Nähe{" "}
+                {text.near}{" "}
                 <span className="font-medium text-white">
                   {cameraLabelById[topComboEntry.cameraId] ?? topComboEntry.cameraId}
                 </span>
               </div>
               <div className="text-sm text-white/72">
-                Zeitfenster{" "}
+                {text.timeWindow}{" "}
                 <span className="font-medium text-white">
                   {fmtWindow(topComboEntry.window2h)}
                 </span>
               </div>
               <div className="text-sm text-white/72">
-                Basis: <span className="font-medium text-white">{topComboEntry.count}</span>{" "}
-                Events
+                {text.basis}:{" "}
+                <span className="font-medium text-white">{topComboEntry.count}</span>{" "}
+                {text.events}
               </div>
             </div>
           )}
@@ -721,12 +779,10 @@ export default async function WildlifePage(props: {
         <div className="rounded-[28px] border border-white/10 bg-white/5 p-5 backdrop-blur-sm">
           <div className="mb-4 flex items-center justify-between">
             <div>
-              <h2 className="text-lg font-medium text-white">Activity Snapshot</h2>
-              <p className="text-sm text-white/65">
-                Wildlife-Aktivität nach Stunde, verdichtet für das Dashboard.
-              </p>
+              <h2 className="text-lg font-medium text-white">{text.activitySnapshot}</h2>
+              <p className="text-sm text-white/65">{text.activitySnapshotText}</p>
             </div>
-            <ActionLink href="/wildlife/activity" label="Mehr" />
+            <ActionLink href="/wildlife/activity" label={text.more} />
           </div>
 
           <div className="space-y-2">
@@ -753,71 +809,26 @@ export default async function WildlifePage(props: {
           </div>
         </div>
 
-        <div className="rounded-[28px] border border-white/10 bg-white/5 p-5 backdrop-blur-sm">
+        <div className="rounded-[28px] border border-amber-300/15 bg-[radial-gradient(circle_at_top_left,rgba(201,149,46,0.16),transparent_34%),linear-gradient(135deg,rgba(255,255,255,0.08),rgba(255,255,255,0.04))] p-5 backdrop-blur-sm">
           <div className="mb-4 flex items-center justify-between">
             <div>
-              <h2 className="text-lg font-medium text-white">PopSim</h2>
-              <p className="text-sm text-white/65">
-                Qualifizierte Populationsschätzung auf Basis modellierter Revierdaten.
-              </p>
+              <h2 className="text-lg font-medium text-white">{text.popsim}</h2>
+              <p className="text-sm text-white/65">{text.popsimText}</p>
             </div>
-            <ActionLink href="/wildlife/popsim" label="Mehr" />
+            <ActionLink href="/wildlife/popsim" label={text.more} />
           </div>
 
-          <div className="space-y-3 text-sm text-white/72">
-            <div>
-              Vorbereiteter Bereich für populationsbasierte Näherungen und
-              Management-Hinweise.
+          <div className="space-y-4">
+            <div className="text-[11px] font-medium uppercase tracking-[0.22em] text-amber-200/80">
+              {text.popsimEyebrow}
             </div>
-            <div className="rounded-[20px] border border-white/10 bg-white/5 p-3 text-white/65">
-              Kein exakter Zensus, sondern ein modellgestützter Snapshot aus Präsenz,
-              Kameradeckung, Artlogik und Zielwerten.
+
+            <div className="text-sm leading-6 text-white/78">{text.popsimBody1}</div>
+
+            <div className="rounded-[20px] border border-white/10 bg-black/10 p-4 text-sm leading-6 text-white/68">
+              {text.popsimBody2}
             </div>
           </div>
-        </div>
-      </section>
-
-      <section className="rounded-[28px] border border-white/10 bg-white/5 p-5 backdrop-blur-sm">
-        <div className="mb-4 flex items-center justify-between">
-          <div>
-            <h2 className="text-lg font-medium text-white">Latest Wildlife Events</h2>
-            <p className="text-sm text-white/65">
-              Jüngste Wildlife-Events im aktuellen Revier-Scope.
-            </p>
-          </div>
-          <ActionLink href="/cameras/ingest" label="Zu Ingest" />
-        </div>
-
-        <div className="space-y-3">
-          {latestEvents.map((evt) => (
-            <Link
-              key={evt.id}
-              href={`/cameras/events/${evt.id}`}
-              className="block rounded-[20px] border border-white/10 bg-white/5 p-3 text-sm hover:border-amber-300/20 hover:bg-white/8"
-            >
-              <div className="flex items-center justify-between gap-3">
-                <div className="font-medium text-white">
-                  {titleCase(evt.top_species)}
-                  {typeof evt.top_count === "number" ? ` (${evt.top_count})` : ""}
-                </div>
-                <div className="text-white/72">
-                  {typeof evt.relevance_score === "number"
-                    ? evt.relevance_score.toFixed(3)
-                    : "—"}
-                </div>
-              </div>
-              <div className="mt-1 text-xs text-white/45">
-                {cameraLabelById[evt.camera_id] ?? evt.camera_id} · {fmtTs(evt.start_at)} ·
-                Assets {evt.asset_count ?? 0}
-              </div>
-            </Link>
-          ))}
-
-          {latestEvents.length === 0 && (
-            <div className="text-sm text-white/68">
-              Noch keine Wildlife-Events vorhanden.
-            </div>
-          )}
         </div>
       </section>
     </main>

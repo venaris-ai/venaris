@@ -1,7 +1,8 @@
-// src/app/api/subscription/change-request/reject/route.ts #1
+// src/app/api/subscription/change-request/reject/route.ts #3
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAuthServer } from "@/lib/supabaseAuthServer";
 import { supabaseServer } from "@/lib/supabaseServer";
+import { getLanguageFromRequest, type AppLanguage } from "@/lib/i18n";
 
 type RequestStatus = "open" | "approved" | "rejected" | "canceled";
 
@@ -21,7 +22,40 @@ type ChangeRequestRow = {
 
 const VENARIS_ADMIN_EMAIL = "dev@venaris.io";
 
+function t(language: AppLanguage) {
+  return language === "en"
+    ? {
+        notAuthenticated: "Not authenticated.",
+        forbidden: "Forbidden: Venaris admin only.",
+        requestIdRequired: "requestId required.",
+        rejectedManually: "Rejected manually by Venaris admin",
+        failedToLoadChangeRequest: "Failed to load change request.",
+        changeRequestNotFound: "Change request not found.",
+        onlyOpenCanBeRejected:
+          "Only open change requests can be rejected.",
+        failedToRejectChangeRequest: "Failed to reject change request.",
+        unexpectedError: "Unexpected error.",
+      }
+    : {
+        notAuthenticated: "Nicht authentifiziert.",
+        forbidden: "Verboten: nur Venaris-Admin.",
+        requestIdRequired: "requestId erforderlich.",
+        rejectedManually: "Manuell durch Venaris-Admin abgelehnt",
+        failedToLoadChangeRequest:
+          "Plananfrage konnte nicht geladen werden.",
+        changeRequestNotFound: "Plananfrage nicht gefunden.",
+        onlyOpenCanBeRejected:
+          "Nur offene Plananfragen können abgelehnt werden.",
+        failedToRejectChangeRequest:
+          "Plananfrage konnte nicht abgelehnt werden.",
+        unexpectedError: "Unerwarteter Fehler.",
+      };
+}
+
 export async function POST(req: NextRequest) {
+  const language = getLanguageFromRequest(req);
+  const text = t(language);
+
   try {
     const auth = await supabaseAuthServer();
     const {
@@ -30,14 +64,17 @@ export async function POST(req: NextRequest) {
     } = await auth.auth.getUser();
 
     if (authError || !user) {
-      return NextResponse.json({ error: "not authenticated" }, { status: 401 });
+      return NextResponse.json(
+        { error: text.notAuthenticated },
+        { status: 401 }
+      );
     }
 
     const userEmail = (user.email ?? "").toLowerCase().trim();
 
     if (userEmail !== VENARIS_ADMIN_EMAIL) {
       return NextResponse.json(
-        { error: "forbidden: venaris admin only" },
+        { error: text.forbidden },
         { status: 403 }
       );
     }
@@ -47,11 +84,11 @@ export async function POST(req: NextRequest) {
     const resolutionNote =
       typeof body.resolutionNote === "string" && body.resolutionNote.trim()
         ? body.resolutionNote.trim()
-        : "Rejected manually by Venaris admin";
+        : text.rejectedManually;
 
     if (!requestId) {
       return NextResponse.json(
-        { error: "requestId required" },
+        { error: text.requestIdRequired },
         { status: 400 }
       );
     }
@@ -69,7 +106,7 @@ export async function POST(req: NextRequest) {
     if (requestResult.error) {
       return NextResponse.json(
         {
-          error: "failed to load change request",
+          error: text.failedToLoadChangeRequest,
           details: requestResult.error.message,
         },
         { status: 500 }
@@ -80,14 +117,14 @@ export async function POST(req: NextRequest) {
 
     if (!changeRequest) {
       return NextResponse.json(
-        { error: "change request not found" },
+        { error: text.changeRequestNotFound },
         { status: 404 }
       );
     }
 
     if (changeRequest.status !== "open") {
       return NextResponse.json(
-        { error: "only open change requests can be rejected" },
+        { error: text.onlyOpenCanBeRejected },
         { status: 409 }
       );
     }
@@ -111,7 +148,7 @@ export async function POST(req: NextRequest) {
     if (rejectRequestResult.error || !rejectRequestResult.data) {
       return NextResponse.json(
         {
-          error: "failed to reject change request",
+          error: text.failedToRejectChangeRequest,
           details:
             rejectRequestResult.error?.message ?? "no rejected request returned",
         },
@@ -129,7 +166,7 @@ export async function POST(req: NextRequest) {
   } catch (e) {
     return NextResponse.json(
       {
-        error: "unexpected error",
+        error: text.unexpectedError,
         details: e instanceof Error ? e.message : String(e),
       },
       { status: 500 }

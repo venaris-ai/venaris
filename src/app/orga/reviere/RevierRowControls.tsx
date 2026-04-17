@@ -1,9 +1,26 @@
-// src/app/orga/reviere/RevierRowControls.tsx #4
+// src/app/orga/reviere/RevierRowControls.tsx #6
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import type { AppLanguage } from "@/lib/i18n";
 
 type RevierStatus = "active" | "paused" | "archived";
+
+function t(language: AppLanguage) {
+  return language === "en"
+    ? {
+        demoReadOnly: "Demo mode: changes are disabled.",
+        active: "Active",
+        paused: "Paused",
+        archived: "Archived",
+      }
+    : {
+        demoReadOnly: "Demo-Modus: Änderungen sind deaktiviert.",
+        active: "Active",
+        paused: "Paused",
+        archived: "Archived",
+      };
+}
 
 function emitDirtyState(revierId: string, dirty: boolean) {
   window.dispatchEvent(
@@ -20,6 +37,7 @@ export default function RevierRowControls({
   initialStatus,
   saveAction,
   isDemo = false,
+  language,
 }: {
   revierId: string;
   initialName: string;
@@ -27,7 +45,9 @@ export default function RevierRowControls({
   initialStatus: RevierStatus;
   saveAction: (formData: FormData) => void | Promise<void>;
   isDemo?: boolean;
+  language: AppLanguage;
 }) {
+  const text = t(language);
   const [name, setName] = useState(initialName);
   const [areaHa, setAreaHa] = useState(String(initialAreaHa));
   const [status, setStatus] = useState<RevierStatus>(initialStatus);
@@ -59,7 +79,7 @@ export default function RevierRowControls({
             onChange={(e) => setName(e.target.value)}
             disabled={isDemo}
             className="w-full rounded-[10px] border border-white/10 bg-white/5 px-2.5 py-1.5 text-sm text-white outline-none disabled:bg-white/5 disabled:text-white/35"
-            title={isDemo ? "Demo-Modus: Änderungen sind deaktiviert." : ""}
+            title={isDemo ? text.demoReadOnly : ""}
           />
         </form>
       </td>
@@ -70,7 +90,7 @@ export default function RevierRowControls({
           onChange={(e) => setAreaHa(e.target.value)}
           disabled={isDemo}
           className="w-24 rounded-[10px] border border-white/10 bg-white/5 px-2.5 py-1.5 text-sm text-white outline-none disabled:bg-white/5 disabled:text-white/35"
-          title={isDemo ? "Demo-Modus: Änderungen sind deaktiviert." : ""}
+          title={isDemo ? text.demoReadOnly : ""}
         />
       </td>
 
@@ -80,16 +100,16 @@ export default function RevierRowControls({
           onChange={(e) => setStatus(e.target.value as RevierStatus)}
           disabled={isDemo}
           className="rounded-[10px] border border-white/10 bg-white/5 px-2.5 py-1.5 text-sm text-white outline-none disabled:bg-white/5 disabled:text-white/35"
-          title={isDemo ? "Demo-Modus: Änderungen sind deaktiviert." : ""}
+          title={isDemo ? text.demoReadOnly : ""}
         >
           <option value="active" className="bg-[#102018] text-white">
-            Active
+            {text.active}
           </option>
           <option value="paused" className="bg-[#102018] text-white">
-            Paused
+            {text.paused}
           </option>
           <option value="archived" className="bg-[#102018] text-white">
-            Archived
+            {text.archived}
           </option>
         </select>
       </td>

@@ -1,11 +1,33 @@
-// src/app/api/asset-relevant/route.ts #3
+// src/app/api/asset-relevant/route.ts #4
 export const runtime = "nodejs";
 
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabaseServer";
 import { assertNotDemoWrite, requireOrganizationRole } from "@/lib/auth";
+import { getLanguageFromRequest, type AppLanguage } from "@/lib/i18n";
 
-export async function POST(req: Request) {
+function t(language: AppLanguage) {
+  return language === "en"
+    ? {
+        activeOrganizationNotFound: "active organization not found",
+        assetIdAndRelevantRequired: "assetId and relevant required",
+        relevantMustBeBooleanOrNull: "relevant must be boolean or null",
+        assetNotFound: "asset not found",
+        notAllowed: "not allowed",
+      }
+    : {
+        activeOrganizationNotFound: "aktive Organisation nicht gefunden",
+        assetIdAndRelevantRequired: "assetId und relevant sind erforderlich",
+        relevantMustBeBooleanOrNull: "relevant muss boolean oder null sein",
+        assetNotFound: "Asset nicht gefunden",
+        notAllowed: "nicht erlaubt",
+      };
+}
+
+export async function POST(req: NextRequest) {
+  const language = getLanguageFromRequest(req);
+  const text = t(language);
+
   try {
     const ctx = await requireOrganizationRole([
       "owner",
@@ -18,7 +40,7 @@ export async function POST(req: Request) {
 
     if (!activeOrganization) {
       return NextResponse.json(
-        { error: "active organization not found" },
+        { error: text.activeOrganizationNotFound },
         { status: 400 }
       );
     }
@@ -31,14 +53,14 @@ export async function POST(req: Request) {
 
     if (!assetId || relevant === undefined) {
       return NextResponse.json(
-        { error: "assetId and relevant required" },
+        { error: text.assetIdAndRelevantRequired },
         { status: 400 }
       );
     }
 
     if (relevant !== null && typeof relevant !== "boolean") {
       return NextResponse.json(
-        { error: "relevant must be boolean or null" },
+        { error: text.relevantMustBeBooleanOrNull },
         { status: 400 }
       );
     }
@@ -54,7 +76,7 @@ export async function POST(req: Request) {
     }
 
     if (!asset) {
-      return NextResponse.json({ error: "asset not found" }, { status: 404 });
+      return NextResponse.json({ error: text.assetNotFound }, { status: 404 });
     }
 
     const { data: camera, error: cameraError } = await supabase
@@ -68,7 +90,7 @@ export async function POST(req: Request) {
     }
 
     if (!camera || camera.organization_id !== activeOrganization.id) {
-      return NextResponse.json({ error: "not allowed" }, { status: 403 });
+      return NextResponse.json({ error: text.notAllowed }, { status: 403 });
     }
 
     const { error } = await supabase

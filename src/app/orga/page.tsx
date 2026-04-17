@@ -1,5 +1,6 @@
-// src/app/orga/page.tsx #3
+// src/app/orga/page.tsx #6
 import Link from "next/link";
+import { cookies } from "next/headers";
 import { requirePathAccess, canAccessPath } from "@/lib/authz";
 import { supabaseServer } from "@/lib/supabaseServer";
 import { getBillingPlan } from "@/lib/billing/plans";
@@ -7,6 +8,11 @@ import {
   resolveSubscriptionState,
   type SubscriptionStatus,
 } from "@/lib/billing/subscriptionPolicy";
+import {
+  LOCALE_COOKIE,
+  resolveLanguage,
+  type AppLanguage,
+} from "@/lib/i18n";
 
 type SubscriptionRow = {
   plan_key: "starter" | "pro" | "enterprise";
@@ -20,22 +26,32 @@ type SubscriptionRow = {
   max_members: number;
 };
 
-function formatDate(value: string | null) {
+function formatDate(value: string | null, language: AppLanguage) {
   if (!value) return "—";
 
-  return new Intl.DateTimeFormat("de-DE", {
+  return new Intl.DateTimeFormat(language === "en" ? "en-GB" : "de-DE", {
     dateStyle: "medium",
   }).format(new Date(value));
 }
 
-function formatMoney(amountCents: number, currency: string) {
-  return new Intl.NumberFormat("de-DE", {
+function formatMoney(
+  amountCents: number,
+  currency: string,
+  language: AppLanguage
+) {
+  return new Intl.NumberFormat(language === "en" ? "en-GB" : "de-DE", {
     style: "currency",
     currency,
   }).format(amountCents / 100);
 }
 
-function billingCycleLabel(cycle: "monthly" | "yearly") {
+function billingCycleLabel(
+  cycle: "monthly" | "yearly",
+  language: AppLanguage
+) {
+  if (language === "en") {
+    return cycle === "yearly" ? "Yearly" : "Monthly";
+  }
   return cycle === "yearly" ? "Jährlich" : "Monatlich";
 }
 
@@ -52,11 +68,18 @@ function planLabel(planKey: SubscriptionRow["plan_key"]) {
   }
 }
 
-function formatPlanPrice(subscription: SubscriptionRow) {
+function formatPlanPrice(
+  subscription: SubscriptionRow,
+  language: AppLanguage
+) {
   const plan = getBillingPlan(subscription.plan_key);
 
   if (subscription.price_amount_cents > 0) {
-    return formatMoney(subscription.price_amount_cents, subscription.price_currency);
+    return formatMoney(
+      subscription.price_amount_cents,
+      subscription.price_currency,
+      language
+    );
   }
 
   if (!plan) return "—";
@@ -67,10 +90,16 @@ function formatPlanPrice(subscription: SubscriptionRow) {
       : plan.monthlyPriceCents;
 
   if (price != null) {
-    return formatMoney(price, subscription.price_currency);
+    return formatMoney(price, subscription.price_currency, language);
   }
 
-  return subscription.plan_key === "enterprise" ? "Individuell" : "Noch nicht festgelegt";
+  return subscription.plan_key === "enterprise"
+    ? language === "en"
+      ? "Custom"
+      : "Individuell"
+    : language === "en"
+      ? "Not yet defined"
+      : "Noch nicht festgelegt";
 }
 
 function statusUi(status: SubscriptionStatus) {
@@ -106,6 +135,116 @@ function statusUi(status: SubscriptionStatus) {
         badgeClass: "border-white/10 bg-white/5 text-white/72",
       };
   }
+}
+
+function t(language: AppLanguage) {
+  return language === "en"
+    ? {
+        eyebrow: "Organization",
+        title: "Organization",
+        intro:
+          "Overview of account, grounds, members and — where permitted — the subscription of the active organization.",
+        statGroundsTitle: "Grounds",
+        statGroundsText: "Current ground structure of this organization.",
+        statMembersTitle: "Members",
+        statMembersText: (openInvitesCount: number) =>
+          `${openInvitesCount} open invites`,
+        statCamerasTitle: "Cameras",
+        statCamerasTextWithPlan: (count: number, max: number) =>
+          `${count} / ${max} in active plan`,
+        statCamerasTextNoPlan: "No subscription found",
+        statSubscriptionTitle: "Abo",
+        statSubscriptionTextWithPlan: (status: string, price: string) =>
+          `${status} · ${price} incl. VAT`,
+        statSubscriptionTextNoPlan: "No subscription stored",
+        myAccountTitle: "My Account",
+        myAccountText: "Active organizational context and your role.",
+        openMyAccount: "Open my account",
+        organizationLabel: "Organization",
+        slugLabel: "Slug",
+        roleLabel: "Your role",
+        emailLabel: "Email",
+        groundsTitle: "Grounds",
+        groundsText:
+          "Operational area and ground structure of the organization.",
+        openGrounds: "Open grounds",
+        newGround: "New ground",
+        groundsStatus: "Status",
+        groundsStatusText:
+          "Grounds are created and administratively managed in organization settings.",
+        membersTitle: "Members",
+        membersText: "Team access, roles and open invitations.",
+        openMembers: "Open members",
+        inviteMember: "Invite member",
+        activeMembers: "Active members",
+        openInvites: "Open invites",
+        countedMembers: (usage: number, max: number) =>
+          `Currently counted: ${usage} of ${max} members.`,
+        subscriptionTitle: "Abo",
+        subscriptionText: "Commercial setup, plan and current usage limits.",
+        openSubscription: "Open subscription",
+        noSubscription: "No subscription was found for this organization.",
+        priceTitle: "Price",
+        usageTitle: "Usage",
+        camerasLabel: "Cameras",
+        membersLabel: "Members",
+        trialEnds: "Trial ends",
+        periodUntil: "Current period until",
+      }
+    : {
+        eyebrow: "Organisation",
+        title: "Organisation",
+        intro:
+          "Überblick über Konto, Reviere, Mitglieder und – sofern freigegeben – das Abo der aktiven Organisation.",
+        statGroundsTitle: "Reviere",
+        statGroundsText: "Aktuelle Revier-Struktur dieser Organisation.",
+        statMembersTitle: "Mitglieder",
+        statMembersText: (openInvitesCount: number) =>
+          `${openInvitesCount} offene Invites`,
+        statCamerasTitle: "Kameras",
+        statCamerasTextWithPlan: (count: number, max: number) =>
+          `${count} / ${max} im aktiven Plan`,
+        statCamerasTextNoPlan: "Kein Abo gefunden",
+        statSubscriptionTitle: "Abo",
+        statSubscriptionTextWithPlan: (status: string, price: string) =>
+          `${status} · ${price} inkl. MwSt.`,
+        statSubscriptionTextNoPlan: "Kein Abo hinterlegt",
+        myAccountTitle: "Mein Konto",
+        myAccountText: "Aktiver Organisationskontext und Deine Rolle.",
+        openMyAccount: "Mein Konto öffnen",
+        organizationLabel: "Organization",
+        slugLabel: "Slug",
+        roleLabel: "Deine Rolle",
+        emailLabel: "E-Mail",
+        groundsTitle: "Reviere",
+        groundsText:
+          "Fachliche Flächen- und Revierstruktur der Organization.",
+        openGrounds: "Reviere öffnen",
+        newGround: "Neues Revier",
+        groundsStatus: "Status",
+        groundsStatusText:
+          "Reviere sind angelegt und über die Orga-Verwaltung administrierbar.",
+        membersTitle: "Mitglieder",
+        membersText: "Teamzugänge, Rollen und offene Einladungen.",
+        openMembers: "Mitglieder öffnen",
+        inviteMember: "Mitglied einladen",
+        activeMembers: "Aktive Mitglieder",
+        openInvites: "Offene Invites",
+        countedMembers: (usage: number, max: number) =>
+          `Aktuell angerechnet: ${usage} von ${max} Mitglieder.`,
+        subscriptionTitle: "Abo",
+        subscriptionText:
+          "Kommerzieller Rahmen, Plan und aktuelle Nutzungsgrenzen.",
+        openSubscription: "Abo öffnen",
+        noSubscription:
+          "Für diese Organisation wurde noch kein Abo gefunden.",
+        priceTitle: "Preis",
+        usageTitle: "Nutzung",
+        camerasLabel: "Kameras",
+        membersLabel: "Mitglieder",
+        trialEnds: "Trial endet",
+        periodUntil: "Periode bis",
+      };
 }
 
 function StatCard({
@@ -149,7 +288,14 @@ function ActionLink({
 
 export default async function OrgaPage() {
   const ctx = await requirePathAccess("/orga");
+
+if (!ctx.user) {
+  throw new Error("Authenticated user required");
+}
+
+
   const supabase = supabaseServer();
+  const cookieStore = await cookies();
 
   if (!ctx.activeMembership) {
     throw new Error("Active organization context required");
@@ -163,6 +309,19 @@ export default async function OrgaPage() {
   if (!organization) {
     throw new Error("Active organization not found");
   }
+
+  const { data: profileData } = await supabase
+    .from("profiles")
+    .select("preferred_language")
+    .eq("id", ctx.user.id)
+    .maybeSingle();
+
+  const language = resolveLanguage({
+    cookieLanguage: cookieStore.get(LOCALE_COOKIE)?.value,
+    profileLanguage: profileData?.preferred_language,
+  });
+
+  const text = t(language);
 
   const [
     reviersResult,
@@ -257,7 +416,7 @@ export default async function OrgaPage() {
     ? statusUi(resolvedSubscription?.effectiveStatus ?? subscription.status)
     : null;
 
-  const planPrice = subscription ? formatPlanPrice(subscription) : "—";
+  const planPrice = subscription ? formatPlanPrice(subscription, language) : "—";
 
   const canSeeSubscription = canAccessPath({
     pathname: "/orga/subscription",
@@ -270,15 +429,12 @@ export default async function OrgaPage() {
       <section className="rounded-[32px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(201,149,46,0.16),transparent_24%),linear-gradient(135deg,rgba(255,255,255,0.06),rgba(255,255,255,0.03))] p-6 backdrop-blur-sm">
         <div>
           <div className="text-xs font-medium uppercase tracking-[0.22em] text-amber-200/80">
-            Organization
+            {text.eyebrow}
           </div>
           <h1 className="mt-3 text-3xl font-semibold tracking-tight text-white">
-            Organisation
+            {text.title}
           </h1>
-          <p className="mt-2 max-w-3xl text-sm text-white/68">
-            Überblick über Konto, Reviere, Members und – sofern freigegeben –
-            die Subscription der aktiven Organization.
-          </p>
+          <p className="mt-2 max-w-3xl text-sm text-white/68">{text.intro}</p>
         </div>
       </section>
 
@@ -288,32 +444,35 @@ export default async function OrgaPage() {
         }`}
       >
         <StatCard
-          title="Reviere"
+          title={text.statGroundsTitle}
           value={String(reviersCount)}
-          subline="Aktuelle Revier-Struktur dieser Organization."
+          subline={text.statGroundsText}
         />
         <StatCard
-          title="Members"
+          title={text.statMembersTitle}
           value={String(membersCount)}
-          subline={`${openInvitesCount} offene Invites`}
+          subline={text.statMembersText(openInvitesCount)}
         />
         <StatCard
-          title="Kameras"
+          title={text.statCamerasTitle}
           value={String(camerasCount)}
           subline={
             subscription
-              ? `${camerasCount} / ${subscription.max_cameras} im aktiven Plan`
-              : "Keine Subscription gefunden"
+              ? text.statCamerasTextWithPlan(camerasCount, subscription.max_cameras)
+              : text.statCamerasTextNoPlan
           }
         />
         {canSeeSubscription ? (
           <StatCard
-            title="Subscription"
+            title={text.statSubscriptionTitle}
             value={subscription ? planLabel(subscription.plan_key) : "—"}
             subline={
               subscription
-                ? `${effectiveStatus?.label ?? "—"} · ${planPrice} inkl. MwSt.`
-                : "Keine Subscription hinterlegt"
+                ? text.statSubscriptionTextWithPlan(
+                    effectiveStatus?.label ?? "—",
+                    planPrice
+                  )
+                : text.statSubscriptionTextNoPlan
             }
           />
         ) : null}
@@ -327,35 +486,33 @@ export default async function OrgaPage() {
         <div className="rounded-[28px] border border-white/10 bg-white/5 p-6 backdrop-blur-sm">
           <div className="flex items-center justify-between gap-4">
             <div>
-              <h2 className="text-lg font-medium text-white">Mein Konto</h2>
-              <p className="mt-1 text-sm text-white/65">
-                Aktiver Organisationskontext und Deine Rolle.
-              </p>
+              <h2 className="text-lg font-medium text-white">{text.myAccountTitle}</h2>
+              <p className="mt-1 text-sm text-white/65">{text.myAccountText}</p>
             </div>
-            <ActionLink href="/orga/account" label="Mein Konto öffnen" />
+            <ActionLink href="/orga/account" label={text.openMyAccount} />
           </div>
 
           <dl className="mt-6 space-y-3 text-sm">
             <div className="flex items-center justify-between gap-4 border-b border-white/8 pb-3">
-              <dt className="text-white/45">Organization</dt>
+              <dt className="text-white/45">{text.organizationLabel}</dt>
               <dd className="text-right font-medium text-white">
                 {organization.name}
               </dd>
             </div>
             <div className="flex items-center justify-between gap-4 border-b border-white/8 pb-3">
-              <dt className="text-white/45">Slug</dt>
+              <dt className="text-white/45">{text.slugLabel}</dt>
               <dd className="text-right font-medium text-white">
                 {organization.slug}
               </dd>
             </div>
             <div className="flex items-center justify-between gap-4 border-b border-white/8 pb-3">
-              <dt className="text-white/45">Deine Rolle</dt>
+              <dt className="text-white/45">{text.roleLabel}</dt>
               <dd className="text-right font-medium capitalize text-white">
                 {role}
               </dd>
             </div>
             <div className="flex items-center justify-between gap-4">
-              <dt className="text-white/45">E-Mail</dt>
+              <dt className="text-white/45">{text.emailLabel}</dt>
               <dd className="text-right font-medium text-white">
                 {userEmail ?? "—"}
               </dd>
@@ -366,26 +523,24 @@ export default async function OrgaPage() {
         <div className="rounded-[28px] border border-white/10 bg-white/5 p-6 backdrop-blur-sm">
           <div className="flex items-center justify-between gap-4">
             <div>
-              <h2 className="text-lg font-medium text-white">Reviere</h2>
-              <p className="mt-1 text-sm text-white/65">
-                Fachliche Flächen- und Revierstruktur der Organization.
-              </p>
+              <h2 className="text-lg font-medium text-white">{text.groundsTitle}</h2>
+              <p className="mt-1 text-sm text-white/65">{text.groundsText}</p>
             </div>
             <div className="flex gap-2">
-              <ActionLink href="/orga/reviere" label="Reviere öffnen" />
-              <ActionLink href="/orga/reviere/new" label="Neues Revier" />
+              <ActionLink href="/orga/reviere" label={text.openGrounds} />
+              <ActionLink href="/orga/reviere/new" label={text.newGround} />
             </div>
           </div>
 
           <div className="mt-6 rounded-[24px] border border-white/10 bg-white/5 p-4">
             <div className="text-xs font-medium uppercase tracking-wide text-white/45">
-              Status
+              {text.groundsStatus}
             </div>
             <div className="mt-2 text-2xl font-semibold text-white">
               {reviersCount}
             </div>
             <p className="mt-2 text-sm leading-6 text-white/68">
-              Reviere sind angelegt und über die Orga-Verwaltung administrierbar.
+              {text.groundsStatusText}
             </p>
           </div>
         </div>
@@ -393,21 +548,19 @@ export default async function OrgaPage() {
         <div className="rounded-[28px] border border-white/10 bg-white/5 p-6 backdrop-blur-sm">
           <div className="flex items-center justify-between gap-4">
             <div>
-              <h2 className="text-lg font-medium text-white">Members</h2>
-              <p className="mt-1 text-sm text-white/65">
-                Teamzugänge, Rollen und offene Einladungen.
-              </p>
+              <h2 className="text-lg font-medium text-white">{text.membersTitle}</h2>
+              <p className="mt-1 text-sm text-white/65">{text.membersText}</p>
             </div>
             <div className="flex gap-2">
-              <ActionLink href="/orga/members" label="Members öffnen" />
-              <ActionLink href="/orga/members/invite" label="Mitglied einladen" />
+              <ActionLink href="/orga/members" label={text.openMembers} />
+              <ActionLink href="/orga/members/invite" label={text.inviteMember} />
             </div>
           </div>
 
           <div className="mt-6 grid gap-4 md:grid-cols-2">
             <div className="rounded-[24px] border border-white/10 bg-white/5 p-4">
               <div className="text-xs font-medium uppercase tracking-wide text-white/45">
-                Aktive Members
+                {text.activeMembers}
               </div>
               <div className="mt-2 text-2xl font-semibold text-white">
                 {membersCount}
@@ -416,7 +569,7 @@ export default async function OrgaPage() {
 
             <div className="rounded-[24px] border border-white/10 bg-white/5 p-4">
               <div className="text-xs font-medium uppercase tracking-wide text-white/45">
-                Offene Invites
+                {text.openInvites}
               </div>
               <div className="mt-2 text-2xl font-semibold text-white">
                 {openInvitesCount}
@@ -426,8 +579,10 @@ export default async function OrgaPage() {
 
           {subscription && resolvedSubscription ? (
             <p className="mt-4 text-sm text-white/68">
-              Aktuell angerechnet: {resolvedSubscription.currentMemberUsage} von{" "}
-              {subscription.max_members} Members.
+              {text.countedMembers(
+                resolvedSubscription.currentMemberUsage,
+                subscription.max_members
+              )}
             </p>
           ) : null}
         </div>
@@ -436,17 +591,22 @@ export default async function OrgaPage() {
           <div className="rounded-[28px] border border-white/10 bg-white/5 p-6 backdrop-blur-sm">
             <div className="flex items-center justify-between gap-4">
               <div>
-                <h2 className="text-lg font-medium text-white">Subscription</h2>
+                <h2 className="text-lg font-medium text-white">
+                  {text.subscriptionTitle}
+                </h2>
                 <p className="mt-1 text-sm text-white/65">
-                  Kommerzieller Rahmen, Plan und aktuelle Nutzungsgrenzen.
+                  {text.subscriptionText}
                 </p>
               </div>
-              <ActionLink href="/orga/subscription" label="Subscription öffnen" />
+              <ActionLink
+                href="/orga/subscription"
+                label={text.openSubscription}
+              />
             </div>
 
             {!subscription ? (
               <div className="mt-6 rounded-[24px] border border-amber-300/20 bg-amber-300/10 p-4 text-sm text-amber-100">
-                Für diese Organization wurde noch keine Subscription gefunden.
+                {text.noSubscription}
               </div>
             ) : (
               <>
@@ -464,33 +624,36 @@ export default async function OrgaPage() {
                 <div className="mt-4 grid gap-4 md:grid-cols-2">
                   <div className="rounded-[24px] border border-white/10 bg-white/5 p-4">
                     <div className="text-xs font-medium uppercase tracking-wide text-white/45">
-                      Preis
+                      {text.priceTitle}
                     </div>
                     <div className="mt-2 text-xl font-semibold text-white">
                       {planPrice}
                     </div>
                     <p className="mt-1 text-sm text-white/68">
-                      {billingCycleLabel(subscription.billing_cycle)} · inkl. MwSt.
+                      {billingCycleLabel(subscription.billing_cycle, language)} ·{" "}
+                      {language === "en" ? "incl. VAT" : "inkl. MwSt."}
                     </p>
                   </div>
 
                   <div className="rounded-[24px] border border-white/10 bg-white/5 p-4">
                     <div className="text-xs font-medium uppercase tracking-wide text-white/45">
-                      Nutzung
+                      {text.usageTitle}
                     </div>
                     <div className="mt-2 text-sm font-medium text-white">
-                      Kameras: {camerasCount} / {subscription.max_cameras}
+                      {text.camerasLabel}: {camerasCount} / {subscription.max_cameras}
                     </div>
                     <div className="mt-1 text-sm font-medium text-white">
-                      Members: {resolvedSubscription?.currentMemberUsage ?? 0} /{" "}
+                      {text.membersLabel}:{" "}
+                      {resolvedSubscription?.currentMemberUsage ?? 0} /{" "}
                       {subscription.max_members}
                     </div>
                   </div>
                 </div>
 
                 <div className="mt-4 text-sm text-white/68">
-                  Trial endet: {formatDate(subscription.trial_ends_at)} · Periode bis:{" "}
-                  {formatDate(subscription.current_period_end)}
+                  {text.trialEnds}: {formatDate(subscription.trial_ends_at, language)} ·{" "}
+                  {text.periodUntil}:{" "}
+                  {formatDate(subscription.current_period_end, language)}
                 </div>
               </>
             )}

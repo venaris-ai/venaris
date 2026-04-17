@@ -1,14 +1,37 @@
-// src/app/api/upload/route.ts #2
+// src/app/api/upload/route.ts #3
 export const runtime = "nodejs";
 
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import JSZip from "jszip";
 import { supabaseServer } from "@/lib/supabaseServer";
 import { ingestFiles, safeJsonParse } from "@/lib/ingestCore";
 import { assertNotDemoWrite, requireOrganizationRole } from "@/lib/auth";
+import { getLanguageFromRequest, type AppLanguage } from "@/lib/i18n";
 
 const MAX_FILES = 500; // MVP Guard
 const MAX_ZIP_BYTES = 150 * 1024 * 1024; // 150MB Guard
+
+function t(language: AppLanguage) {
+  return language === "en"
+    ? {
+        activeOrganizationNotFound: "active organization not found",
+        cameraIdRequired: "cameraId required",
+        cameraNotFound: "camera not found",
+        notAllowed: "not allowed",
+        fileOrFilesRequired: "file or files required",
+        noImageFilesFound: "no image files found (jpg/png/webp)",
+        uploadRouteCrashed: "upload route crashed",
+      }
+    : {
+        activeOrganizationNotFound: "aktive Organisation nicht gefunden",
+        cameraIdRequired: "cameraId erforderlich",
+        cameraNotFound: "Kamera nicht gefunden",
+        notAllowed: "nicht erlaubt",
+        fileOrFilesRequired: "file oder files erforderlich",
+        noImageFilesFound: "keine Bilddateien gefunden (jpg/png/webp)",
+        uploadRouteCrashed: "Upload-Route abgestürzt",
+      };
+}
 
 function isImageName(name: string) {
   const n = name.toLowerCase();
@@ -70,7 +93,10 @@ async function extractImagesFromZip(zipFile: File): Promise<File[]> {
   return out;
 }
 
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
+  const language = getLanguageFromRequest(req);
+  const text = t(language);
+
   try {
     const ctx = await requireOrganizationRole(["owner", "admin", "member"]);
     assertNotDemoWrite(ctx);
@@ -80,7 +106,7 @@ export async function POST(req: Request) {
 
     if (!activeOrganization) {
       return NextResponse.json(
-        { error: "active organization not found" },
+        { error: text.activeOrganizationNotFound },
         { status: 400 }
       );
     }
@@ -90,7 +116,7 @@ export async function POST(req: Request) {
 
     const cameraId = (formData.get("cameraId") as string | null)?.trim() ?? null;
     if (!cameraId) {
-      return NextResponse.json({ error: "cameraId required" }, { status: 400 });
+      return NextResponse.json({ error: text.cameraIdRequired }, { status: 400 });
     }
 
     const { data: camera, error: cameraError } = await supabase
@@ -104,11 +130,11 @@ export async function POST(req: Request) {
     }
 
     if (!camera) {
-      return NextResponse.json({ error: "camera not found" }, { status: 404 });
+      return NextResponse.json({ error: text.cameraNotFound }, { status: 404 });
     }
 
     if (camera.organization_id !== activeOrganization.id) {
-      return NextResponse.json({ error: "not allowed" }, { status: 403 });
+      return NextResponse.json({ error: text.notAllowed }, { status: 403 });
     }
 
     // Backward compatible: accept single + multi
@@ -122,7 +148,7 @@ export async function POST(req: Request) {
     const incomingFiles = raw.filter((v): v is File => v instanceof File);
 
     if (incomingFiles.length === 0) {
-      return NextResponse.json({ error: "file or files required" }, { status: 400 });
+      return NextResponse.json({ error: text.fileOrFilesRequired }, { status: 400 });
     }
 
     const clientMeta = safeJsonParse(formData.get("metadata") as string | null) ?? {};
@@ -144,7 +170,7 @@ export async function POST(req: Request) {
 
     if (files.length === 0) {
       return NextResponse.json(
-        { error: "no image files found (jpg/png/webp)" },
+        { error: text.noImageFilesFound },
         { status: 400 }
       );
     }
@@ -173,7 +199,7 @@ export async function POST(req: Request) {
   } catch (err: any) {
     console.error("UPLOAD crashed:", err);
     return NextResponse.json(
-      { error: "upload route crashed", details: err?.message ?? String(err) },
+      { error: text.uploadRouteCrashed, details: err?.message ?? String(err) },
       { status: 500 }
     );
   }

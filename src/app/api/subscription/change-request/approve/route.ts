@@ -1,8 +1,9 @@
-// src/app/api/subscription/change-request/approve/route.ts #2
+// src/app/api/subscription/change-request/approve/route.ts #5
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAuthServer } from "@/lib/supabaseAuthServer";
 import { supabaseServer } from "@/lib/supabaseServer";
 import { BILLING_PLANS, type BillingCycle } from "@/lib/billing/plans";
+import { getLanguageFromRequest, type AppLanguage } from "@/lib/i18n";
 
 type PlanKey = "starter" | "pro" | "enterprise";
 type RequestStatus = "open" | "approved" | "rejected" | "canceled";
@@ -33,7 +34,51 @@ function isPlanKey(value: unknown): value is PlanKey {
   return value === "starter" || value === "pro" || value === "enterprise";
 }
 
+function t(language: AppLanguage) {
+  return language === "en"
+    ? {
+        notAuthenticated: "Not authenticated.",
+        forbidden: "Forbidden: Venaris admin only.",
+        requestIdRequired: "requestId required.",
+        approvedManually: "Approved manually by Venaris admin",
+        failedToLoadChangeRequest: "Failed to load change request.",
+        changeRequestNotFound: "Change request not found.",
+        onlyOpenCanBeApproved:
+          "Only open change requests can be approved.",
+        invalidRequestedPlanKey: "Invalid requested plan key.",
+        failedToLoadSubscription: "Failed to load subscription.",
+        subscriptionNotFound: "Subscription not found.",
+        failedToUpdateSubscription: "Failed to update subscription.",
+        approvalUpdateFailed:
+          "Subscription updated, but request approval update failed.",
+        unexpectedError: "Unexpected error.",
+      }
+    : {
+        notAuthenticated: "Nicht authentifiziert.",
+        forbidden: "Verboten: nur Venaris-Admin.",
+        requestIdRequired: "requestId erforderlich.",
+        approvedManually: "Manuell durch Venaris-Admin genehmigt",
+        failedToLoadChangeRequest:
+          "Plananfrage konnte nicht geladen werden.",
+        changeRequestNotFound: "Plananfrage nicht gefunden.",
+        onlyOpenCanBeApproved:
+          "Nur offene Plananfragen können genehmigt werden.",
+        invalidRequestedPlanKey: "Ungültiger angefragter Plan-Key.",
+        failedToLoadSubscription:
+          "Abo konnte nicht geladen werden.",
+        subscriptionNotFound: "Abo nicht gefunden.",
+        failedToUpdateSubscription:
+          "Abo konnte nicht aktualisiert werden.",
+        approvalUpdateFailed:
+          "Abo wurde aktualisiert, aber die Genehmigung der Anfrage konnte nicht gespeichert werden.",
+        unexpectedError: "Unerwarteter Fehler.",
+      };
+}
+
 export async function POST(req: NextRequest) {
+  const language = getLanguageFromRequest(req);
+  const text = t(language);
+
   try {
     const auth = await supabaseAuthServer();
     const {
@@ -42,14 +87,17 @@ export async function POST(req: NextRequest) {
     } = await auth.auth.getUser();
 
     if (authError || !user) {
-      return NextResponse.json({ error: "not authenticated" }, { status: 401 });
+      return NextResponse.json(
+        { error: text.notAuthenticated },
+        { status: 401 }
+      );
     }
 
     const userEmail = (user.email ?? "").toLowerCase().trim();
 
     if (userEmail !== VENARIS_ADMIN_EMAIL) {
       return NextResponse.json(
-        { error: "forbidden: venaris admin only" },
+        { error: text.forbidden },
         { status: 403 }
       );
     }
@@ -59,11 +107,11 @@ export async function POST(req: NextRequest) {
     const resolutionNote =
       typeof body.resolutionNote === "string" && body.resolutionNote.trim()
         ? body.resolutionNote.trim()
-        : "Approved manually by Venaris admin";
+        : text.approvedManually;
 
     if (!requestId) {
       return NextResponse.json(
-        { error: "requestId required" },
+        { error: text.requestIdRequired },
         { status: 400 }
       );
     }
@@ -81,7 +129,7 @@ export async function POST(req: NextRequest) {
     if (requestResult.error) {
       return NextResponse.json(
         {
-          error: "failed to load change request",
+          error: text.failedToLoadChangeRequest,
           details: requestResult.error.message,
         },
         { status: 500 }
@@ -92,21 +140,21 @@ export async function POST(req: NextRequest) {
 
     if (!changeRequest) {
       return NextResponse.json(
-        { error: "change request not found" },
+        { error: text.changeRequestNotFound },
         { status: 404 }
       );
     }
 
     if (changeRequest.status !== "open") {
       return NextResponse.json(
-        { error: "only open change requests can be approved" },
+        { error: text.onlyOpenCanBeApproved },
         { status: 409 }
       );
     }
 
     if (!isPlanKey(changeRequest.requested_plan_key)) {
       return NextResponse.json(
-        { error: "invalid requested plan key" },
+        { error: text.invalidRequestedPlanKey },
         { status: 400 }
       );
     }
@@ -122,7 +170,7 @@ export async function POST(req: NextRequest) {
     if (subscriptionResult.error) {
       return NextResponse.json(
         {
-          error: "failed to load subscription",
+          error: text.failedToLoadSubscription,
           details: subscriptionResult.error.message,
         },
         { status: 500 }
@@ -133,7 +181,7 @@ export async function POST(req: NextRequest) {
 
     if (!subscription) {
       return NextResponse.json(
-        { error: "subscription not found" },
+        { error: text.subscriptionNotFound },
         { status: 404 }
       );
     }
@@ -174,7 +222,7 @@ export async function POST(req: NextRequest) {
     if (updateSubscriptionResult.error || !updateSubscriptionResult.data) {
       return NextResponse.json(
         {
-          error: "failed to update subscription",
+          error: text.failedToUpdateSubscription,
           details:
             updateSubscriptionResult.error?.message ?? "no subscription returned",
         },
@@ -199,7 +247,7 @@ export async function POST(req: NextRequest) {
     if (approveRequestResult.error || !approveRequestResult.data) {
       return NextResponse.json(
         {
-          error: "subscription updated, but request approval update failed",
+          error: text.approvalUpdateFailed,
           details:
             approveRequestResult.error?.message ?? "no approved request returned",
         },
@@ -218,7 +266,7 @@ export async function POST(req: NextRequest) {
   } catch (e) {
     return NextResponse.json(
       {
-        error: "unexpected error",
+        error: text.unexpectedError,
         details: e instanceof Error ? e.message : String(e),
       },
       { status: 500 }

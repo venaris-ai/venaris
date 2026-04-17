@@ -1,4 +1,4 @@
-// src/lib/authz.ts #6
+// src/lib/authz.ts #7
 import { redirect } from "next/navigation";
 import {
   getOptionalActiveOrganization,
@@ -11,16 +11,19 @@ import {
   SECTION_NAV_ITEMS,
   canAccessPath,
   filterNavItemsByAccess,
+  getMainNavItems,
   getRouteAccessRule,
+  getSectionNavItems,
   isNavItemActive,
   isPublicPathname,
   pathMatches,
+  type AppLanguage,
   type AppRole,
   type NavItem,
   type RouteAccessRule,
 } from "@/lib/routeAccess";
 
-export type { AppRole, NavItem, RouteAccessRule };
+export type { AppLanguage, AppRole, NavItem, RouteAccessRule };
 
 export {
   MAIN_NAV_ITEMS,
@@ -28,7 +31,9 @@ export {
   SECTION_NAV_ITEMS,
   canAccessPath,
   filterNavItemsByAccess,
+  getMainNavItems,
   getRouteAccessRule,
+  getSectionNavItems,
   isNavItemActive,
   isPublicPathname,
   pathMatches,

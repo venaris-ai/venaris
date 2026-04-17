@@ -1,10 +1,14 @@
-// src/app/invite/accept/page.tsx #8b
+// src/app/invite/accept/page.tsx #9
+import { cookies } from "next/headers";
 import { getOptionalUser } from "@/lib/auth";
+import {
+  LOCALE_COOKIE,
+  normalizeLanguage,
+  type AppLanguage,
+} from "@/lib/i18n";
 import { supabaseServer } from "@/lib/supabaseServer";
 import InviteAcceptForm from "./InviteAcceptForm";
 import AcceptExistingInviteButton from "./AcceptExistingInviteButton";
-
-type AppLanguage = "de" | "en";
 
 type InviteRow = {
   id: string;
@@ -65,8 +69,8 @@ function t(language: AppLanguage) {
         expiredText:
           "This invitation is no longer valid. Please request a new invitation.",
         invalidTitle: "Invitation is no longer open",
-        invalidText:
-          "This invitation already has the status",
+        invalidText: "This invitation already has the status",
+        invalidTextSuffix: "and cannot be accepted again.",
         setPasswordTitle: "Set password",
         setPasswordText:
           "Please set your password first. Your account will then be created, the invitation accepted and you will be signed in.",
@@ -77,6 +81,7 @@ function t(language: AppLanguage) {
         wrongUserTextB: "but you are currently signed in as",
         wrongUserTextC:
           "Please sign in with the invited email address.",
+        unknownUser: "unknown",
         alreadyLoggedInTitle: "Already signed in",
         alreadyLoggedInText:
           "You are already signed in with the invited email address and can accept this invitation now.",
@@ -94,14 +99,14 @@ function t(language: AppLanguage) {
         emailLabel: "Eingeladene E-Mail",
         roleLabel: "Rolle",
         statusLabel: "Status",
-        invitedAtLabel: "Invited at",
-        expiresAtLabel: "Expires at",
+        invitedAtLabel: "Eingeladen am",
+        expiresAtLabel: "Läuft ab am",
         expiredTitle: "Einladung abgelaufen",
         expiredText:
           "Diese Einladung ist nicht mehr gültig. Bitte fordere eine neue Einladung an.",
         invalidTitle: "Einladung nicht mehr offen",
-        invalidText:
-          "Diese Einladung hat bereits den Status",
+        invalidText: "Diese Einladung hat bereits den Status",
+        invalidTextSuffix: "und kann nicht erneut angenommen werden.",
         setPasswordTitle: "Passwort festlegen",
         setPasswordText:
           "Bitte zuerst ein Passwort festlegen. Danach wird Dein Account angelegt, die Einladung angenommen und Du wirst eingeloggt.",
@@ -112,6 +117,7 @@ function t(language: AppLanguage) {
         wrongUserTextB: "Aktuell bist Du aber als",
         wrongUserTextC:
           "Bitte logge Dich mit der eingeladenen E-Mail-Adresse ein.",
+        unknownUser: "unbekannt",
         alreadyLoggedInTitle: "Bereits eingeloggt",
         alreadyLoggedInText:
           "Du bist bereits mit der eingeladenen E-Mail-Adresse eingeloggt und kannst diese Einladung jetzt annehmen.",
@@ -126,19 +132,24 @@ export default async function InviteAcceptPage({
   const params = (await searchParams) ?? {};
   const token = params.token?.trim() ?? "";
 
+const cookieStore = await cookies();
+const fallbackLanguage = normalizeLanguage(
+  cookieStore.get(LOCALE_COOKIE)?.value
+);
+
+
+  const fallbackText = t(fallbackLanguage);
   const user = await getOptionalUser();
 
   if (!token) {
-    const text = t("de");
-
     return (
       <main className="mx-auto max-w-2xl px-6 py-12">
         <div className="rounded-[28px] border border-rose-300/20 bg-rose-300/10 p-6 backdrop-blur-sm">
           <h1 className="text-2xl font-semibold tracking-tight text-rose-100">
-            {text.missingTitle}
+            {fallbackText.missingTitle}
           </h1>
           <p className="mt-2 text-sm leading-6 text-rose-100/85">
-            {text.missingText}
+            {fallbackText.missingText}
           </p>
         </div>
       </main>
@@ -177,23 +188,21 @@ export default async function InviteAcceptPage({
   const invite = (data ?? null) as InviteRow | null;
 
   if (!invite) {
-    const text = t("de");
-
     return (
       <main className="mx-auto max-w-2xl px-6 py-12">
         <div className="rounded-[28px] border border-rose-300/20 bg-rose-300/10 p-6 backdrop-blur-sm">
           <h1 className="text-2xl font-semibold tracking-tight text-rose-100">
-            {text.missingTitle}
+            {fallbackText.missingTitle}
           </h1>
           <p className="mt-2 text-sm leading-6 text-rose-100/85">
-            {text.notFoundText}
+            {fallbackText.notFoundText}
           </p>
         </div>
       </main>
     );
   }
 
-  const language = invite.language === "en" ? "en" : "de";
+  const language = normalizeLanguage(invite.language);
   const text = t(language);
 
   const expired = isExpired(invite.expires_at);
@@ -286,8 +295,7 @@ export default async function InviteAcceptPage({
             {text.invalidTitle}
           </h2>
           <p className="mt-2 text-sm leading-6 text-amber-100/85">
-            {text.invalidText} <strong>{invite.status}</strong>{" "}
-            {language === "en" ? "and cannot be accepted again." : "und kann nicht erneut angenommen werden."}
+            {text.invalidText} <strong>{invite.status}</strong> {text.invalidTextSuffix}
           </p>
         </section>
       ) : null}
@@ -327,7 +335,7 @@ export default async function InviteAcceptPage({
           </h2>
           <p className="mt-2 text-sm leading-6 text-rose-100/85">
             {text.wrongUserTextA} <strong>{invite.email}</strong>.{" "}
-            {text.wrongUserTextB} <strong>{currentEmail ?? "unknown"}</strong>.
+            {text.wrongUserTextB} <strong>{currentEmail ?? text.unknownUser}</strong>.
           </p>
           <p className="mt-2 text-sm leading-6 text-rose-100/85">
             {text.wrongUserTextC}

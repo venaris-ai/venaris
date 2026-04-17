@@ -1,7 +1,8 @@
-// src/app/cameras/events/[id]/AssetGrid.tsx #5
+// src/app/cameras/events/[id]/AssetGrid.tsx #7
 "use client";
 
 import { useState } from "react";
+import { type AppLanguage } from "@/lib/i18n";
 
 type AssetItem = {
   id: string;
@@ -14,62 +15,116 @@ type AssetItem = {
   emptyConfidence?: number | null;
 };
 
-function effectiveRelevant(a: AssetItem) {
-  if (typeof a.relevantUser === "boolean") return a.relevantUser;
-  return a.relevant;
+function effectiveRelevant(asset: AssetItem) {
+  if (typeof asset.relevantUser === "boolean") return asset.relevantUser;
+  return asset.relevant;
 }
 
-function badgeLabel(a: AssetItem) {
-  const eff = effectiveRelevant(a);
-
-  if (typeof a.relevantUser === "boolean") {
-    return `OVERRIDE · ${eff ? "relevant" : "irrelevant"}`;
+function t(language: AppLanguage) {
+  if (language === "en") {
+    return {
+      overrideRelevant: "OVERRIDE · relevant",
+      overrideIrrelevant: "OVERRIDE · irrelevant",
+      autoEmpty: "AUTO · empty",
+      autoRelevant: "AUTO · relevant",
+      previewMissing: "No preview",
+      markRelevant: "Mark relevant",
+      markIrrelevant: "Mark irrelevant",
+      resetAuto: "Reset (Auto)",
+      effective: "Effective",
+      relevant: "relevant",
+      irrelevant: "irrelevant",
+      userOverride: "User override",
+      autoEmptyFilter: "Auto (empty filter)",
+      demoTitle: "Demo mode: changes are disabled.",
+      demoAlert:
+        "This is a demo account. Records cannot be deleted, added, or changed.",
+      saveFailedPrefix: "Could not save relevance:",
+      resetToAuto: "Remove override and return to auto",
+    };
   }
 
-  if (a.empty === true) {
-    const c =
-      typeof a.emptyConfidence === "number"
-        ? ` (${Math.round(a.emptyConfidence * 100)}%)`
+  return {
+    overrideRelevant: "OVERRIDE · relevant",
+    overrideIrrelevant: "OVERRIDE · irrelevant",
+    autoEmpty: "AUTO · leer",
+    autoRelevant: "AUTO · relevant",
+    previewMissing: "Kein Preview",
+    markRelevant: "Als relevant markieren",
+    markIrrelevant: "Als irrelevant markieren",
+    resetAuto: "Reset (Auto)",
+    effective: "Effektiv",
+    relevant: "relevant",
+    irrelevant: "irrelevant",
+    userOverride: "User Override",
+    autoEmptyFilter: "Auto (Empty Filter)",
+    demoTitle: "Demo-Modus: Änderungen sind deaktiviert.",
+    demoAlert:
+      "Das ist ein Demo-Account. Datensätze können weder entfernt noch hinzugefügt oder geändert werden.",
+    saveFailedPrefix: "Konnte Relevanz nicht speichern:",
+    resetToAuto: "Override entfernen, zurück zu Auto",
+  };
+}
+
+function badgeLabel(asset: AssetItem, language: AppLanguage) {
+  const text = t(language);
+  const effective = effectiveRelevant(asset);
+
+  if (typeof asset.relevantUser === "boolean") {
+    return effective ? text.overrideRelevant : text.overrideIrrelevant;
+  }
+
+  if (asset.empty === true) {
+    const confidence =
+      typeof asset.emptyConfidence === "number"
+        ? ` (${Math.round(asset.emptyConfidence * 100)}%)`
         : "";
-    return `AUTO · empty${c}`;
+    return `${text.autoEmpty}${confidence}`;
   }
 
-  return `AUTO · relevant`;
+  return text.autoRelevant;
 }
 
-function badgeClasses(a: AssetItem) {
-  const eff = effectiveRelevant(a);
-  if (typeof a.relevantUser === "boolean") {
-    return eff
+function badgeClasses(asset: AssetItem) {
+  const effective = effectiveRelevant(asset);
+
+  if (typeof asset.relevantUser === "boolean") {
+    return effective
       ? "border-amber-300/20 bg-amber-300/10 text-amber-200"
       : "border-white/10 bg-white/5 text-white/72";
   }
 
-  if (a.empty === true) return "border-white/10 bg-white/5 text-white/72";
+  if (asset.empty === true) {
+    return "border-white/10 bg-white/5 text-white/72";
+  }
+
   return "border-amber-300/20 bg-amber-300/10 text-amber-200";
 }
 
 export default function AssetGrid({
   initialAssets,
   isDemo = false,
+  language,
 }: {
   initialAssets: AssetItem[];
   isDemo?: boolean;
+  language: AppLanguage;
 }) {
+  const text = t(language);
   const [assets, setAssets] = useState<AssetItem[]>(initialAssets);
   const [busyId, setBusyId] = useState<string | null>(null);
 
   async function setOverride(assetId: string, next: boolean | null) {
     if (isDemo) {
-      alert(
-        "Das ist ein Demo-Account. Datensätze können weder entfernt noch hinzugefügt oder geändert werden."
-      );
+      alert(text.demoAlert);
       return;
     }
 
-    const prev = assets;
-    setAssets((p) =>
-      p.map((a) => (a.id === assetId ? { ...a, relevantUser: next } : a))
+    const previousAssets = assets;
+    setAssets((current) =>
+      current.map((asset) =>
+        asset.id === assetId ? { ...asset, relevantUser: next } : asset
+      )
     );
     setBusyId(assetId);
 
@@ -81,17 +136,13 @@ export default function AssetGrid({
       });
 
       if (!res.ok) {
-        const txt = await res.text();
-        throw new Error(txt || `HTTP ${res.status}`);
+        const rawText = await res.text();
+        throw new Error(rawText || `HTTP ${res.status}`);
       }
-    } catch (e) {
-      setAssets(prev);
-      const message = String((e as any)?.message ?? e);
-      alert(
-        message.includes("Demo mode is read-only")
-          ? "Demo-Modus: Änderungen sind deaktiviert."
-          : `Konnte Relevanz nicht speichern: ${message}`
-      );
+    } catch (error) {
+      setAssets(previousAssets);
+      const message = String((error as { message?: string })?.message ?? error);
+      alert(`${text.saveFailedPrefix} ${message}`);
     } finally {
       setBusyId(null);
     }
@@ -99,38 +150,42 @@ export default function AssetGrid({
 
   return (
     <div className="mt-3 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-      {assets.map((a) => {
-        const isBusy = busyId === a.id;
-        const eff = effectiveRelevant(a);
-        const isOverride = typeof a.relevantUser === "boolean";
+      {assets.map((asset) => {
+        const isBusy = busyId === asset.id;
+        const effective = effectiveRelevant(asset);
+        const isOverride = typeof asset.relevantUser === "boolean";
 
         return (
           <div
-            key={a.id}
+            key={asset.id}
             className="rounded-[24px] border border-white/10 bg-white/5 p-3 backdrop-blur-sm"
           >
             <div className="flex items-start justify-between gap-2">
               <div className="text-xs text-white/55">
-                <div>{a.timestampLabel}</div>
+                <div>{asset.timestampLabel}</div>
               </div>
 
               <span
                 className={[
                   "inline-flex items-center rounded-full border px-3 py-1 text-xs whitespace-nowrap",
-                  badgeClasses(a),
+                  badgeClasses(asset),
                 ].join(" ")}
-                title={isOverride ? "User Override" : "Auto (Empty Filter)"}
+                title={isOverride ? text.userOverride : text.autoEmptyFilter}
               >
-                {badgeLabel(a)}
+                {badgeLabel(asset, language)}
               </span>
             </div>
 
             <div className="mt-2 aspect-video w-full overflow-hidden rounded-[16px] bg-white/5">
-              {a.previewUrl ? (
-                <img src={a.previewUrl} alt="asset" className="h-full w-full object-cover" />
+              {asset.previewUrl ? (
+                <img
+                  src={asset.previewUrl}
+                  alt="asset"
+                  className="h-full w-full object-cover"
+                />
               ) : (
                 <div className="flex h-full items-center justify-center text-sm text-white/45">
-                  Kein Preview
+                  {text.previewMissing}
                 </div>
               )}
             </div>
@@ -146,10 +201,10 @@ export default function AssetGrid({
                         : "hover:border-amber-300/20 hover:bg-white/8 hover:text-white",
                     ].join(" ")}
                     disabled={isBusy}
-                    onClick={() => setOverride(a.id, true)}
-                    title={isDemo ? "Demo-Modus: Änderungen sind deaktiviert." : ""}
+                    onClick={() => setOverride(asset.id, true)}
+                    title={isDemo ? text.demoTitle : ""}
                   >
-                    Mark relevant
+                    {text.markRelevant}
                   </button>
 
                   <button
@@ -160,10 +215,10 @@ export default function AssetGrid({
                         : "hover:border-amber-300/20 hover:bg-white/8 hover:text-white",
                     ].join(" ")}
                     disabled={isBusy}
-                    onClick={() => setOverride(a.id, false)}
-                    title={isDemo ? "Demo-Modus: Änderungen sind deaktiviert." : ""}
+                    onClick={() => setOverride(asset.id, false)}
+                    title={isDemo ? text.demoTitle : ""}
                   >
-                    Mark irrelevant
+                    {text.markIrrelevant}
                   </button>
                 </>
               ) : (
@@ -175,21 +230,17 @@ export default function AssetGrid({
                       : "hover:border-amber-300/20 hover:bg-white/8 hover:text-white",
                   ].join(" ")}
                   disabled={isBusy}
-                  onClick={() => setOverride(a.id, null)}
-                  title={
-                    isDemo
-                      ? "Demo-Modus: Änderungen sind deaktiviert."
-                      : "Override entfernen, zurück zu Auto"
-                  }
+                  onClick={() => setOverride(asset.id, null)}
+                  title={isDemo ? text.demoTitle : text.resetToAuto}
                 >
-                  Reset (Auto)
+                  {text.resetAuto}
                 </button>
               )}
 
               <span className="ml-auto text-xs text-white/55">
-                Effective:{" "}
+                {text.effective}:{" "}
                 <span className="font-medium text-white">
-                  {eff ? "relevant" : "irrelevant"}
+                  {effective ? text.relevant : text.irrelevant}
                 </span>
               </span>
             </div>

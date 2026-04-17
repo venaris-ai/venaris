@@ -1,12 +1,13 @@
-// src/components/SectionNav.tsx #4
+// src/components/SectionNav.tsx #5
 "use client";
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
-  SECTION_NAV_ITEMS,
   canAccessPath,
+  getSectionNavItems,
   isNavItemActive,
+  type AppLanguage,
   type AppRole,
   type NavItem,
 } from "@/lib/routeAccess";
@@ -15,28 +16,31 @@ type Props = {
   role?: AppRole | null;
   email?: string | null;
   isDemo?: boolean;
+  language: AppLanguage;
 };
 
-function getSectionItems(pathname: string): NavItem[] {
+function getSectionItems(pathname: string, language: AppLanguage): NavItem[] {
+  const sectionItems = getSectionNavItems(language);
+
   if (pathname.startsWith("/wildlife")) {
-    return SECTION_NAV_ITEMS.wildlife;
+    return sectionItems.wildlife;
   }
 
   if (pathname.startsWith("/cameras")) {
-    return SECTION_NAV_ITEMS.cameras;
+    return sectionItems.cameras;
   }
 
   if (pathname.startsWith("/orga")) {
-    return SECTION_NAV_ITEMS.orga;
+    return sectionItems.orga;
   }
 
   return [];
 }
 
-export default function SectionNav({ role, email, isDemo }: Props) {
+export default function SectionNav({ role, email, isDemo, language }: Props) {
   const pathname = usePathname();
 
-  const items = getSectionItems(pathname).filter((item) =>
+  const items = getSectionItems(pathname, language).filter((item) =>
     canAccessPath({
       pathname: item.href,
       role,

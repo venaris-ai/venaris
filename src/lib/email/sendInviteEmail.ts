@@ -1,12 +1,11 @@
-// src/lib/email/sendInviteEmail.ts #2
+// src/lib/email/sendInviteEmail.ts #3
+import type { AppLanguage } from "@/lib/i18n";
 import {
   getAppBaseUrl,
   getResendClient,
   getResendFromEmail,
   getResendFromName,
 } from "@/lib/email/resend";
-
-type AppLanguage = "de" | "en";
 
 type SendInviteEmailParams = {
   to: string;

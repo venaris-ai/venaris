@@ -1,10 +1,9 @@
-// src/app/invite/accept/AcceptExistingInviteButton.tsx #3
+// src/app/invite/accept/AcceptExistingInviteButton.tsx #4
 "use client";
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-
-type AppLanguage = "de" | "en";
+import type { AppLanguage } from "@/lib/i18n";
 
 type Props = {
   token: string;
@@ -20,7 +19,7 @@ function t(language: AppLanguage) {
       }
     : {
         acceptFailed: "Einladung konnte nicht angenommen werden.",
-        loading: "Nimmt an...",
+        loading: "Nehme an...",
         idle: "Einladung annehmen",
       };
 }

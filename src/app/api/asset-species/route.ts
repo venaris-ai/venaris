@@ -1,9 +1,10 @@
-// src/app/api/asset-species/route.ts #1
+// src/app/api/asset-species/route.ts #2
 export const runtime = "nodejs";
 
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabaseServer";
 import { assertNotDemoWrite, requireOrganizationRole } from "@/lib/auth";
+import { getLanguageFromRequest, type AppLanguage } from "@/lib/i18n";
 
 const ALLOWED_SPECIES = [
   "roe_deer",
@@ -29,7 +30,32 @@ function isAllowedSpecies(value: unknown): value is SpeciesValue {
   return typeof value === "string" && ALLOWED_SPECIES.includes(value as SpeciesValue);
 }
 
-export async function POST(req: Request) {
+function t(language: AppLanguage) {
+  return language === "en"
+    ? {
+        activeOrganizationNotFound: "active organization not found",
+        assetIdAndSpeciesRequired: "assetId and species required",
+        speciesMustBeValid:
+          "species must be null or a valid taxonomy species",
+        assetNotFound: "asset not found",
+        notAllowed: "not allowed",
+        noAnimalDetectionsFound: "no animal detections found for asset",
+      }
+    : {
+        activeOrganizationNotFound: "aktive Organisation nicht gefunden",
+        assetIdAndSpeciesRequired: "assetId und species sind erforderlich",
+        speciesMustBeValid:
+          "species muss null oder eine gültige taxonomy species sein",
+        assetNotFound: "Asset nicht gefunden",
+        notAllowed: "nicht erlaubt",
+        noAnimalDetectionsFound: "keine Tier-Detections für das Asset gefunden",
+      };
+}
+
+export async function POST(req: NextRequest) {
+  const language = getLanguageFromRequest(req);
+  const text = t(language);
+
   try {
     const ctx = await requireOrganizationRole(["owner", "admin", "member"]);
     assertNotDemoWrite(ctx);
@@ -38,7 +64,7 @@ export async function POST(req: Request) {
 
     if (!activeOrganization) {
       return NextResponse.json(
-        { error: "active organization not found" },
+        { error: text.activeOrganizationNotFound },
         { status: 400 }
       );
     }
@@ -51,14 +77,14 @@ export async function POST(req: Request) {
 
     if (!assetId || species === undefined) {
       return NextResponse.json(
-        { error: "assetId and species required" },
+        { error: text.assetIdAndSpeciesRequired },
         { status: 400 }
       );
     }
 
     if (species !== null && !isAllowedSpecies(species)) {
       return NextResponse.json(
-        { error: "species must be null or a valid taxonomy species" },
+        { error: text.speciesMustBeValid },
         { status: 400 }
       );
     }
@@ -74,7 +100,7 @@ export async function POST(req: Request) {
     }
 
     if (!asset) {
-      return NextResponse.json({ error: "asset not found" }, { status: 404 });
+      return NextResponse.json({ error: text.assetNotFound }, { status: 404 });
     }
 
     const { data: camera, error: cameraError } = await supabase
@@ -88,7 +114,7 @@ export async function POST(req: Request) {
     }
 
     if (!camera || camera.organization_id !== activeOrganization.id) {
-      return NextResponse.json({ error: "not allowed" }, { status: 403 });
+      return NextResponse.json({ error: text.notAllowed }, { status: 403 });
     }
 
     const { data: animalDetections, error: detectionsError } = await supabase
@@ -103,7 +129,7 @@ export async function POST(req: Request) {
 
     if ((animalDetections ?? []).length === 0) {
       return NextResponse.json(
-        { error: "no animal detections found for asset" },
+        { error: text.noAnimalDetectionsFound },
         { status: 400 }
       );
     }

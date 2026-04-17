@@ -1,5 +1,6 @@
-// src/app/layout.tsx #12
+// src/app/layout.tsx #14
 import "./globals.css";
+import { cookies } from "next/headers";
 import MainNav from "@/components/MainNav";
 import SectionNav from "@/components/SectionNav";
 import ContextBar from "@/components/ContextBar";
@@ -14,6 +15,12 @@ import {
   resolveSubscriptionState,
   type SubscriptionStatus,
 } from "@/lib/billing/subscriptionPolicy";
+import {
+  LOCALE_COOKIE,
+  normalizeLanguage,
+  resolveLanguage,
+  type AppLanguage,
+} from "@/lib/i18n";
 
 export const metadata = {
   title: "Venaris",
@@ -31,41 +38,70 @@ type SubscriptionRow = {
   max_members: number;
 };
 
-function formatDate(value: string | null) {
+function formatDate(value: string | null, language: AppLanguage) {
   if (!value) return "—";
 
-  return new Intl.DateTimeFormat("de-DE", {
+  return new Intl.DateTimeFormat(language === "en" ? "en-GB" : "de-DE", {
     dateStyle: "medium",
   }).format(new Date(value));
 }
 
-function billingCycleLabel(cycle: BillingCycle) {
+function billingCycleLabel(cycle: BillingCycle, language: AppLanguage) {
+  if (language === "en") {
+    return cycle === "yearly" ? "Yearly" : "Monthly";
+  }
   return cycle === "yearly" ? "Jährlich" : "Monatlich";
 }
 
-function blockedHeadline(status: SubscriptionStatus) {
+function blockedHeadline(status: SubscriptionStatus, language: AppLanguage) {
+  if (language === "en") {
+    switch (status) {
+      case "expired":
+        return "Your subscription has expired";
+      case "past_due":
+        return "Your subscription needs a quick clarification";
+      case "canceled":
+        return "Your subscription is currently not active";
+      default:
+        return "Please choose an active plan";
+    }
+  }
+
   switch (status) {
     case "expired":
       return "Dein Abo ist abgelaufen";
     case "past_due":
-      return "Deine Subscription braucht gerade eine kurze Klärung";
+      return "Dein Abo braucht gerade eine kurze Klärung";
     case "canceled":
-      return "Deine Subscription ist derzeit nicht aktiv";
+      return "Dein Abo ist derzeit nicht aktiv";
     default:
       return "Bitte wähle einen aktiven Plan";
   }
 }
 
-function blockedText(status: SubscriptionStatus) {
+function blockedText(status: SubscriptionStatus, language: AppLanguage) {
+  if (language === "en") {
+    switch (status) {
+      case "expired":
+        return "To continue using Venaris, please choose a suitable plan for your organization now.";
+      case "past_due":
+        return "As soon as the plan is active again, you can continue using Venaris as usual. Choose a suitable plan now or review your subscription details.";
+      case "canceled":
+        return "Activate a suitable plan again now so your organization can continue accessing the product environment.";
+      default:
+        return "Choose a suitable plan for your organization now.";
+    }
+  }
+
   switch (status) {
     case "expired":
-      return "Um weiter in den Genuss der Venaris-Welt zu kommen, wähle jetzt eine passende Option für Deine Organization aus.";
+      return "Um weiter in den Genuss der Venaris-Welt zu kommen, wähle jetzt einen passenden Plan für Deine Organization aus.";
     case "past_due":
-      return "Sobald der Plan wieder aktiv ist, kannst Du Venaris wie gewohnt weiter nutzen. Wähle jetzt eine passende Option oder prüfe Deine Subscription-Details.";
+      return "Sobald Dein Abo wieder aktiv ist, kannst Du Venaris wie gewohnt weiter nutzen. Wähle jetzt einen passenden Plan oder prüfe Deine Abo-Details.";
     case "canceled":
       return "Aktiviere jetzt wieder einen passenden Plan, damit Deine Organization den Zugriff auf die Produktwelt fortsetzen kann.";
     default:
-      return "Wähle jetzt eine passende Option für Deine Organization aus.";
+      return "Wähle jetzt einen passende Plan für Deine Organization aus.";
   }
 }
 
@@ -89,6 +125,7 @@ export default async function RootLayout({
 }) {
   const ctx = await getOptionalActiveOrganization();
   const supabase = supabaseServer();
+  const cookieStore = await cookies();
 
   let blocked = false;
   let blockedPage: React.ReactNode = null;
@@ -97,6 +134,24 @@ export default async function RootLayout({
   const role = ctx?.activeMembership.role ?? null;
   const email = ctx?.user.email ?? null;
   const isDemo = ctx?.isDemo ?? false;
+
+  const cookieLanguage = normalizeLanguage(cookieStore.get(LOCALE_COOKIE)?.value);
+  let profileLanguage: AppLanguage | undefined;
+
+  if (ctx?.user.id) {
+    const { data: profileData } = await supabase
+      .from("profiles")
+      .select("preferred_language")
+      .eq("id", ctx.user.id)
+      .maybeSingle();
+
+    profileLanguage = normalizeLanguage(profileData?.preferred_language);
+  }
+
+  const language = resolveLanguage({
+    cookieLanguage,
+    profileLanguage,
+  });
 
   if (organization) {
     const nowIso = new Date().toISOString();
@@ -193,24 +248,25 @@ export default async function RootLayout({
                     Venaris · {organization.name}
                   </div>
                   <h1 className="mt-3 text-3xl font-semibold tracking-tight text-white">
-                    {blockedHeadline(resolved.effectiveStatus)}
+                    {blockedHeadline(resolved.effectiveStatus, language)}
                   </h1>
                   <p className="mt-4 text-sm leading-7 text-white/72">
-                    {blockedText(resolved.effectiveStatus)}
+                    {blockedText(resolved.effectiveStatus, language)}
                   </p>
                   <p className="mt-3 text-sm leading-7 text-white/60">
-                    Aktueller Plan:{" "}
+                    {language === "en" ? "Current plan:" : "Aktueller Plan:"}{" "}
                     <strong className="text-white">
                       {BILLING_PLANS[subscription.plan_key].label}
                     </strong>
                     {" · "}
-                    {billingCycleLabel(subscription.billing_cycle)}
+                    {billingCycleLabel(subscription.billing_cycle, language)}
                     {" · "}
-                    Trial endet: {formatDate(subscription.trial_ends_at)}
+                    {language === "en" ? "Trial ends:" : "Trial endet:"}{" "}
+                    {formatDate(subscription.trial_ends_at, language)}
                   </p>
                 </div>
 
-                <LogoutButton />
+                <LogoutButton language={language} />
               </div>
 
               <div className="mt-8">
@@ -225,6 +281,7 @@ export default async function RootLayout({
                   currentStatusLabel={resolved.effectiveStatus}
                   isDemo={isDemo}
                   existingOpenRequest={null}
+                  language={language}
                 />
               </div>
             </div>
@@ -236,22 +293,22 @@ export default async function RootLayout({
 
   const header = (
     <header className="border-b border-white/8 bg-[#102018]/72 backdrop-blur-xl">
-      <div className="mx-auto max-w-5xl px-6 py-3">
+      <div className="mx-auto max-w-6xl px-6 py-3">
         <div className="flex items-end justify-between gap-6">
           <div className="min-w-0">
             <HeaderBrand email={email} />
             <div className="mt-2">
-              <ContextBar />
+              <ContextBar language={language} />
             </div>
           </div>
 
           <div className="flex flex-col items-end gap-2">
             <div className="flex items-center gap-2">
-              <MainNav />
-              <LogoutButton />
+              <MainNav language={language} />
+              <LogoutButton language={language} />
             </div>
 
-            <SectionNav role={role} email={email} isDemo={isDemo} />
+            <SectionNav role={role} email={email} isDemo={isDemo} language={language} />
           </div>
         </div>
       </div>
@@ -259,7 +316,7 @@ export default async function RootLayout({
   );
 
   return (
-    <html lang="de">
+    <html lang={language}>
       <body>
         {isDemo ? <DemoSessionGuard /> : null}
         <AppShellGate blocked={blocked} blockedPage={blockedPage} header={header}>
