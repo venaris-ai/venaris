@@ -153,7 +153,7 @@ function t(language: AppLanguage) {
         statCamerasTextWithPlan: (count: number, max: number) =>
           `${count} / ${max} in active plan`,
         statCamerasTextNoPlan: "No subscription found",
-        statSubscriptionTitle: "Abo",
+        statSubscriptionTitle: "Subscription",
         statSubscriptionTextWithPlan: (status: string, price: string) =>
           `${status} · ${price} incl. VAT`,
         statSubscriptionTextNoPlan: "No subscription stored",
@@ -180,7 +180,7 @@ function t(language: AppLanguage) {
         openInvites: "Open invites",
         countedMembers: (usage: number, max: number) =>
           `Currently counted: ${usage} of ${max} members.`,
-        subscriptionTitle: "Abo",
+        subscriptionTitle: "Subscription",
         subscriptionText: "Commercial setup, plan and current usage limits.",
         openSubscription: "Open subscription",
         noSubscription: "No subscription was found for this organization.",
@@ -205,7 +205,7 @@ function t(language: AppLanguage) {
         statCamerasTextWithPlan: (count: number, max: number) =>
           `${count} / ${max} im aktiven Plan`,
         statCamerasTextNoPlan: "Kein Abo gefunden",
-        statSubscriptionTitle: "Abo",
+        statSubscriptionTitle: "Subscription",
         statSubscriptionTextWithPlan: (status: string, price: string) =>
           `${status} · ${price} inkl. MwSt.`,
         statSubscriptionTextNoPlan: "Kein Abo hinterlegt",
@@ -232,7 +232,7 @@ function t(language: AppLanguage) {
         openInvites: "Offene Invites",
         countedMembers: (usage: number, max: number) =>
           `Aktuell angerechnet: ${usage} von ${max} Mitglieder.`,
-        subscriptionTitle: "Abo",
+        subscriptionTitle: "Subscription",
         subscriptionText:
           "Kommerzieller Rahmen, Plan und aktuelle Nutzungsgrenzen.",
         openSubscription: "Abo öffnen",

@@ -213,18 +213,18 @@ function statusUi(status: SubscriptionStatus, language: AppLanguage) {
 function t(language: AppLanguage) {
   return language === "en"
     ? {
-        eyebrow: "Abo",
-        pageTitle: "Abo",
+        eyebrow: "Subscription",
+        pageTitle: "Subscription",
         pageText:
           "Status, current plan and available plan options for the active organization.",
         missingPageText:
           "No subscription was found for this organization yet.",
-        missingSectionTitle: "Abo",
+        missingSectionTitle: "Subscription",
         missingSectionText:
           "No subscription was found for this organization yet.",
         missingBoxText:
           "Please review the subscription configuration in the database.",
-        currentSectionTitle: "Abo",
+        currentSectionTitle: "Subscription",
         currentSectionText:
           "Status, current plan and available plan options for the active organization.",
         usageTitle: "Current usage",
@@ -242,18 +242,18 @@ function t(language: AppLanguage) {
         inclVat: "incl. VAT",
       }
     : {
-        eyebrow: "Abo",
-        pageTitle: "Abo",
+        eyebrow: "Subscription",
+        pageTitle: "Subscription",
         pageText:
           "Status, aktueller Plan und verfügbare Planoptionen der aktiven Organization.",
         missingPageText:
           "Für diese Organisation wurde noch kein Abo gefunden.",
-        missingSectionTitle: "Abo",
+        missingSectionTitle: "Subscription",
         missingSectionText:
           "Für diese Organisation wurde noch kein Abo gefunden.",
         missingBoxText:
           "Bitte prüfe die Abo-Konfiguration in der Datenbank.",
-        currentSectionTitle: "Abo",
+        currentSectionTitle: "Subscription",
         currentSectionText:
           "Status, aktueller Plan und verfügbare Planoptionen der aktiven Organization.",
         usageTitle: "Aktuelle Nutzung",

@@ -269,7 +269,7 @@ function t(language: AppLanguage) {
       noSubscriptionFound: "No subscription found",
       membersTitle: "Members",
       openInvites: (count: number) => `${count} open invites`,
-      subscriptionTitle: "Abo",
+      subscriptionTitle: "Subscription",
       subscriptionSubline: (price: string, status: string) =>
         `${price} incl. VAT · ${status}`,
       noSubscriptionStored: "No subscription stored",
@@ -365,7 +365,7 @@ function t(language: AppLanguage) {
     noSubscriptionFound: "Kein Abo gefunden",
     membersTitle: "Mitglieder",
     openInvites: (count: number) => `${count} offene Einladungen`,
-    subscriptionTitle: "Abo",
+    subscriptionTitle: "Subscription",
     subscriptionSubline: (price: string, status: string) =>
       `${price} inkl. MwSt. · ${status}`,
     noSubscriptionStored: "Kein Abo hinterlegt",
