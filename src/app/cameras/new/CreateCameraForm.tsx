@@ -116,7 +116,7 @@ function t(language: AppLanguage) {
       understood: "Understood",
       provisioningTitle: "Provisioning result",
       provisioningText:
-        "The camera has been created successfully. Save the provisioning data now.",
+        "The camera has been created successfully. The provisioning data is available later in Camera status.",
       coreProvisioning: "Core provisioning",
       coreProvisioningText: "Basic camera data for later reference.",
       copyBlock: "Copy block",
@@ -193,7 +193,7 @@ function t(language: AppLanguage) {
     understood: "Verstanden",
     provisioningTitle: "Provisioning-Ergebnis",
     provisioningText:
-      "Die Kamera wurde erfolgreich angelegt. Bitte speichere die Provisioning-Daten jetzt.",
+      "Die Kamera wurde erfolgreich angelegt. Die Provisioning-Daten sind später im Kamerastatus verfügbar.",
     coreProvisioning: "Core Provisioning",
     coreProvisioningText: "Basisdaten dieser Kamera für spätere Referenz.",
     copyBlock: "Block kopieren",

@@ -1,4 +1,4 @@
-// src/app/cameras/health/page.tsx #10
+// src/app/cameras/health/page.tsx #12
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
@@ -16,8 +16,7 @@ import {
   resolveLanguage,
   type AppLanguage,
 } from "@/lib/i18n";
-import CameraRowFields from "./CameraRowFields";
-import CameraRowActions from "./CameraRowActions";
+import CameraTableRow from "./CameraTableRow";
 
 type SearchParams = {
   revier?: string;
@@ -31,13 +30,34 @@ type RevierRow = {
   name: string;
 };
 
+type CameraIngestConfigRow = {
+  method: string | null;
+  is_active: boolean | null;
+  smtp_alias: string | null;
+  ftp_username: string | null;
+  ftp_inbox_path: string | null;
+  manual_label: string | null;
+  notes: string | null;
+  ingest_token: string | null;
+  vendor: string | null;
+  external_key: string | null;
+  provisioning_status: string | null;
+  ftp_host: string | null;
+  ftp_port: number | null;
+  provisioned_at: string | null;
+  deprovisioned_at: string | null;
+  last_provisioning_error: string | null;
+};
+
 type CameraBaseRow = {
   id: string;
   name: string;
   revier_id: string;
   import_method: string | null;
+  technical_name: string | null;
   is_active: boolean;
   reviers: { name: string } | { name: string }[] | null;
+  camera_ingest_configs: CameraIngestConfigRow[] | null;
 };
 
 type CameraHealthRow = {
@@ -54,11 +74,28 @@ type CameraHealthListRow = {
   revier_id: string;
   revier_name: string;
   import_method: string | null;
+  technical_name: string | null;
   is_active: boolean;
   last_seen_at: string | null;
   stale_after_minutes: number;
   offline_after_minutes: number;
   health_status: "online" | "stale" | "offline" | "unknown" | string;
+  config_method: string | null;
+  config_is_active: boolean | null;
+  config_smtp_alias: string | null;
+  config_ftp_username: string | null;
+  config_ftp_inbox_path: string | null;
+  config_manual_label: string | null;
+  config_notes: string | null;
+  config_ingest_token: string | null;
+  config_vendor: string | null;
+  config_external_key: string | null;
+  config_provisioning_status: string | null;
+  config_ftp_host: string | null;
+  config_ftp_port: number | null;
+  config_provisioned_at: string | null;
+  config_deprovisioned_at: string | null;
+  config_last_provisioning_error: string | null;
 };
 
 type HealthRuleRow = {
@@ -121,6 +158,7 @@ function t(language: AppLanguage) {
       healthCol: "Health",
       statusCol: "Status",
       lastFeedCol: "Ingest",
+      configCol: "Config",
       actionsCol: "Actions",
       healthRulesPrefix: "* Health rules in current scope:",
       staleFrom: "stale from",
@@ -189,6 +227,7 @@ function t(language: AppLanguage) {
     healthCol: "Leben",
     statusCol: "Status",
     lastFeedCol: "Ingest",
+    configCol: "Config",
     actionsCol: "Aktionen",
     healthRulesPrefix: "* Lebenszeichen-Regeln im aktuellen Scope:",
     staleFrom: "veraltet ab",
@@ -219,35 +258,6 @@ function t(language: AppLanguage) {
   };
 }
 
-function formatAgo(value: string | null, language: AppLanguage) {
-  const text = t(language);
-
-  if (!value) return "—";
-
-  const ts = new Date(value).getTime();
-  const diffMs = Date.now() - ts;
-  const diffMinutes = Math.floor(diffMs / 60000);
-
-  if (diffMinutes < 2) return text.justNow;
-  if (diffMinutes < 60) {
-    return language === "en"
-      ? `${diffMinutes} ${text.agoMin.replace(" ago", "")} ago`
-      : text.agoMin.replace("{n}", String(diffMinutes));
-  }
-
-  const diffHours = Math.floor(diffMinutes / 60);
-  if (diffHours < 24) {
-    return language === "en"
-      ? `${diffHours} ${text.agoHour.replace(" ago", "")} ago`
-      : text.agoHour.replace("{n}", String(diffHours));
-  }
-
-  const diffDays = Math.floor(diffHours / 24);
-  return language === "en"
-    ? `${diffDays} ${text.agoDay.replace(" ago", "")} ago`
-    : text.agoDay.replace("{n}", String(diffDays));
-}
-
 function formatMethod(value: string | null, language: AppLanguage) {
   const text = t(language);
 
@@ -258,22 +268,19 @@ function formatMethod(value: string | null, language: AppLanguage) {
   return value;
 }
 
-function formatHealthLabel(value: string, language: AppLanguage) {
-  const text = t(language);
-
-  if (value === "online") return text.online;
-  if (value === "stale") return text.stale;
-  if (value === "offline") return text.offline;
-  if (value === "unknown") return text.unknown;
-  return value;
-}
-
 function extractRevierName(
   value: { name: string } | { name: string }[] | null
 ): string {
   if (!value) return "—";
   if (Array.isArray(value)) return value[0]?.name ?? "—";
   return value.name ?? "—";
+}
+
+function firstConfig(
+  value: CameraIngestConfigRow[] | null | undefined
+): CameraIngestConfigRow | null {
+  if (!value || value.length === 0) return null;
+  return value[0] ?? null;
 }
 
 function buildHealthRules(
@@ -346,10 +353,9 @@ async function saveCameraStatus(formData: FormData) {
   "use server";
 
   const ctx = await requirePathAccess("/cameras/health");
-if (!ctx.user) {
-  throw new Error("Authenticated user required");
-}
-
+  if (!ctx.user) {
+    throw new Error("Authenticated user required");
+  }
 
   const cookieStore = await cookies();
   const supabase = supabaseServer();
@@ -482,12 +488,9 @@ async function removeCamera(formData: FormData) {
   "use server";
 
   const ctx = await requirePathAccess("/cameras/health");
-if (!ctx.user) {
-  throw new Error("Authenticated user required");
-}
-
-
-
+  if (!ctx.user) {
+    throw new Error("Authenticated user required");
+  }
 
   const cookieStore = await cookies();
   const supabase = supabaseServer();
@@ -557,31 +560,6 @@ if (!ctx.user) {
   );
 }
 
-function HealthBadge({
-  status,
-  language,
-}: {
-  status: string;
-  language: AppLanguage;
-}) {
-  const className =
-    status === "online"
-      ? "border-emerald-300/25 bg-emerald-300/10 text-emerald-200"
-      : status === "stale"
-        ? "border-amber-300/25 bg-amber-300/10 text-amber-200"
-        : status === "offline"
-          ? "border-rose-300/25 bg-rose-300/10 text-rose-200"
-          : "border-white/10 bg-white/5 text-white/72";
-
-  return (
-    <span
-      className={`inline-flex rounded-full border px-2.5 py-0.5 text-xs font-medium ${className}`}
-    >
-      {formatHealthLabel(status, language)}
-    </span>
-  );
-}
-
 function StatCard({
   title,
   value,
@@ -605,10 +583,9 @@ export default async function CamerasHealthPage(props: {
 }) {
   const ctx = await requirePathAccess("/cameras/health");
 
-if (!ctx.user) {
-  throw new Error("Authenticated user required");
-}
-
+  if (!ctx.user) {
+    throw new Error("Authenticated user required");
+  }
 
   const cookieStore = await cookies();
   const supabase = supabaseServer();
@@ -731,7 +708,33 @@ if (!ctx.user) {
 
   let camerasQuery = supabase
     .from("cameras")
-    .select("id,name,revier_id,import_method,is_active,reviers(name)")
+    .select(`
+      id,
+      name,
+      revier_id,
+      import_method,
+      technical_name,
+      is_active,
+      reviers(name),
+      camera_ingest_configs(
+        method,
+        is_active,
+        smtp_alias,
+        ftp_username,
+        ftp_inbox_path,
+        manual_label,
+        notes,
+        ingest_token,
+        vendor,
+        external_key,
+        provisioning_status,
+        ftp_host,
+        ftp_port,
+        provisioned_at,
+        deprovisioned_at,
+        last_provisioning_error
+      )
+    `)
     .eq("organization_id", activeOrganization.id)
     .order("name", { ascending: true });
 
@@ -862,6 +865,7 @@ if (!ctx.user) {
 
   const rows: CameraHealthListRow[] = cameraBaseRows.map((camera) => {
     const health = healthById.get(camera.id);
+    const config = firstConfig(camera.camera_ingest_configs);
 
     return {
       id: camera.id,
@@ -869,11 +873,28 @@ if (!ctx.user) {
       revier_id: camera.revier_id,
       revier_name: extractRevierName(camera.reviers),
       import_method: camera.import_method,
+      technical_name: camera.technical_name ?? null,
       is_active: camera.is_active,
       last_seen_at: health?.last_seen_at ?? null,
       stale_after_minutes: health?.stale_after_minutes ?? 0,
       offline_after_minutes: health?.offline_after_minutes ?? 0,
       health_status: health?.health_status ?? "unknown",
+      config_method: config?.method ?? null,
+      config_is_active: config?.is_active ?? null,
+      config_smtp_alias: config?.smtp_alias ?? null,
+      config_ftp_username: config?.ftp_username ?? null,
+      config_ftp_inbox_path: config?.ftp_inbox_path ?? null,
+      config_manual_label: config?.manual_label ?? null,
+      config_notes: config?.notes ?? null,
+      config_ingest_token: config?.ingest_token ?? null,
+      config_vendor: config?.vendor ?? null,
+      config_external_key: config?.external_key ?? null,
+      config_provisioning_status: config?.provisioning_status ?? null,
+      config_ftp_host: config?.ftp_host ?? null,
+      config_ftp_port: config?.ftp_port ?? null,
+      config_provisioned_at: config?.provisioned_at ?? null,
+      config_deprovisioned_at: config?.deprovisioned_at ?? null,
+      config_last_provisioning_error: config?.last_provisioning_error ?? null,
     };
   });
 
@@ -962,6 +983,7 @@ if (!ctx.user) {
                 <th className="px-6 py-3 font-medium whitespace-nowrap">{text.healthCol}</th>
                 <th className="px-6 py-3 font-medium whitespace-nowrap">{text.statusCol}</th>
                 <th className="px-6 py-3 font-medium whitespace-nowrap">{text.lastFeedCol}</th>
+                <th className="px-6 py-3 font-medium whitespace-nowrap">{text.configCol}</th>
                 <th className="px-6 py-3 font-medium whitespace-nowrap text-right">
                   {text.actionsCol}
                 </th>
@@ -970,46 +992,16 @@ if (!ctx.user) {
 
             <tbody>
               {rows.map((row) => (
-                <tr key={row.id} className="border-t border-white/8 align-middle">
-                  <td className="px-6 py-4 font-medium text-white whitespace-nowrap">
-                    {row.name}
-                  </td>
-
-                  <td className="px-6 py-4 text-white/68 whitespace-nowrap">
-                    {row.revier_name}
-                  </td>
-
-                  <td className="px-6 py-4 text-white/68 whitespace-nowrap">
-                    {formatMethod(row.import_method, language)}
-                  </td>
-
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <HealthBadge status={row.health_status} language={language} />
-                  </td>
-
-                  <CameraRowFields
-                    cameraId={row.id}
-                    initialStatus={row.is_active ? "active" : "disabled"}
-                    canManage={canManageCameras}
-                    returnRevier={rawRevier ?? ""}
-                    saveAction={saveCameraStatus}
-                    isDemo={isDemo}
-                    language={language}
-                  />
-
-                  <td className="px-6 py-4 text-white/68 whitespace-nowrap">
-                    {formatAgo(row.last_seen_at, language)}
-                  </td>
-
-                  <CameraRowActions
-                    cameraId={row.id}
-                    canManage={canManageCameras}
-                    removeAction={removeCamera}
-                    returnRevier={rawRevier ?? ""}
-                    isDemo={isDemo}
-                    language={language}
-                  />
-                </tr>
+                <CameraTableRow
+                  key={row.id}
+                  row={row}
+                  canManageCameras={canManageCameras}
+                  returnRevier={rawRevier ?? ""}
+                  saveAction={saveCameraStatus}
+                  removeAction={removeCamera}
+                  isDemo={isDemo}
+                  language={language}
+                />
               ))}
             </tbody>
           </table>
