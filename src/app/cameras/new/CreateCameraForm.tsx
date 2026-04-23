@@ -483,7 +483,7 @@ export default function CreateCameraForm({
           <div className="md:col-span-2">
             <label className="mb-1 block text-sm font-medium text-white">{text.organization}</label>
             <div className="w-full rounded-[14px] border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/72">
-              {organization.name} ({organization.slug})
+              {organization.name}
             </div>
           </div>
 

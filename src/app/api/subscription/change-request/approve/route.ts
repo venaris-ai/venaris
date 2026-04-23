@@ -1,8 +1,13 @@
-// src/app/api/subscription/change-request/approve/route.ts #5
+// src/app/api/subscription/change-request/approve/route.ts #6
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAuthServer } from "@/lib/supabaseAuthServer";
 import { supabaseServer } from "@/lib/supabaseServer";
-import { BILLING_PLANS, type BillingCycle } from "@/lib/billing/plans";
+import {
+  BILLING_PLANS,
+  getBillingPlanPriceCents,
+  isSelfServeBillingPlanKey,
+  type BillingCycle,
+} from "@/lib/billing/plans";
 import { getLanguageFromRequest, type AppLanguage } from "@/lib/i18n";
 
 type PlanKey = "starter" | "pro" | "enterprise";
@@ -46,6 +51,8 @@ function t(language: AppLanguage) {
         onlyOpenCanBeApproved:
           "Only open change requests can be approved.",
         invalidRequestedPlanKey: "Invalid requested plan key.",
+        selfServePlanUsesStripe:
+          "Starter and Pro are managed via self-service billing and cannot be approved manually.",
         failedToLoadSubscription: "Failed to load subscription.",
         subscriptionNotFound: "Subscription not found.",
         failedToUpdateSubscription: "Failed to update subscription.",
@@ -64,6 +71,8 @@ function t(language: AppLanguage) {
         onlyOpenCanBeApproved:
           "Nur offene Plananfragen können genehmigt werden.",
         invalidRequestedPlanKey: "Ungültiger angefragter Plan-Key.",
+        selfServePlanUsesStripe:
+          "Starter und Pro werden über Self-Service-Billing verwaltet und können nicht manuell genehmigt werden.",
         failedToLoadSubscription:
           "Abo konnte nicht geladen werden.",
         subscriptionNotFound: "Abo nicht gefunden.",
@@ -159,6 +168,13 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    if (isSelfServeBillingPlanKey(changeRequest.requested_plan_key)) {
+      return NextResponse.json(
+        { error: text.selfServePlanUsesStripe },
+        { status: 400 }
+      );
+    }
+
     const targetPlan = BILLING_PLANS[changeRequest.requested_plan_key];
 
     const subscriptionResult = await supabase
@@ -188,9 +204,7 @@ export async function POST(req: NextRequest) {
 
     const billingCycle = subscription.billing_cycle ?? "monthly";
     const targetPriceCents =
-      billingCycle === "yearly"
-        ? targetPlan.yearlyPriceCents ?? 0
-        : targetPlan.monthlyPriceCents ?? 0;
+      getBillingPlanPriceCents(changeRequest.requested_plan_key, billingCycle) ?? 0;
 
     const nowIso = new Date().toISOString();
 

@@ -1,4 +1,4 @@
-// src/app/orga/page.tsx #6
+// src/app/orga/page.tsx #7
 import Link from "next/link";
 import { cookies } from "next/headers";
 import { requirePathAccess, canAccessPath } from "@/lib/authz";
@@ -24,6 +24,10 @@ type SubscriptionRow = {
   price_currency: string;
   max_cameras: number;
   max_members: number;
+};
+
+type OrganizationMetaRow = {
+  camera_code: string;
 };
 
 function formatDate(value: string | null, language: AppLanguage) {
@@ -106,7 +110,7 @@ function statusUi(status: SubscriptionStatus) {
   switch (status) {
     case "trialing":
       return {
-        label: "Trialing",
+        label: "Trial",
         badgeClass: "border-sky-300/25 bg-sky-300/10 text-sky-200",
       };
     case "active":
@@ -161,7 +165,7 @@ function t(language: AppLanguage) {
         myAccountText: "Active organizational context and your role.",
         openMyAccount: "Open my account",
         organizationLabel: "Organization",
-        slugLabel: "Slug",
+        slugLabel: "Camera code",
         roleLabel: "Your role",
         emailLabel: "Email",
         groundsTitle: "Grounds",
@@ -205,7 +209,7 @@ function t(language: AppLanguage) {
         statCamerasTextWithPlan: (count: number, max: number) =>
           `${count} / ${max} im aktiven Plan`,
         statCamerasTextNoPlan: "Kein Abo gefunden",
-        statSubscriptionTitle: "Subscription",
+        statSubscriptionTitle: "Abo",
         statSubscriptionTextWithPlan: (status: string, price: string) =>
           `${status} · ${price} inkl. MwSt.`,
         statSubscriptionTextNoPlan: "Kein Abo hinterlegt",
@@ -213,7 +217,7 @@ function t(language: AppLanguage) {
         myAccountText: "Aktiver Organisationskontext und Deine Rolle.",
         openMyAccount: "Mein Konto öffnen",
         organizationLabel: "Organization",
-        slugLabel: "Slug",
+        slugLabel: "Kamera-Code",
         roleLabel: "Deine Rolle",
         emailLabel: "E-Mail",
         groundsTitle: "Reviere",
@@ -232,7 +236,7 @@ function t(language: AppLanguage) {
         openInvites: "Offene Invites",
         countedMembers: (usage: number, max: number) =>
           `Aktuell angerechnet: ${usage} von ${max} Mitglieder.`,
-        subscriptionTitle: "Subscription",
+        subscriptionTitle: "Abo",
         subscriptionText:
           "Kommerzieller Rahmen, Plan und aktuelle Nutzungsgrenzen.",
         openSubscription: "Abo öffnen",
@@ -289,10 +293,9 @@ function ActionLink({
 export default async function OrgaPage() {
   const ctx = await requirePathAccess("/orga");
 
-if (!ctx.user) {
-  throw new Error("Authenticated user required");
-}
-
+  if (!ctx.user) {
+    throw new Error("Authenticated user required");
+  }
 
   const supabase = supabaseServer();
   const cookieStore = await cookies();
@@ -329,6 +332,7 @@ if (!ctx.user) {
     invitesResult,
     subscriptionResult,
     camerasResult,
+    organizationMetaResult,
   ] = await Promise.all([
     supabase
       .from("reviers")
@@ -369,6 +373,12 @@ if (!ctx.user) {
       .from("cameras")
       .select("id", { count: "exact", head: true })
       .eq("organization_id", organization.id),
+
+    supabase
+      .from("organizations")
+      .select("camera_code")
+      .eq("id", organization.id)
+      .maybeSingle<OrganizationMetaRow>(),
   ]);
 
   if (reviersResult.error) {
@@ -393,11 +403,18 @@ if (!ctx.user) {
     throw new Error(`Failed to load cameras summary: ${camerasResult.error.message}`);
   }
 
+  if (organizationMetaResult.error) {
+    throw new Error(
+      `Failed to load organization meta: ${organizationMetaResult.error.message}`
+    );
+  }
+
   const reviersCount = reviersResult.count ?? 0;
   const membersCount = membersResult.count ?? 0;
   const openInvitesCount = invitesResult.count ?? 0;
   const camerasCount = camerasResult.count ?? 0;
   const subscription = subscriptionResult.data;
+  const organizationCameraCode = organizationMetaResult.data?.camera_code ?? "—";
 
   const resolvedSubscription = subscription
     ? resolveSubscriptionState({
@@ -502,7 +519,7 @@ if (!ctx.user) {
             <div className="flex items-center justify-between gap-4 border-b border-white/8 pb-3">
               <dt className="text-white/45">{text.slugLabel}</dt>
               <dd className="text-right font-medium text-white">
-                {organization.slug}
+                {organizationCameraCode}
               </dd>
             </div>
             <div className="flex items-center justify-between gap-4 border-b border-white/8 pb-3">

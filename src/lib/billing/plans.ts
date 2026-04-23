@@ -1,9 +1,10 @@
-// src/lib/billing/plans.ts #5
+// src/lib/billing/plans.ts #6
 import type { AppLanguage } from "@/lib/i18n";
 
 export type { AppLanguage } from "@/lib/i18n";
 
 export type BillingPlanKey = "starter" | "pro" | "enterprise";
+export type SelfServeBillingPlanKey = "starter" | "pro";
 
 export type BillingCycle = "monthly" | "yearly";
 
@@ -22,7 +23,7 @@ export const BILLING_PLANS: Record<BillingPlanKey, BillingPlanDefinition> = {
     key: "starter",
     label: "Starter",
     description:
-      "Für kleine Reviere und erste Teams mit klar begrenzter Kamera- und Member-Zahl.",
+      "Für kleine Reviere und erste Teams mit klar begrenzter Kamera- und Mitglieder-Zahl.",
     maxCameras: 5,
     maxMembers: 5,
     monthlyPriceCents: 995,
@@ -32,7 +33,7 @@ export const BILLING_PLANS: Record<BillingPlanKey, BillingPlanDefinition> = {
     key: "pro",
     label: "Pro",
     description:
-      "Für professionelle Nutzung mit mehr Kameras, mehr Nutzern und operativem Ausbau.",
+      "Für professionelle Nutzung mit mehr Kameras, mehr Mitgliedern und operativem Ausbau.",
     maxCameras: 25,
     maxMembers: 25,
     monthlyPriceCents: 2995,
@@ -50,12 +51,27 @@ export const BILLING_PLANS: Record<BillingPlanKey, BillingPlanDefinition> = {
   },
 };
 
+export function isBillingPlanKey(value: string | null | undefined): value is BillingPlanKey {
+  return value === "starter" || value === "pro" || value === "enterprise";
+}
+
+export function isSelfServeBillingPlanKey(
+  value: string | null | undefined
+): value is SelfServeBillingPlanKey {
+  return value === "starter" || value === "pro";
+}
+
 export function getBillingPlan(planKey: string | null | undefined) {
-  if (!planKey) return null;
-  if (planKey === "starter" || planKey === "pro" || planKey === "enterprise") {
-    return BILLING_PLANS[planKey];
-  }
-  return null;
+  if (!isBillingPlanKey(planKey)) return null;
+  return BILLING_PLANS[planKey];
+}
+
+export function getBillingPlanPriceCents(
+  planKey: BillingPlanKey,
+  billingCycle: BillingCycle
+): number | null {
+  const plan = BILLING_PLANS[planKey];
+  return billingCycle === "yearly" ? plan.yearlyPriceCents : plan.monthlyPriceCents;
 }
 
 export function getBillingPlanDescription(

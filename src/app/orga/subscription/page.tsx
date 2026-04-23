@@ -1,4 +1,7 @@
-// src/app/orga/subscription/page.tsx #19
+// src/app/orga/subscription/page.tsx #22
+import type { ReactNode } from "react";
+import SubscriptionSyncNotice from "@/components/SubscriptionSyncNotice";
+import StripeBillingPortalButton from "@/components/StripeBillingPortalButton";
 import { cookies } from "next/headers";
 import { requirePathAccess } from "@/lib/authz";
 import { supabaseServer } from "@/lib/supabaseServer";
@@ -14,6 +17,8 @@ import {
   type AppLanguage,
 } from "@/lib/i18n";
 
+type ScheduledChangeType = "upgrade" | "downgrade" | "cancel";
+
 type SubscriptionRow = {
   plan_key: "starter" | "pro" | "enterprise";
   status: SubscriptionStatus;
@@ -25,6 +30,12 @@ type SubscriptionRow = {
   max_cameras: number;
   max_members: number;
   billing_provider: "none" | "manual" | "stripe";
+  provider_subscription_id: string | null;
+  scheduled_plan_key: "starter" | "pro" | "enterprise" | null;
+  scheduled_change_type: ScheduledChangeType | null;
+  scheduled_change_effective_at: string | null;
+  cancel_at_period_end: boolean;
+  canceled_at: string | null;
 };
 
 type OpenRequestRow = {
@@ -37,10 +48,9 @@ type OpenRequestRow = {
 async function resolveUiLanguageForProtectedPath(pathname: string) {
   const ctx = await requirePathAccess(pathname);
 
-if (!ctx.user) {
-  throw new Error("Authenticated user required");
-}
-
+  if (!ctx.user) {
+    throw new Error("Authenticated user required");
+  }
 
   const supabase = supabaseServer();
   const cookieStore = await cookies();
@@ -114,10 +124,7 @@ function billingProviderLabel(
   }
 }
 
-function planPriceText(
-  subscription: SubscriptionRow,
-  language: AppLanguage
-) {
+function planPriceText(subscription: SubscriptionRow, language: AppLanguage) {
   if (subscription.price_amount_cents > 0) {
     return formatMoney(
       subscription.price_amount_cents,
@@ -144,7 +151,7 @@ function statusUi(status: SubscriptionStatus, language: AppLanguage) {
     switch (status) {
       case "trialing":
         return {
-          label: "Trialing",
+          label: "Trial",
           badgeClass: "border-sky-300/25 bg-sky-300/10 text-sky-200",
         };
       case "active":
@@ -179,7 +186,7 @@ function statusUi(status: SubscriptionStatus, language: AppLanguage) {
   switch (status) {
     case "trialing":
       return {
-        label: "Trialing",
+        label: "Trial",
         badgeClass: "border-sky-300/25 bg-sky-300/10 text-sky-200",
       };
     case "active":
@@ -240,20 +247,34 @@ function t(language: AppLanguage) {
         choosePlanText:
           "Choose the right plan for your organization. Smaller plans can only be selected if current usage fits the target limits.",
         inclVat: "incl. VAT",
+        stripeBoxTitle: "Self-service billing",
+        stripeBoxText:
+          "Starter and Pro are managed via Stripe. The first activation from a trial uses checkout. Plan changes for existing Stripe subscriptions are triggered directly here. Payment method changes and cancellation continue via the Stripe Billing Portal.",
+        manualBoxTitle: "Manual billing",
+        manualBoxText:
+          "This subscription is managed manually by Venaris. Enterprise requests continue to run through the manual approval process.",
+        noneBoxTitle: "Trial / no billing provider yet",
+        noneBoxText:
+          "Venaris is a brand of easg.aero GmbH & Co. KG. Starter and Pro can be activated directly via our billing provider Stripe.",
+        scheduledDowngrade: (planLabel: string, date: string) =>
+          `Scheduled from ${date}: ${planLabel}`,
+        scheduledUpgrade: (planLabel: string, date: string) =>
+          `Scheduled from ${date}: ${planLabel}`,
+        scheduledCancel: (date: string) => `Canceled effective ${date}`,
       }
     : {
-        eyebrow: "Subscription",
-        pageTitle: "Subscription",
+        eyebrow: "Abo",
+        pageTitle: "Abo",
         pageText:
           "Status, aktueller Plan und verfügbare Planoptionen der aktiven Organization.",
         missingPageText:
           "Für diese Organisation wurde noch kein Abo gefunden.",
-        missingSectionTitle: "Subscription",
+        missingSectionTitle: "Abo",
         missingSectionText:
           "Für diese Organisation wurde noch kein Abo gefunden.",
         missingBoxText:
           "Bitte prüfe die Abo-Konfiguration in der Datenbank.",
-        currentSectionTitle: "Subscription",
+        currentSectionTitle: "Abo",
         currentSectionText:
           "Status, aktueller Plan und verfügbare Planoptionen der aktiven Organization.",
         usageTitle: "Aktuelle Nutzung",
@@ -262,13 +283,27 @@ function t(language: AppLanguage) {
         trialEndsLabel: "Trial endet",
         periodUntilLabel: "Periode bis",
         camerasLabel: "Kameras",
-        membersWithInvitesLabel: "Members inkl. offene Invites",
-        activeMembersLabel: "Aktive Members",
-        openInvitesLabel: "Offene Invites",
+        membersWithInvitesLabel: "Mitglieder inkl. offene Einladungen",
+        activeMembersLabel: "Aktive Mitglieder",
+        openInvitesLabel: "Offene Einladungen",
         choosePlanTitle: "Plan auswählen",
         choosePlanText:
           "Wähle den passenden Plan für Deine Organization. Kleinere Pläne sind nur auswählbar, wenn die aktuelle Nutzung in die Ziel-Limits passt.",
         inclVat: "inkl. MwSt.",
+        stripeBoxTitle: "Self-Service-Billing",
+        stripeBoxText:
+          "Starter und Pro werden über Stripe verwaltet. Die erste Aktivierung aus dem Trial läuft über einen sicheren Checkout. Planwechsel bestehender Stripe-Abos werden direkt hier angestoßen. Änderungen an Zahlungsmethode und Kündigung laufen weiterhin über das Stripe Billing Portal.",
+        manualBoxTitle: "Manuelle Abrechnung",
+        manualBoxText:
+          "Dieses Abo wird manuell durch Venaris verwaltet. Enterprise-Anfragen laufen weiterhin über den manuellen Freigabeprozess.",
+        noneBoxTitle: "Trial / noch kein Billing-Provider",
+        noneBoxText:
+          "Venaris ist eine Marke der easg.aero GmbH & Co. KG. Starter und Pro können über unseren Billing-Provider Stripe direkt aktiviert werden.",
+        scheduledDowngrade: (planLabel: string, date: string) =>
+          `Geplant ab ${date}: ${planLabel}`,
+        scheduledUpgrade: (planLabel: string, date: string) =>
+          `Geplant ab ${date}: ${planLabel}`,
+        scheduledCancel: (date: string) => `Gekündigt zum ${date}`,
       };
 }
 
@@ -279,7 +314,7 @@ function Section({
 }: {
   title: string;
   text: string;
-  children: React.ReactNode;
+  children: ReactNode;
 }) {
   return (
     <section className="rounded-[28px] border border-white/10 bg-white/5 p-6 backdrop-blur-sm">
@@ -330,7 +365,13 @@ export default async function SubscriptionPage() {
         price_currency,
         max_cameras,
         max_members,
-        billing_provider
+        billing_provider,
+        provider_subscription_id,
+        scheduled_plan_key,
+        scheduled_change_type,
+        scheduled_change_effective_at,
+        cancel_at_period_end,
+        canceled_at
         `
       )
       .eq("organization_id", organization.id)
@@ -398,7 +439,10 @@ export default async function SubscriptionPage() {
   const activeMemberCount = membersCountResult.count ?? 0;
   const openInviteCount = invitesCountResult.count ?? 0;
   const currentMemberUsage = activeMemberCount + openInviteCount;
-  const openRequest = openRequestResult.data ?? null;
+  const openRequest =
+    openRequestResult.data?.requested_plan_key === "enterprise"
+      ? openRequestResult.data
+      : null;
 
   if (!subscription) {
     return (
@@ -442,8 +486,47 @@ export default async function SubscriptionPage() {
 
   const effectiveStatus = statusUi(resolved.effectiveStatus, language);
 
+  const existingScheduledChange =
+    subscription.scheduled_plan_key &&
+    (subscription.scheduled_change_type === "upgrade" ||
+      subscription.scheduled_change_type === "downgrade") &&
+    (subscription.scheduled_plan_key === "starter" ||
+      subscription.scheduled_plan_key === "pro")
+      ? {
+          requestedPlanKey: subscription.scheduled_plan_key,
+          requestType: subscription.scheduled_change_type,
+          scheduledFor: subscription.scheduled_change_effective_at,
+        }
+      : null;
+
+  const cancellationNotice =
+    subscription.scheduled_change_type === "cancel" &&
+    subscription.scheduled_change_effective_at
+      ? text.scheduledCancel(
+          formatDate(subscription.scheduled_change_effective_at, language)
+        )
+      : null;
+
+  const scheduledPlanNotice =
+    subscription.scheduled_plan_key &&
+    subscription.scheduled_change_effective_at &&
+    subscription.scheduled_change_type === "downgrade"
+      ? text.scheduledDowngrade(
+          BILLING_PLANS[subscription.scheduled_plan_key].label,
+          formatDate(subscription.scheduled_change_effective_at, language)
+        )
+      : subscription.scheduled_plan_key &&
+          subscription.scheduled_change_effective_at &&
+          subscription.scheduled_change_type === "upgrade"
+        ? text.scheduledUpgrade(
+            BILLING_PLANS[subscription.scheduled_plan_key].label,
+            formatDate(subscription.scheduled_change_effective_at, language)
+          )
+        : null;
+
   return (
     <main className="space-y-8">
+      <SubscriptionSyncNotice language={language} />
       <section className="rounded-[32px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(201,149,46,0.16),transparent_24%),linear-gradient(135deg,rgba(255,255,255,0.06),rgba(255,255,255,0.03))] p-6 backdrop-blur-sm">
         <div>
           <div className="text-xs font-medium uppercase tracking-[0.22em] text-amber-200/80">
@@ -458,10 +541,19 @@ export default async function SubscriptionPage() {
         </div>
       </section>
 
-      <Section
-        title={text.currentSectionTitle}
-        text={text.currentSectionText}
-      >
+      <Section title={text.currentSectionTitle} text={text.currentSectionText}>
+        {cancellationNotice ? (
+          <div className="mb-4 rounded-[24px] border border-rose-300/20 bg-rose-300/10 p-4 text-sm text-rose-100">
+            {cancellationNotice}
+          </div>
+        ) : null}
+
+        {scheduledPlanNotice ? (
+          <div className="mb-4 rounded-[24px] border border-sky-300/20 bg-sky-300/10 p-4 text-sm text-sky-100">
+            {scheduledPlanNotice}
+          </div>
+        ) : null}
+
         <div className="grid gap-4 md:grid-cols-2">
           <div className="rounded-[24px] border border-white/10 bg-white/5 p-5">
             <div className="flex flex-wrap items-center gap-3">
@@ -517,6 +609,30 @@ export default async function SubscriptionPage() {
       </Section>
 
       <Section title={text.choosePlanTitle} text={text.choosePlanText}>
+        {subscription.billing_provider === "stripe" ? (
+          <div className="mb-6 rounded-[24px] border border-sky-300/20 bg-sky-300/10 p-5 text-sm text-sky-100">
+            <div className="font-medium text-white">{text.stripeBoxTitle}</div>
+            <p className="mt-2 leading-6 text-sky-100/90">{text.stripeBoxText}</p>
+            <div className="mt-4">
+              <StripeBillingPortalButton language={language} />
+            </div>
+          </div>
+        ) : null}
+
+        {subscription.billing_provider === "manual" ? (
+          <div className="mb-6 rounded-[24px] border border-amber-300/20 bg-amber-300/10 p-5 text-sm text-amber-100">
+            <div className="font-medium text-white">{text.manualBoxTitle}</div>
+            <p className="mt-2 leading-6 text-amber-100/90">{text.manualBoxText}</p>
+          </div>
+        ) : null}
+
+        {subscription.billing_provider === "none" ? (
+          <div className="mb-6 rounded-[24px] border border-emerald-300/20 bg-emerald-300/10 p-5 text-sm text-emerald-100">
+            <div className="font-medium text-white">{text.noneBoxTitle}</div>
+            <p className="mt-2 leading-6 text-emerald-100/90">{text.noneBoxText}</p>
+          </div>
+        ) : null}
+
         <PlanSelectionCards
           currentPlanKey={subscription.plan_key}
           billingCycle={subscription.billing_cycle}
@@ -524,6 +640,7 @@ export default async function SubscriptionPage() {
           currentCameraCount={currentCameraCount}
           currentMemberUsage={currentMemberUsage}
           currentStatusLabel={effectiveStatus.label}
+          billingProvider={subscription.billing_provider}
           existingOpenRequest={
             openRequest
               ? {
@@ -534,6 +651,7 @@ export default async function SubscriptionPage() {
                 }
               : null
           }
+          existingScheduledChange={existingScheduledChange}
           language={language}
         />
       </Section>

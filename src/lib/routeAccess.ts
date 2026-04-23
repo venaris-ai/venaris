@@ -81,8 +81,8 @@ export const SECTION_NAV_ITEMS = {
     { href: "/orga", label: "Overview", match: "exact" },
     { href: "/orga/account", label: "Mein Konto", match: "exact" },
     { href: "/orga/reviere", label: "Reviere", match: "exact" },
-    { href: "/orga/members", label: "Members", match: "exact" },
-    { href: "/orga/subscription", label: "Subscription", match: "exact" },
+    { href: "/orga/members", label: "Mitglieder", match: "exact" },
+    { href: "/orga/subscription", label: "Abo", match: "exact" },
   ] satisfies NavItem[],
 } as const;
 
@@ -265,7 +265,7 @@ export function getSectionNavItems(language: AppLanguage) {
           { href: "/orga/account", label: "Mein Konto", match: "exact" },
           { href: "/orga/reviere", label: "Reviere", match: "exact" },
           { href: "/orga/members", label: "Mitglieder", match: "exact" },
-          { href: "/orga/subscription", label: "Subscription", match: "exact" },
+          { href: "/orga/subscription", label: "Abo", match: "exact" },
         ] satisfies NavItem[],
       };
 }

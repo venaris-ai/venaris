@@ -145,7 +145,7 @@ function statusUi(status: SubscriptionStatus, language: AppLanguage) {
     switch (status) {
       case "trialing":
         return {
-          label: "Trialing",
+          label: "Trial",
           badgeClass: "border-sky-300/25 bg-sky-300/10 text-sky-200",
         };
       case "active":
@@ -179,7 +179,7 @@ function statusUi(status: SubscriptionStatus, language: AppLanguage) {
   switch (status) {
     case "trialing":
       return {
-        label: "Trialing",
+        label: "Trial",
         badgeClass: "border-sky-300/25 bg-sky-300/10 text-sky-200",
       };
     case "active":
@@ -365,7 +365,7 @@ function t(language: AppLanguage) {
     noSubscriptionFound: "Kein Abo gefunden",
     membersTitle: "Mitglieder",
     openInvites: (count: number) => `${count} offene Einladungen`,
-    subscriptionTitle: "Subscription",
+    subscriptionTitle: "Abo",
     subscriptionSubline: (price: string, status: string) =>
       `${price} inkl. MwSt. · ${status}`,
     noSubscriptionStored: "Kein Abo hinterlegt",

@@ -1,8 +1,9 @@
-// src/app/api/subscription/change-request/route.ts #7
+// src/app/api/subscription/change-request/route.ts #8
 import { NextRequest, NextResponse } from "next/server";
 import { assertNotDemoWrite, requireOrganizationRole } from "@/lib/auth";
 import { supabaseServer } from "@/lib/supabaseServer";
 import { getLanguageFromRequest, type AppLanguage } from "@/lib/i18n";
+import { isSelfServeBillingPlanKey } from "@/lib/billing/plans";
 
 type PlanKey = "starter" | "pro" | "enterprise";
 type RequestType = "upgrade" | "downgrade" | "change";
@@ -47,6 +48,8 @@ function t(language: AppLanguage) {
     ? {
         activeOrganizationNotFound: "Active organization not found.",
         invalidRequestedPlanKey: "Invalid requestedPlanKey.",
+        selfServePlanUsesStripe:
+          "Starter and Pro are managed via self-service billing and can no longer be requested manually.",
         failedToLoadSubscription: "Failed to load subscription.",
         subscriptionNotFound: "Subscription not found.",
         failedToCheckOpenRequests: "Failed to check open requests.",
@@ -58,6 +61,8 @@ function t(language: AppLanguage) {
     : {
         activeOrganizationNotFound: "Aktive Organization nicht gefunden.",
         invalidRequestedPlanKey: "Ungültiger requestedPlanKey.",
+        selfServePlanUsesStripe:
+          "Starter und Pro werden über Self-Service-Billing verwaltet und können nicht mehr manuell angefragt werden.",
         failedToLoadSubscription: "Abo konnte nicht geladen werden.",
         subscriptionNotFound: "Abo nicht gefunden.",
         failedToCheckOpenRequests:
@@ -96,6 +101,13 @@ export async function POST(req: NextRequest) {
     if (!isPlanKey(requestedPlanKey)) {
       return NextResponse.json(
         { error: text.invalidRequestedPlanKey },
+        { status: 400 }
+      );
+    }
+
+    if (isSelfServeBillingPlanKey(requestedPlanKey)) {
+      return NextResponse.json(
+        { error: text.selfServePlanUsesStripe },
         { status: 400 }
       );
     }

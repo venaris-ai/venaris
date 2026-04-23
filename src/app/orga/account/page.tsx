@@ -1,4 +1,4 @@
-// src/app/orga/account/page.tsx #7
+// src/app/orga/account/page.tsx #10
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { redirectIfDemoWrite } from "@/lib/auth";
@@ -15,20 +15,19 @@ type OrganizationRow = {
   id: string;
   name: string;
   slug: string;
+  camera_code: string;
   kind: string;
   status: string;
   owner_user_id: string | null;
   created_at: string;
   notes: string | null;
   legal_name: string | null;
-  legal_form: string | null;
   contact_person: string | null;
   billing_email: string | null;
   billing_street: string | null;
   billing_postal_code: string | null;
   billing_city: string | null;
   billing_country: string | null;
-  vat_id: string | null;
   logo_url: string | null;
   customer_reference: string | null;
 };
@@ -58,6 +57,14 @@ function show(value: string | null) {
   return value?.trim() ? value : "—";
 }
 
+function normalizeNextPath(value: string | null | undefined) {
+  const next = (value ?? "").trim();
+  if (!next) return null;
+  if (!next.startsWith("/")) return null;
+  if (next.startsWith("//")) return null;
+  return next;
+}
+
 function t(language: AppLanguage) {
   return language === "en"
     ? {
@@ -72,17 +79,15 @@ function t(language: AppLanguage) {
         saved: "Changes were saved successfully.",
         statName: "Name",
         statNameText: "Display name of the active organization.",
-        statSlug: "Slug",
-        statSlugText: "Technical short name, currently read-only.",
+        statSlug: "Camera code",
+        statSlugText: "Technical organization code for camera provisioning.",
         statKind: "Kind",
         statKindText: "Tenant classification in Venaris.",
         statStatus: "Status",
         statStatusText: "Lifecycle of the organization, currently read-only.",
         editTitle: "Edit organization data",
         nameLabel: "Organization name *",
-        legalNameLabel: "Legal name",
-        legalFormLabel: "Legal form",
-        legalFormPlaceholder: "e.g. GmbH",
+        legalNameLabel: "Name on invoice",
         contactPersonLabel: "Contact person",
         billingEmailLabel: "Billing email",
         customerReferenceLabel: "Customer reference",
@@ -90,14 +95,13 @@ function t(language: AppLanguage) {
         postalCodeLabel: "Postal code",
         cityLabel: "City",
         countryLabel: "Country",
-        vatIdLabel: "VAT ID / Tax ID",
         notesLabel: "Notes",
         saveIdle: "Save changes",
         savePending: "Saving...",
         demoMode: "Demo mode",
         readOnlyTitle: "Read-only system data",
         organizationId: "Organization ID",
-        slugLabel: "Slug",
+        slugLabel: "Camera code",
         kindLabel: "Kind",
         statusLabel: "Status",
         ownerUserId: "Owner user ID",
@@ -116,17 +120,15 @@ function t(language: AppLanguage) {
         saved: "Änderungen wurden erfolgreich gespeichert.",
         statName: "Name",
         statNameText: "Anzeigename der aktiven Organisation.",
-        statSlug: "Slug",
-        statSlugText: "Technischer Kurzname, aktuell schreibgeschützt.",
+        statSlug: "Kamera-Code",
+        statSlugText: "Technischer Organisationscode für Kamera-Provisioning.",
         statKind: "Kind",
         statKindText: "Typisierung des Tenants in Venaris.",
         statStatus: "Status",
         statStatusText: "Lebenszyklus der Organisation, aktuell schreibgeschützt.",
         editTitle: "Organisationsdaten bearbeiten",
         nameLabel: "Organisationsname *",
-        legalNameLabel: "Rechtlicher Name",
-        legalFormLabel: "Rechtsform",
-        legalFormPlaceholder: "z. B. GmbH",
+        legalNameLabel: "Name auf der Rechnung",
         contactPersonLabel: "Ansprechpartner",
         billingEmailLabel: "Rechnungs-E-Mail",
         customerReferenceLabel: "Kundenreferenz",
@@ -134,14 +136,13 @@ function t(language: AppLanguage) {
         postalCodeLabel: "PLZ",
         cityLabel: "Ort",
         countryLabel: "Land",
-        vatIdLabel: "USt-ID / Steuer-ID",
         notesLabel: "Notizen",
         saveIdle: "Änderungen speichern",
         savePending: "Speichert...",
         demoMode: "Demo-Modus",
         readOnlyTitle: "Systemdaten (schreibgeschützt)",
         organizationId: "Organisation ID",
-        slugLabel: "Slug",
+        slugLabel: "Kamera-Code",
         kindLabel: "Kind",
         statusLabel: "Status",
         ownerUserId: "Owner-User-ID",
@@ -153,8 +154,13 @@ function t(language: AppLanguage) {
 async function saveOrganizationAccount(formData: FormData) {
   "use server";
 
+  const requestedNext = normalizeNextPath(String(formData.get("next") ?? ""));
+  const demoRedirectUrl = requestedNext
+    ? `/orga/account?demo_read_only=1&next=${encodeURIComponent(requestedNext)}`
+    : "/orga/account?demo_read_only=1";
+
   const ctx = await requirePathAccess("/orga/account");
-  redirectIfDemoWrite(ctx, "/orga/account?demo_read_only=1");
+  redirectIfDemoWrite(ctx, demoRedirectUrl);
 
   if (!ctx.user) {
     throw new Error("Authenticated user required");
@@ -187,7 +193,6 @@ async function saveOrganizationAccount(formData: FormData) {
 
   const name = String(formData.get("name") ?? "").trim();
   const legalName = String(formData.get("legal_name") ?? "").trim();
-  const legalForm = String(formData.get("legal_form") ?? "").trim();
   const contactPerson = String(formData.get("contact_person") ?? "").trim();
   const billingEmail = String(formData.get("billing_email") ?? "").trim();
   const billingStreet = String(formData.get("billing_street") ?? "").trim();
@@ -195,7 +200,6 @@ async function saveOrganizationAccount(formData: FormData) {
   const billingCity = String(formData.get("billing_city") ?? "").trim();
   const billingCountry =
     String(formData.get("billing_country") ?? "").trim().toUpperCase() || "DE";
-  const vatId = String(formData.get("vat_id") ?? "").trim();
   const customerReference = String(formData.get("customer_reference") ?? "").trim();
   const notes = String(formData.get("notes") ?? "").trim();
 
@@ -212,14 +216,12 @@ async function saveOrganizationAccount(formData: FormData) {
     .update({
       name,
       legal_name: legalName || null,
-      legal_form: legalForm || null,
       contact_person: contactPerson || null,
       billing_email: billingEmail || null,
       billing_street: billingStreet || null,
       billing_postal_code: billingPostalCode || null,
       billing_city: billingCity || null,
       billing_country: billingCountry || null,
-      vat_id: vatId || null,
       customer_reference: customerReference || null,
       notes: notes || null,
     })
@@ -227,6 +229,10 @@ async function saveOrganizationAccount(formData: FormData) {
 
   if (error) {
     throw new Error(`${text.saveFailedPrefix} ${error.message}`);
+  }
+
+  if (requestedNext) {
+    redirect(requestedNext);
   }
 
   redirect("/orga/account?saved=1");
@@ -253,11 +259,16 @@ function StatCard({
 export default async function OrgaAccountPage({
   searchParams,
 }: {
-  searchParams?: Promise<{ saved?: string; demo_read_only?: string }>;
+  searchParams?: Promise<{
+    saved?: string;
+    demo_read_only?: string;
+    next?: string;
+  }>;
 }) {
   const params = (await searchParams) ?? {};
   const saved = params.saved === "1";
   const demoReadOnly = params.demo_read_only === "1";
+  const nextPath = normalizeNextPath(params.next);
 
   const ctx = await requirePathAccess("/orga/account");
 
@@ -295,20 +306,19 @@ export default async function OrgaAccountPage({
       id,
       name,
       slug,
+      camera_code,
       kind,
       status,
       owner_user_id,
       created_at,
       notes,
       legal_name,
-      legal_form,
       contact_person,
       billing_email,
       billing_street,
       billing_postal_code,
       billing_city,
       billing_country,
-      vat_id,
       logo_url,
       customer_reference
     `
@@ -352,7 +362,7 @@ export default async function OrgaAccountPage({
 
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <StatCard title={text.statName} value={org.name} text={text.statNameText} />
-        <StatCard title={text.statSlug} value={org.slug} text={text.statSlugText} />
+        <StatCard title={text.statSlug} value={org.camera_code} text={text.statSlugText} />
         <StatCard
           title={text.statKind}
           value={formatKind(org.kind)}
@@ -370,6 +380,8 @@ export default async function OrgaAccountPage({
           <h2 className="text-lg font-medium text-white">{text.editTitle}</h2>
 
           <form action={saveOrganizationAccount} className="mt-6 space-y-6">
+            <input type="hidden" name="next" value={nextPath ?? ""} />
+
             <div className="grid gap-4 md:grid-cols-2">
               <div>
                 <label htmlFor="name" className="mb-2 block text-sm font-medium text-white">
@@ -402,25 +414,6 @@ export default async function OrgaAccountPage({
                   disabled={isDemo}
                   title={isDemo ? text.demoReadOnly : ""}
                   className="w-full rounded-[10px] border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none placeholder:text-white/35 disabled:bg-white/5 disabled:text-white/35"
-                />
-              </div>
-
-              <div>
-                <label
-                  htmlFor="legal_form"
-                  className="mb-2 block text-sm font-medium text-white"
-                >
-                  {text.legalFormLabel}
-                </label>
-                <input
-                  id="legal_form"
-                  name="legal_form"
-                  type="text"
-                  defaultValue={org.legal_form ?? ""}
-                  disabled={isDemo}
-                  title={isDemo ? text.demoReadOnly : ""}
-                  className="w-full rounded-[10px] border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none placeholder:text-white/35 disabled:bg-white/5 disabled:text-white/35"
-                  placeholder={text.legalFormPlaceholder}
                 />
               </div>
 
@@ -549,21 +542,6 @@ export default async function OrgaAccountPage({
                   className="w-full rounded-[10px] border border-white/10 bg-white/5 px-3 py-2 text-sm uppercase text-white outline-none placeholder:text-white/35 disabled:bg-white/5 disabled:text-white/35"
                 />
               </div>
-
-              <div>
-                <label htmlFor="vat_id" className="mb-2 block text-sm font-medium text-white">
-                  {text.vatIdLabel}
-                </label>
-                <input
-                  id="vat_id"
-                  name="vat_id"
-                  type="text"
-                  defaultValue={org.vat_id ?? ""}
-                  disabled={isDemo}
-                  title={isDemo ? text.demoReadOnly : ""}
-                  className="w-full rounded-[10px] border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none placeholder:text-white/35 disabled:bg-white/5 disabled:text-white/35"
-                />
-              </div>
             </div>
 
             <div>
@@ -601,7 +579,7 @@ export default async function OrgaAccountPage({
 
             <div className="grid gap-2 py-3">
               <dt className="text-sm font-medium text-white/45">{text.slugLabel}</dt>
-              <dd className="text-sm text-white">{org.slug}</dd>
+              <dd className="text-sm text-white">{org.camera_code}</dd>
             </div>
 
             <div className="grid gap-2 py-3">
