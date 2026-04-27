@@ -134,6 +134,7 @@ async function updateProvisioningStatus(params: {
   provisioningStatus: "pending" | "ready" | "failed" | "disabled" | "deprovisioned";
   ftpHost?: string | null;
   ftpPort?: number | null;
+  ftpPassword?: string | null;
   provisionedAt?: string | null;
   deprovisionedAt?: string | null;
   lastProvisioningError?: string | null;
@@ -148,6 +149,7 @@ async function updateProvisioningStatus(params: {
   if (params.method === "ftp") {
     update.ftp_host = params.ftpHost ?? null;
     update.ftp_port = params.ftpPort ?? null;
+    update.ftp_password = params.ftpPassword ?? null;
     update.provisioned_at = params.provisionedAt ?? null;
     update.deprovisioned_at = params.deprovisionedAt ?? null;
   }
@@ -390,6 +392,7 @@ export async function POST(req: NextRequest) {
           provisioningStatus: "ready",
           ftpHost: FTP_PUBLIC_HOST,
           ftpPort: FTP_PUBLIC_PORT,
+          ftpPassword,
           provisionedAt: new Date().toISOString(),
           lastProvisioningError: null,
         });

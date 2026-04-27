@@ -117,7 +117,7 @@ function t(language: AppLanguage) {
       understood: "Understood",
       provisioningTitle: "Provisioning result",
       provisioningText:
-        "The camera has been created successfully. Please find provisioning data here below.",
+        "The camera has been created successfully. The provisioning data is available later in Camera status.",
       coreProvisioning: "Core provisioning",
       coreProvisioningText: "Basic camera data for later reference.",
       copyBlock: "Copy block",
@@ -126,9 +126,9 @@ function t(language: AppLanguage) {
       ingestToken: "Ingest token",
       ftpSetup: "FTP setup",
       ftpSetupText:
-        "Enter these values into the camera now. The password is shown only once.",
+        "Enter these values into the camera. The FTP password is also available later in Camera status.",
       important:
-        "Important: store the FTP password now. It will not be shown again after this page.",
+        "Important: store these FTP settings in the camera configuration. You can view the password again later in Camera status.",
       ftpServer: "FTP server",
       ftpPort: "FTP port",
       ftpUsername: "FTP username",
@@ -195,7 +195,7 @@ function t(language: AppLanguage) {
     understood: "Verstanden",
     provisioningTitle: "Provisioning-Ergebnis",
     provisioningText:
-      "Die Kamera wurde erfolgreich angelegt. Die Provisioning-Daten findest Du hier weiter unten.",
+      "Die Kamera wurde erfolgreich angelegt. Die Provisioning-Daten sind später im Kamerastatus verfügbar.",
     coreProvisioning: "Core Provisioning",
     coreProvisioningText: "Basisdaten dieser Kamera für spätere Referenz.",
     copyBlock: "Block kopieren",
@@ -204,9 +204,9 @@ function t(language: AppLanguage) {
     ingestToken: "Ingest-Token",
     ftpSetup: "FTP-Setup",
     ftpSetupText:
-      "Bitte diese Werte jetzt direkt in der Kamera eintragen. Das Passwort wird nur einmal angezeigt.",
+      "Bitte diese Werte direkt in der Kamera eintragen. Das FTP-Passwort ist später auch im Kamerastatus verfügbar.",
     important:
-      "Wichtig: Bitte das FTP-Passwort jetzt sichern. Nach Verlassen der Seite wird es nicht erneut angezeigt.",
+      "Wichtig: Bitte diese FTP-Daten in der Kamera-Konfiguration eintragen. Das Passwort kann später im Kamerastatus erneut eingesehen werden.",
     ftpServer: "FTP-Server",
     ftpPort: "FTP-Port",
     ftpUsername: "FTP-Benutzername",

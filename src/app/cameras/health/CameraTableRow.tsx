@@ -22,6 +22,7 @@ type CameraHealthListRow = {
   config_is_active: boolean | null;
   config_smtp_alias: string | null;
   config_ftp_username: string | null;
+  config_ftp_password: string | null;
   config_ftp_inbox_path: string | null;
   config_manual_label: string | null;
   config_notes: string | null;
@@ -53,6 +54,7 @@ function t(language: AppLanguage) {
       ftpHost: "FTP host",
       ftpPort: "FTP port",
       ftpUsername: "FTP username",
+      ftpPassword: "FTP password",
       ftpInboxPath: "FTP inbox path",
       manualLabel: "Manual label",
       notes: "Notes",
@@ -76,6 +78,7 @@ function t(language: AppLanguage) {
     ftpHost: "FTP-Host",
     ftpPort: "FTP-Port",
     ftpUsername: "FTP-Username",
+    ftpPassword: "FTP-Passwort",
     ftpInboxPath: "FTP-Inbox-Pfad",
     manualLabel: "Manual-Label",
     notes: "Notizen",
@@ -366,6 +369,13 @@ export default function CameraTableRow({
                   <ConfigValue
                     label={text.ftpUsername}
                     value={row.config_ftp_username}
+                  />
+                ) : null}
+
+                {row.config_ftp_password ? (
+                  <ConfigValue
+                    label={text.ftpPassword}
+                    value={row.config_ftp_password}
                   />
                 ) : null}
 

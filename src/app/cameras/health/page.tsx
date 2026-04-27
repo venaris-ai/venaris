@@ -35,6 +35,7 @@ type CameraIngestConfigRow = {
   is_active: boolean | null;
   smtp_alias: string | null;
   ftp_username: string | null;
+  ftp_password: string | null;
   ftp_inbox_path: string | null;
   manual_label: string | null;
   notes: string | null;
@@ -84,6 +85,7 @@ type CameraHealthListRow = {
   config_is_active: boolean | null;
   config_smtp_alias: string | null;
   config_ftp_username: string | null;
+  config_ftp_password: string | null;
   config_ftp_inbox_path: string | null;
   config_manual_label: string | null;
   config_notes: string | null;
@@ -721,6 +723,7 @@ export default async function CamerasHealthPage(props: {
         is_active,
         smtp_alias,
         ftp_username,
+        ftp_password,
         ftp_inbox_path,
         manual_label,
         notes,
@@ -883,6 +886,7 @@ export default async function CamerasHealthPage(props: {
       config_is_active: config?.is_active ?? null,
       config_smtp_alias: config?.smtp_alias ?? null,
       config_ftp_username: config?.ftp_username ?? null,
+      config_ftp_password: config?.ftp_password ?? null,
       config_ftp_inbox_path: config?.ftp_inbox_path ?? null,
       config_manual_label: config?.manual_label ?? null,
       config_notes: config?.notes ?? null,
