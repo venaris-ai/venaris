@@ -1,4 +1,4 @@
-// src/app/cameras/health/page.tsx #12
+// src/app/cameras/health/page.tsx #13
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
@@ -57,6 +57,11 @@ type CameraBaseRow = {
   import_method: string | null;
   technical_name: string | null;
   is_active: boolean;
+  location_name: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  direction_deg: number | null;
+  notes: string | null;
   reviers: { name: string } | { name: string }[] | null;
   camera_ingest_configs: CameraIngestConfigRow[] | null;
 };
@@ -77,6 +82,11 @@ type CameraHealthListRow = {
   import_method: string | null;
   technical_name: string | null;
   is_active: boolean;
+  location_name: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  direction_deg: number | null;
+  notes: string | null;
   last_seen_at: string | null;
   stale_after_minutes: number;
   offline_after_minutes: number;
@@ -161,6 +171,7 @@ function t(language: AppLanguage) {
       statusCol: "Status",
       lastFeedCol: "Ingest",
       configCol: "Config",
+      locationCol: "Location",
       actionsCol: "Actions",
       healthRulesPrefix: "* Health rules in current scope:",
       staleFrom: "stale from",
@@ -230,6 +241,7 @@ function t(language: AppLanguage) {
     statusCol: "Status",
     lastFeedCol: "Ingest",
     configCol: "Config",
+    locationCol: "Ort",
     actionsCol: "Aktionen",
     healthRulesPrefix: "* Lebenszeichen-Regeln im aktuellen Scope:",
     staleFrom: "veraltet ab",
@@ -717,6 +729,11 @@ export default async function CamerasHealthPage(props: {
       import_method,
       technical_name,
       is_active,
+      location_name,
+      latitude,
+      longitude,
+      direction_deg,
+      notes,
       reviers(name),
       camera_ingest_configs(
         method,
@@ -878,6 +895,11 @@ export default async function CamerasHealthPage(props: {
       import_method: camera.import_method,
       technical_name: camera.technical_name ?? null,
       is_active: camera.is_active,
+      location_name: camera.location_name ?? null,
+      latitude: camera.latitude ?? null,
+      longitude: camera.longitude ?? null,
+      direction_deg: camera.direction_deg ?? null,
+      notes: camera.notes ?? null,
       last_seen_at: health?.last_seen_at ?? null,
       stale_after_minutes: health?.stale_after_minutes ?? 0,
       offline_after_minutes: health?.offline_after_minutes ?? 0,
@@ -988,6 +1010,7 @@ export default async function CamerasHealthPage(props: {
                 <th className="px-6 py-3 font-medium whitespace-nowrap">{text.statusCol}</th>
                 <th className="px-6 py-3 font-medium whitespace-nowrap">{text.lastFeedCol}</th>
                 <th className="px-6 py-3 font-medium whitespace-nowrap">{text.configCol}</th>
+                <th className="px-6 py-3 font-medium whitespace-nowrap">{text.locationCol}</th>
                 <th className="px-6 py-3 font-medium whitespace-nowrap text-right">
                   {text.actionsCol}
                 </th>

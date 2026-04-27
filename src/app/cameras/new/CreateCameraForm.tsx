@@ -1,8 +1,7 @@
-// src/app/cameras/new/CreateCameraForm.tsx #11
+// src/app/cameras/new/CreateCameraForm.tsx #12
 "use client";
 
 import { useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
 import type { AppLanguage } from "@/lib/i18n";
 import type {
   SubscriptionActionPolicy,
@@ -113,12 +112,11 @@ function t(language: AppLanguage) {
       createBlocked: "Camera creation blocked",
       creating: "Creating...",
       createCamera: "Create camera",
-      createSuccess: "Camera was created successfully.",
       demoMode: "Demo mode",
       understood: "Understood",
       provisioningTitle: "Provisioning result",
       provisioningText:
-        "You can find the provisioning details further down on this page and later in Camera status.",
+        "The camera has been created successfully. The provisioning data is available later in Camera status.",
       coreProvisioning: "Core provisioning",
       coreProvisioningText: "Basic camera data for later reference.",
       copyBlock: "Copy block",
@@ -127,13 +125,17 @@ function t(language: AppLanguage) {
       ingestToken: "Ingest token",
       ftpSetup: "FTP setup",
       ftpSetupText:
-        "Enter these values into the camera. The FTP password is also available later in Camera status.",
+        "Enter these values into the camera now. The password is shown only once.",
+      important:
+        "Important: store the FTP password now. It will not be shown again after this page.",
       ftpServer: "FTP server",
       ftpPort: "FTP port",
       ftpUsername: "FTP username",
       ftpPassword: "FTP password",
-      path: "Path",
-      passiveMode: "Passive mode",
+      path: "FTP inbox path",
+      ftpInboxPathValue: "Empty or /",
+      passiveMode: "FTP mode",
+      ftpModeValue: "Passive / PASV",
       enabled: "Enabled",
       disabled: "Disabled",
       smtpSetup: "SMTP setup",
@@ -189,12 +191,11 @@ function t(language: AppLanguage) {
     createBlocked: "Kameraanlage gesperrt",
     creating: "Wird angelegt...",
     createCamera: "Kamera anlegen",
-    createSuccess: "Kamera wurde erfolgreich angelegt.",
     demoMode: "Demo-Modus",
     understood: "Verstanden",
     provisioningTitle: "Provisioning-Ergebnis",
     provisioningText:
-      "Das Provisioning findest Du hier weiter unten und später im Kamerastatus.",
+      "Die Kamera wurde erfolgreich angelegt. Die Provisioning-Daten sind später im Kamerastatus verfügbar.",
     coreProvisioning: "Core Provisioning",
     coreProvisioningText: "Basisdaten dieser Kamera für spätere Referenz.",
     copyBlock: "Block kopieren",
@@ -203,13 +204,17 @@ function t(language: AppLanguage) {
     ingestToken: "Ingest-Token",
     ftpSetup: "FTP-Setup",
     ftpSetupText:
-      "Bitte diese Werte direkt in der Kamera eintragen. Das FTP-Passwort ist später auch im Kamerastatus verfügbar.",
+      "Bitte diese Werte jetzt direkt in der Kamera eintragen. Das Passwort wird nur einmal angezeigt.",
+    important:
+      "Wichtig: Bitte das FTP-Passwort jetzt sichern. Nach Verlassen der Seite wird es nicht erneut angezeigt.",
     ftpServer: "FTP-Server",
     ftpPort: "FTP-Port",
     ftpUsername: "FTP-Benutzername",
     ftpPassword: "FTP-Passwort",
-    path: "Pfad",
-    passiveMode: "Passivmodus",
+    path: "FTP-Inbox-Pfad",
+    ftpInboxPathValue: "Leer bzw. /",
+    passiveMode: "FTP-Modus",
+    ftpModeValue: "Passiv / PASV",
     enabled: "Aktiviert",
     disabled: "Deaktiviert",
     smtpSetup: "SMTP-Setup",
@@ -282,7 +287,8 @@ function buildFtpProvisioningCopy(
     `${text.ftpPort}: ${ftpProvisioning.port}`,
     `${text.ftpUsername}: ${ftpProvisioning.username}`,
     `${text.ftpPassword}: ${ftpProvisioning.password}`,
-    `${text.passiveMode}: ${ftpProvisioning.passiveMode ? text.enabled : text.disabled}`,
+    `${text.path}: ${text.ftpInboxPathValue}`,
+    `${text.passiveMode}: ${text.ftpModeValue}`,
   ].join("\n");
 }
 
@@ -321,7 +327,6 @@ export default function CreateCameraForm({
   isDemo = false,
   language,
 }: Props) {
-  const router = useRouter();
   const text = t(language);
   const organizationId = organization.id;
 
@@ -336,7 +341,7 @@ export default function CreateCameraForm({
 
   const [revierId, setRevierId] = useState(defaultRevierId);
   const [cameraName, setCameraName] = useState("");
-  const [method, setMethod] = useState<"smtp" | "ftp" | "manual">("ftp");
+  const [method, setMethod] = useState<"smtp" | "ftp" | "manual">("smtp");
   const [vendor, setVendor] = useState<(typeof VENDORS)[number]>("reolink");
   const [locationName, setLocationName] = useState("");
   const [latitude, setLatitude] = useState("");
@@ -405,7 +410,6 @@ export default function CreateCameraForm({
       }
 
       setResult(json as CreateResponse);
-      router.refresh();
 
       setCameraName("");
       setLocationName("");
@@ -472,17 +476,6 @@ export default function CreateCameraForm({
       {isDemo ? (
         <section className="rounded-[24px] border border-amber-300/20 bg-amber-300/10 p-4">
           <p className="text-sm text-amber-100">{text.demoReadOnly}</p>
-        </section>
-      ) : null}
-
-      {camera ? (
-        <section className="rounded-[24px] border border-emerald-300/20 bg-emerald-300/10 p-4">
-          <p className="text-sm font-medium text-emerald-100">
-            {text.createSuccess}
-          </p>
-          <p className="mt-1 text-sm text-emerald-100/75">
-            {text.provisioningText}
-          </p>
         </section>
       ) : null}
 
@@ -749,6 +742,9 @@ export default function CreateCameraForm({
                 </button>
               </div>
 
+              <div className="rounded-[14px] border border-amber-300/20 bg-amber-300/10 px-3 py-2 text-sm text-amber-100">
+                {text.important}
+              </div>
 
               <div className="grid gap-2 text-sm text-white/78">
                 <div>
@@ -760,12 +756,14 @@ export default function CreateCameraForm({
                 <div>
                   <span className="font-medium text-white">{text.ftpUsername}:</span> {ftpProvisioning.username}
                 </div>
-                <div>
-                  <span className="font-medium text-white">{text.ftpPassword}:</span> {ftpProvisioning.password}
+                <div className="rounded-[14px] border border-white/10 bg-white/5 px-3 py-3 text-white">
+                  <span className="font-medium">{text.ftpPassword}:</span> {ftpProvisioning.password}
                 </div>
                 <div>
-                  <span className="font-medium text-white">{text.passiveMode}:</span>{" "}
-                  {ftpProvisioning.passiveMode ? text.enabled : text.disabled}
+                  <span className="font-medium text-white">{text.path}:</span> {text.ftpInboxPathValue}
+                </div>
+                <div>
+                  <span className="font-medium text-white">{text.passiveMode}:</span> {text.ftpModeValue}
                 </div>
               </div>
             </div>

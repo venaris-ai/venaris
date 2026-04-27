@@ -1,4 +1,4 @@
-// src/app/cameras/health/CameraTableRow.tsx #1
+// src/app/cameras/health/CameraTableRow.tsx #3
 "use client";
 
 import { useState } from "react";
@@ -14,6 +14,11 @@ type CameraHealthListRow = {
   import_method: string | null;
   technical_name: string | null;
   is_active: boolean;
+  location_name: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  direction_deg: number | null;
+  notes: string | null;
   last_seen_at: string | null;
   stale_after_minutes: number;
   offline_after_minutes: number;
@@ -46,6 +51,11 @@ function t(language: AppLanguage) {
       unknown: "Unknown",
       manual: "Manual",
       configTitle: "Camera config",
+      locationTitle: "Camera location",
+      locationName: "Location name",
+      latitude: "Latitude",
+      longitude: "Longitude",
+      direction: "Direction",
       technicalName: "Technical name",
       method: "Method",
       provisioningStatus: "Provisioning",
@@ -56,6 +66,9 @@ function t(language: AppLanguage) {
       ftpUsername: "FTP username",
       ftpPassword: "FTP password",
       ftpInboxPath: "FTP inbox path",
+      ftpInboxPathValue: "Empty or /",
+      ftpMode: "FTP mode",
+      ftpModeValue: "Passive / PASV",
       manualLabel: "Manual label",
       notes: "Notes",
       provisionedAt: "Provisioned at",
@@ -70,6 +83,11 @@ function t(language: AppLanguage) {
     unknown: "Unbekannt",
     manual: "Manuell",
     configTitle: "Kamera-Config",
+    locationTitle: "Kamera-Ort",
+    locationName: "Standortname",
+    latitude: "Breitengrad",
+    longitude: "Längengrad",
+    direction: "Richtung",
     technicalName: "Technical Name",
     method: "Methode",
     provisioningStatus: "Provisionierung",
@@ -80,6 +98,9 @@ function t(language: AppLanguage) {
     ftpUsername: "FTP-Username",
     ftpPassword: "FTP-Passwort",
     ftpInboxPath: "FTP-Inbox-Pfad",
+    ftpInboxPathValue: "Leer bzw. /",
+    ftpMode: "FTP-Modus",
+    ftpModeValue: "Passiv / PASV",
     manualLabel: "Manual-Label",
     notes: "Notizen",
     provisionedAt: "Provisioniert am",
@@ -146,6 +167,16 @@ function formatDateTime(value: string | null, language: AppLanguage) {
     dateStyle: "medium",
     timeStyle: "short",
   }).format(d);
+}
+
+function formatCoordinate(value: number | null) {
+  if (value === null) return "—";
+  return value.toString();
+}
+
+function formatDirection(value: number | null) {
+  if (value === null) return "—";
+  return value + "°";
 }
 
 function HealthBadge({
@@ -242,9 +273,12 @@ export default function CameraTableRow({
   language: AppLanguage;
 }) {
   const text = t(language);
-  const [configOpen, setConfigOpen] = useState(false);
+  const [openPanel, setOpenPanel] = useState<"config" | "location" | null>(null);
 
   const hasConfig = !isDemo;
+  const hasLocation = !isDemo;
+  const configOpen = openPanel === "config";
+  const locationOpen = openPanel === "location";
 
   const effectiveMethod = row.config_method ?? row.import_method ?? null;
 
@@ -285,7 +319,9 @@ export default function CameraTableRow({
           {hasConfig ? (
             <button
               type="button"
-              onClick={() => setConfigOpen((prev) => !prev)}
+              onClick={() =>
+                setOpenPanel((prev) => (prev === "config" ? null : "config"))
+              }
               className="inline-flex h-8 w-8 items-center justify-center rounded-[10px] border border-white/10 bg-white/5 text-white/72 hover:border-white/15 hover:bg-white/8 hover:text-white"
               aria-label={configOpen ? "Hide config" : "Show config"}
               title={configOpen ? "Hide config" : "Show config"}
@@ -299,6 +335,28 @@ export default function CameraTableRow({
           )}
         </td>
 
+
+        <td className="px-6 py-4 whitespace-nowrap">
+          {hasLocation ? (
+            <button
+              type="button"
+              onClick={() =>
+                setOpenPanel((prev) =>
+                  prev === "location" ? null : "location"
+                )
+              }
+              className="inline-flex h-8 w-8 items-center justify-center rounded-[10px] border border-white/10 bg-white/5 text-white/72 hover:border-white/15 hover:bg-white/8 hover:text-white"
+              aria-label={locationOpen ? "Hide location" : "Show location"}
+              title={locationOpen ? "Hide location" : "Show location"}
+            >
+              {locationOpen ? <EyeOffIcon /> : <EyeIcon />}
+            </button>
+          ) : (
+            <span className="inline-flex h-8 w-8 items-center justify-center rounded-[10px] border border-white/8 text-white/20">
+              <EyeIcon />
+            </span>
+          )}
+        </td>
         <CameraRowActions
           cameraId={row.id}
           canManage={canManageCameras}
@@ -311,7 +369,7 @@ export default function CameraTableRow({
 
       {hasConfig && configOpen ? (
         <tr className="border-t border-white/6 bg-black/10">
-          <td colSpan={8} className="px-6 py-5">
+          <td colSpan={9} className="px-6 py-5">
             <div className="rounded-[18px] border border-white/8 bg-white/[0.03] p-5">
               <div className="mb-4 flex items-center justify-between gap-3">
                 <h3 className="text-sm font-semibold text-white">
@@ -320,7 +378,7 @@ export default function CameraTableRow({
 
                 <button
                   type="button"
-                  onClick={() => setConfigOpen(false)}
+                  onClick={() => setOpenPanel(null)}
                   className="inline-flex h-8 w-8 items-center justify-center rounded-[10px] border border-white/10 bg-white/5 text-white/72 hover:border-white/15 hover:bg-white/8 hover:text-white"
                   aria-label="Hide config"
                   title="Hide config"
@@ -379,10 +437,17 @@ export default function CameraTableRow({
                   />
                 ) : null}
 
-                {row.config_ftp_inbox_path ? (
+                {effectiveMethod === "ftp" ? (
                   <ConfigValue
                     label={text.ftpInboxPath}
-                    value={row.config_ftp_inbox_path}
+                    value={text.ftpInboxPathValue}
+                  />
+                ) : null}
+
+                {effectiveMethod === "ftp" ? (
+                  <ConfigValue
+                    label={text.ftpMode}
+                    value={text.ftpModeValue}
                   />
                 ) : null}
 
@@ -393,12 +458,10 @@ export default function CameraTableRow({
                   />
                 ) : null}
 
-                {row.config_provisioned_at ? (
-                  <ConfigValue
-                    label={text.provisionedAt}
-                    value={formatDateTime(row.config_provisioned_at, language)}
-                  />
-                ) : null}
+                <ConfigValue
+                  label={text.provisionedAt}
+                  value={formatDateTime(row.config_provisioned_at, language)}
+                />
 
                 {row.config_notes ? (
                   <ConfigValue label={text.notes} value={row.config_notes} />
@@ -415,6 +478,50 @@ export default function CameraTableRow({
                   </p>
                 </div>
               ) : null}
+            </div>
+          </td>
+        </tr>
+      ) : null}
+
+      {hasLocation && locationOpen ? (
+        <tr className="border-t border-white/6 bg-black/10">
+          <td colSpan={9} className="px-6 py-5">
+            <div className="rounded-[18px] border border-white/8 bg-white/[0.03] p-5">
+              <div className="mb-4 flex items-center justify-between gap-3">
+                <h3 className="text-sm font-semibold text-white">
+                  {text.locationTitle}
+                </h3>
+
+                <button
+                  type="button"
+                  onClick={() => setOpenPanel(null)}
+                  className="inline-flex h-8 w-8 items-center justify-center rounded-[10px] border border-white/10 bg-white/5 text-white/72 hover:border-white/15 hover:bg-white/8 hover:text-white"
+                  aria-label="Hide location"
+                  title="Hide location"
+                >
+                  <EyeOffIcon />
+                </button>
+              </div>
+
+              <dl className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                <ConfigValue
+                  label={text.locationName}
+                  value={row.location_name}
+                />
+                <ConfigValue
+                  label={text.latitude}
+                  value={formatCoordinate(row.latitude)}
+                />
+                <ConfigValue
+                  label={text.longitude}
+                  value={formatCoordinate(row.longitude)}
+                />
+                <ConfigValue
+                  label={text.direction}
+                  value={formatDirection(row.direction_deg)}
+                />
+                <ConfigValue label={text.notes} value={row.notes} />
+              </dl>
             </div>
           </td>
         </tr>
