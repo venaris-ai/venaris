@@ -112,6 +112,7 @@ function t(language: AppLanguage) {
       createBlocked: "Camera creation blocked",
       creating: "Creating...",
       createCamera: "Create camera",
+      createSuccess: "Camera was created successfully.",
       demoMode: "Demo mode",
       understood: "Understood",
       provisioningTitle: "Provisioning result",
@@ -189,6 +190,7 @@ function t(language: AppLanguage) {
     createBlocked: "Kameraanlage gesperrt",
     creating: "Wird angelegt...",
     createCamera: "Kamera anlegen",
+    createSuccess: "Kamera wurde erfolgreich angelegt.",
     demoMode: "Demo-Modus",
     understood: "Verstanden",
     provisioningTitle: "Provisioning-Ergebnis",
@@ -472,6 +474,17 @@ export default function CreateCameraForm({
       {isDemo ? (
         <section className="rounded-[24px] border border-amber-300/20 bg-amber-300/10 p-4">
           <p className="text-sm text-amber-100">{text.demoReadOnly}</p>
+        </section>
+      ) : null}
+
+      {camera ? (
+        <section className="rounded-[24px] border border-emerald-300/20 bg-emerald-300/10 p-4">
+          <p className="text-sm font-medium text-emerald-100">
+            {text.createSuccess}
+          </p>
+          <p className="mt-1 text-sm text-emerald-100/75">
+            {text.provisioningText}
+          </p>
         </section>
       ) : null}
 

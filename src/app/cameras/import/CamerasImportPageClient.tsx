@@ -12,6 +12,8 @@ type CameraRow = {
   manualLabel: string | null;
 };
 
+type MessageTone = "success" | "error" | "info";
+
 function t(language: AppLanguage) {
   if (language === "en") {
     return {
@@ -38,7 +40,10 @@ function t(language: AppLanguage) {
       demoMode: "Demo mode",
       selectCamera: "Please select a manual camera.",
       selectFiles: "Please select files or a ZIP archive.",
-      completePrefix: "✅ Import completed:",
+      noticeTitle: "Notice",
+      errorTitle: "Import could not be completed",
+      successTitle: "Import completed",
+      successText: "The selected files have been processed successfully.",
     };
   }
 
@@ -66,7 +71,10 @@ function t(language: AppLanguage) {
     demoMode: "Demo-Modus",
     selectCamera: "Bitte eine manuelle Kamera auswählen.",
     selectFiles: "Bitte Dateien oder ein ZIP auswählen.",
-    completePrefix: "✅ Import abgeschlossen:",
+    noticeTitle: "Hinweis",
+    errorTitle: "Import konnte nicht abgeschlossen werden",
+    successTitle: "Import abgeschlossen",
+    successText: "Die ausgewählten Dateien wurden erfolgreich verarbeitet.",
   };
 }
 
@@ -90,6 +98,30 @@ async function parseApiResponse(res: Response) {
   }
 }
 
+function alertTone(tone: MessageTone) {
+  if (tone === "success") {
+    return {
+      wrap: "border-emerald-300/20 bg-emerald-300/10",
+      title: "text-emerald-100",
+      text: "text-emerald-100/75",
+    };
+  }
+
+  if (tone === "error") {
+    return {
+      wrap: "border-rose-300/20 bg-rose-300/10",
+      title: "text-rose-100",
+      text: "text-rose-100/75",
+    };
+  }
+
+  return {
+    wrap: "border-amber-300/20 bg-amber-300/10",
+    title: "text-amber-100",
+    text: "text-amber-100/75",
+  };
+}
+
 export default function CamerasImportPageClient({
   language,
 }: {
@@ -103,6 +135,7 @@ export default function CamerasImportPageClient({
   const [cameraId, setCameraId] = useState("");
   const [files, setFiles] = useState<File[]>([]);
   const [msg, setMsg] = useState("");
+  const [msgTone, setMsgTone] = useState<MessageTone>("info");
   const [busy, setBusy] = useState(false);
   const [dragOver, setDragOver] = useState(false);
 
@@ -124,6 +157,7 @@ export default function CamerasImportPageClient({
     const json = await parseApiResponse(res);
 
     if (!res.ok) {
+      setMsgTone("error");
       setMsg(
         normalizeApiErrorMessage(
           json.error || json.rawText || `HTTP ${res.status}`,
@@ -155,6 +189,7 @@ export default function CamerasImportPageClient({
 
   function onPickFiles(e: React.ChangeEvent<HTMLInputElement>) {
     if (isDemo) {
+      setMsgTone("info");
       setMsg(text.demoReadOnly);
       e.target.value = "";
       return;
@@ -172,16 +207,19 @@ export default function CamerasImportPageClient({
     setMsg("");
 
     if (isDemo) {
+      setMsgTone("info");
       setMsg(text.demoReadOnly);
       return;
     }
 
     if (!cameraId) {
+      setMsgTone("error");
       setMsg(text.selectCamera);
       return;
     }
 
     if (files.length === 0) {
+      setMsgTone("error");
       setMsg(text.selectFiles);
       return;
     }
@@ -214,13 +252,11 @@ export default function CamerasImportPageClient({
       }
 
       setFiles([]);
-      setMsg(
-        `${text.completePrefix} accepted=${json.accepted ?? "?"}, skippedDup=${
-          json.skippedDuplicates ?? "?"
-        }, batchId=${json.batchId?.slice(0, 8) ?? "?"}…`
-      );
+      setMsgTone("success");
+      setMsg(text.successText);
     } catch (error: any) {
-      setMsg(`❌ ${normalizeApiErrorMessage(error.message, language)}`);
+      setMsgTone("error");
+      setMsg(normalizeApiErrorMessage(error.message, language));
     } finally {
       setBusy(false);
       setDragOver(false);
@@ -232,6 +268,7 @@ export default function CamerasImportPageClient({
     setDragOver(false);
 
     if (isDemo) {
+      setMsgTone("info");
       setMsg(text.demoReadOnly);
       return;
     }
@@ -243,6 +280,13 @@ export default function CamerasImportPageClient({
   }
 
   const canImport = !!cameraId && files.length > 0 && !busy && !isDemo;
+  const messageTone = alertTone(msgTone);
+  const messageTitle =
+    msgTone === "success"
+      ? text.successTitle
+      : msgTone === "error"
+        ? text.errorTitle
+        : text.noticeTitle;
 
   return (
     <main className="space-y-8">
@@ -261,6 +305,15 @@ export default function CamerasImportPageClient({
       {isDemo ? (
         <section className="rounded-[24px] border border-amber-300/20 bg-amber-300/10 p-4">
           <p className="text-sm text-amber-100">{text.demoReadOnly}</p>
+        </section>
+      ) : null}
+
+      {msg ? (
+        <section className={`rounded-[24px] border p-4 ${messageTone.wrap}`}>
+          <p className={`text-sm font-medium ${messageTone.title}`}>
+            {messageTitle}
+          </p>
+          <p className={`mt-1 text-sm ${messageTone.text}`}>{msg}</p>
         </section>
       ) : null}
 
@@ -326,6 +379,7 @@ export default function CamerasImportPageClient({
               className="rounded-[10px] border border-white/10 bg-white/5 px-4 py-2 text-sm text-white/78 hover:border-amber-300/20 hover:bg-white/8 hover:text-white disabled:opacity-60"
               onClick={() => {
                 if (isDemo) {
+                  setMsgTone("info");
                   setMsg(text.demoReadOnly);
                   return;
                 }
@@ -370,6 +424,7 @@ export default function CamerasImportPageClient({
               className="rounded-[10px] border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/78 hover:border-white/15 hover:bg-white/8 hover:text-white disabled:opacity-60"
               onClick={() => {
                 if (isDemo) {
+                  setMsgTone("info");
                   setMsg(text.demoReadOnly);
                   return;
                 }
@@ -393,12 +448,6 @@ export default function CamerasImportPageClient({
             </button>
           </div>
         </div>
-
-        {msg ? (
-          <div className="rounded-[14px] border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/78">
-            {msg}
-          </div>
-        ) : null}
       </section>
     </main>
   );
