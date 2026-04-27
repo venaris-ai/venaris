@@ -85,6 +85,18 @@ type RevierRow = {
   name: string;
 };
 
+
+type BatchCameraRelation =
+  | {
+      id: string;
+      name: string | null;
+    }
+  | {
+      id: string;
+      name: string | null;
+    }[]
+  | null;
+
 type BatchDb = {
   id: string;
   camera_id: string;
@@ -93,13 +105,12 @@ type BatchDb = {
   file_count: number | null;
   status: string | null;
   error_summary: string | null;
-  cameras:
-    | {
-        id: string;
-        name: string | null;
-      }[]
-    | null;
+  cameras: BatchCameraRelation;
 };
+
+
+
+
 
 type Batch = {
   id: string;
@@ -150,11 +161,18 @@ type IngestEventRow = {
   relevanceScore: number | null;
 };
 
+function extractCameraName(value: BatchCameraRelation): string | null {
+  if (!value) return null;
+  if (Array.isArray(value)) return value[0]?.name ?? null;
+  return value.name ?? null;
+}
+
+
 function normalizeBatch(row: BatchDb): Batch {
   return {
     id: row.id,
     cameraId: row.camera_id,
-    cameraName: row.cameras?.[0]?.name ?? null,
+    cameraName: extractCameraName(row.cameras),
     receivedAt: row.received_at,
     source: row.source,
     fileCount: row.file_count,
