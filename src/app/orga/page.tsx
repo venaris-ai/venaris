@@ -13,6 +13,12 @@ import {
   resolveLanguage,
   type AppLanguage,
 } from "@/lib/i18n";
+import {
+  DEFAULT_APP_TIME_ZONE,
+  formatAppDate,
+} from "@/lib/dateTime";
+
+
 
 type SubscriptionRow = {
   plan_key: "starter" | "pro" | "enterprise";
@@ -31,11 +37,7 @@ type OrganizationMetaRow = {
 };
 
 function formatDate(value: string | null, language: AppLanguage) {
-  if (!value) return "—";
-
-  return new Intl.DateTimeFormat(language === "en" ? "en-GB" : "de-DE", {
-    dateStyle: "medium",
-  }).format(new Date(value));
+  return formatAppDate(value, language, DEFAULT_APP_TIME_ZONE);
 }
 
 function formatMoney(

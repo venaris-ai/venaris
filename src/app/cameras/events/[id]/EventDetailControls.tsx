@@ -1,7 +1,7 @@
-// src/app/cameras/events/[id]/EventDetailControls.tsx #6
+// src/app/cameras/events/[id]/EventDetailControls.tsx #7
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { type AppLanguage } from "@/lib/i18n";
 import type { SpeciesOption } from "@/lib/speciesMeta";
 
@@ -59,7 +59,6 @@ function t(language: AppLanguage) {
       yes: "Yes",
       no: "No",
       auto: "Auto",
-      active: "Active",
       couldNotSave: "Could not save changes:",
       demoTitle: "Demo mode",
       demoText:
@@ -75,7 +74,6 @@ function t(language: AppLanguage) {
     yes: "Ja",
     no: "Nein",
     auto: "Auto",
-    active: "Aktiv",
     couldNotSave: "Konnte Änderungen nicht speichern:",
     demoTitle: "Demo-Modus",
     demoText:
@@ -119,21 +117,6 @@ export default function EventDetailControls({
   const dirty =
     relevantValue !== relevantUserToSelect(initialRelevantUser) ||
     speciesValue !== speciesUserToSelect(initialSpeciesUser);
-
-  const currentRelevantLabel = useMemo(() => {
-    if (relevantValue === "yes") return text.yes;
-    if (relevantValue === "no") return text.no;
-    if (initialRelevantAuto === true) return text.yes;
-    if (initialRelevantAuto === false) return text.no;
-    return "—";
-  }, [relevantValue, initialRelevantAuto, text.no, text.yes]);
-
-  const currentSpeciesLabel = useMemo(() => {
-    if (speciesValue !== "auto") {
-      return getSpeciesLabel(speciesValue, speciesLabelByCode);
-    }
-    return getSpeciesLabel(initialSpeciesAuto, speciesLabelByCode);
-  }, [speciesValue, initialSpeciesAuto, speciesLabelByCode]);
 
   async function saveChanges() {
     if (!assetId || !dirty || busy || isDemo) return;
@@ -269,14 +252,6 @@ export default function EventDetailControls({
           </select>
         </div>
 
-        {(relevantValue !== "auto" || speciesValue !== "auto") && (
-          <div className="text-xs text-white/45">
-            {text.active}:{" "}
-            <span className="text-white/70">
-              {currentRelevantLabel} · {currentSpeciesLabel}
-            </span>
-          </div>
-        )}
       </div>
 
       {isReadOnlyModalOpen ? (

@@ -1,4 +1,4 @@
-// src/app/cameras/events/[id]/page.tsx #13
+// src/app/cameras/events/[id]/page.tsx #14
 export const runtime = "nodejs";
 
 import Link from "next/link";
@@ -14,6 +14,7 @@ import {
   resolveLanguage,
   type AppLanguage,
 } from "@/lib/i18n";
+import { formatAppDateTime } from "@/lib/dateTime";
 import {
   resolveRevierScope,
   type RevierOption,
@@ -32,6 +33,7 @@ type SearchParams = {
 type RevierRow = {
   id: string;
   name: string;
+  timezone: string | null;
 };
 
 type AssetViewItem = {
@@ -50,11 +52,6 @@ type DetectionTopRow = {
   species_user: string | null;
   score: number | null;
 };
-
-function fmt(ts: string | null, language: AppLanguage) {
-  if (!ts) return "—";
-  return new Date(ts).toLocaleString(language === "en" ? "en-GB" : "de-DE");
-}
 
 function scoreBadge(score: number | null, language: AppLanguage) {
   if (typeof score !== "number") return "—";
@@ -132,17 +129,16 @@ export default async function CameraEventDetailPage(props: {
     ? await Promise.resolve(props.searchParams)
     : undefined;
 
+  const eventId: string | undefined = params?.id;
+  const rawRevier = searchParams?.revier;
+  const backHref = buildBackHref(rawRevier);
+  const cookieStore = await cookies();
 
-const eventId: string | undefined = params?.id;
-const rawRevier = searchParams?.revier;
-const backHref = buildBackHref(rawRevier);
-const cookieStore = await cookies();
-
-if (!eventId) {
-  const language = resolveLanguage({
-    cookieLanguage: cookieStore.get(LOCALE_COOKIE)?.value,
-  });
-  const text = t(language);
+  if (!eventId) {
+    const language = resolveLanguage({
+      cookieLanguage: cookieStore.get(LOCALE_COOKIE)?.value,
+    });
+    const text = t(language);
 
     return (
       <main className="space-y-8">
@@ -152,7 +148,9 @@ if (!eventId) {
               <div className="text-xs font-medium uppercase tracking-[0.22em] text-amber-200/80">
                 {text.eyebrow}
               </div>
-              <h1 className="mt-3 text-3xl font-semibold text-white">{text.title}</h1>
+              <h1 className="mt-3 text-3xl font-semibold text-white">
+                {text.title}
+              </h1>
               <p className="mt-2 text-sm text-white/68">{text.intro}</p>
             </div>
             <Link
@@ -221,7 +219,9 @@ if (!eventId) {
               <div className="text-xs font-medium uppercase tracking-[0.22em] text-amber-200/80">
                 {text.eyebrow}
               </div>
-              <h1 className="mt-3 text-3xl font-semibold text-white">{text.title}</h1>
+              <h1 className="mt-3 text-3xl font-semibold text-white">
+                {text.title}
+              </h1>
               <p className="mt-2 text-sm text-white/68">{text.intro}</p>
             </div>
             <Link
@@ -255,7 +255,9 @@ if (!eventId) {
               <div className="text-xs font-medium uppercase tracking-[0.22em] text-amber-200/80">
                 {text.eyebrow}
               </div>
-              <h1 className="mt-3 text-3xl font-semibold text-white">{text.title}</h1>
+              <h1 className="mt-3 text-3xl font-semibold text-white">
+                {text.title}
+              </h1>
               <p className="mt-2 text-sm text-white/68">{text.intro}</p>
             </div>
             <Link
@@ -276,7 +278,7 @@ if (!eventId) {
 
   const { data: reviersData, error: reviersError } = await supabase
     .from("reviers")
-    .select("id,name")
+    .select("id,name,timezone")
     .eq("organization_id", activeOrganization.id)
     .eq("status", "active")
     .order("name", { ascending: true });
@@ -290,7 +292,9 @@ if (!eventId) {
               <div className="text-xs font-medium uppercase tracking-[0.22em] text-amber-200/80">
                 {text.eyebrow}
               </div>
-              <h1 className="mt-3 text-3xl font-semibold text-white">{text.title}</h1>
+              <h1 className="mt-3 text-3xl font-semibold text-white">
+                {text.title}
+              </h1>
               <p className="mt-2 text-sm text-white/68">{text.intro}</p>
             </div>
             <Link
@@ -332,7 +336,9 @@ if (!eventId) {
               <div className="text-xs font-medium uppercase tracking-[0.22em] text-amber-200/80">
                 {text.eyebrow}
               </div>
-              <h1 className="mt-3 text-3xl font-semibold text-white">{text.title}</h1>
+              <h1 className="mt-3 text-3xl font-semibold text-white">
+                {text.title}
+              </h1>
               <p className="mt-2 text-sm text-white/68">{text.intro}</p>
             </div>
             <Link
@@ -350,6 +356,9 @@ if (!eventId) {
       </main>
     );
   }
+
+  const eventTimeZone =
+    reviers.find((revier) => revier.id === camera.revier_id)?.timezone ?? null;
 
   const { data: eventAssets, error: assetsErr } = await supabase
     .from("event_assets")
@@ -407,7 +416,11 @@ if (!eventId) {
   const initialAssets: AssetViewItem[] = assets.map((asset) => ({
     id: asset.id,
     previewUrl: signedUrlsByAssetId[asset.id],
-    timestampLabel: fmt(asset.captured_at ?? asset.created_at, language),
+    timestampLabel: formatAppDateTime(
+      asset.captured_at ?? asset.created_at,
+      language,
+      eventTimeZone
+    ),
     storagePath: asset.storage_path ?? undefined,
     relevant: asset.relevant,
     relevantUser: asset.relevant_user ?? null,
@@ -450,9 +463,12 @@ if (!eventId) {
             <div className="text-xs font-medium uppercase tracking-[0.22em] text-amber-200/80">
               {text.eyebrow}
             </div>
-            <h1 className="mt-3 text-3xl font-semibold text-white">{topSpeciesLabel}</h1>
+            <h1 className="mt-3 text-3xl font-semibold text-white">
+              {topSpeciesLabel}
+            </h1>
             <p className="mt-2 text-sm text-white/68">
-              {fmt(event.start_at, language)} – {fmt(event.end_at, language)}
+              {formatAppDateTime(event.start_at, language, eventTimeZone)} –{" "}
+              {formatAppDateTime(event.end_at, language, eventTimeZone)}
             </p>
           </div>
 
@@ -501,13 +517,16 @@ if (!eventId) {
 
           <div className="rounded-[20px] border border-white/10 bg-white/5 p-4">
             <div className="text-xs text-white/45">{text.camera}</div>
-            <div className="mt-1 text-sm font-medium text-white">{cameraLabel}</div>
+            <div className="mt-1 text-sm font-medium text-white">
+              {cameraLabel}
+            </div>
           </div>
 
           <div className="rounded-[20px] border border-white/10 bg-white/5 p-4">
             <div className="text-xs text-white/45">{text.timestamp}</div>
             <div className="mt-1 text-sm font-medium text-white">
-              {heroAsset?.timestampLabel ?? fmt(event.start_at, language)}
+              {heroAsset?.timestampLabel ??
+                formatAppDateTime(event.start_at, language, eventTimeZone)}
             </div>
           </div>
         </aside>
@@ -519,7 +538,9 @@ if (!eventId) {
             <h2 className="text-xl font-medium text-white">
               {text.additionalShotsTitle}
             </h2>
-            <p className="mt-1 text-sm text-white/62">{text.additionalShotsText}</p>
+            <p className="mt-1 text-sm text-white/62">
+              {text.additionalShotsText}
+            </p>
           </div>
         </div>
 

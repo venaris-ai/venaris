@@ -1,4 +1,4 @@
-// src/app/wildlife/page.tsx #5
+// src/app/wildlife/page.tsx #6
 export const runtime = "nodejs";
 
 import Link from "next/link";
@@ -19,6 +19,10 @@ import {
   getSpeciesLabel,
   loadSpeciesMeta,
 } from "@/lib/speciesMeta";
+import {
+  DEFAULT_APP_TIME_ZONE,
+  getAppHour,
+} from "@/lib/dateTime";
 
 type SearchParams = {
   revier?: string;
@@ -49,6 +53,7 @@ type CameraRow = {
 type RevierRow = {
   id: string;
   name: string;
+  timezone: string | null;
 };
 
 function locale(language: AppLanguage) {
@@ -315,7 +320,7 @@ export default async function WildlifePage(props: {
 
   const { data: reviersData, error: reviersError } = await supabase
     .from("reviers")
-    .select("id,name")
+    .select("id,name,timezone")
     .eq("organization_id", activeOrganization.id)
     .eq("status", "active")
     .order("name", { ascending: true });
@@ -350,6 +355,13 @@ export default async function WildlifePage(props: {
     currentRevierValue === "all"
       ? text.allActiveGrounds
       : reviers.find((r) => r.id === currentRevierValue)?.name ?? text.oneGround;
+
+  const selectedRevier =
+    revierScope.type === "single"
+      ? reviers.find((r) => r.id === revierScope.revierId) ?? null
+      : null;
+
+  const wildlifeTimeZone = selectedRevier?.timezone ?? DEFAULT_APP_TIME_ZONE;
 
   const allowedRevierIds = allowedReviers.map((r) => r.id);
 
@@ -570,8 +582,9 @@ export default async function WildlifePage(props: {
     .map((r) => {
       const evt = eventById.get(r.event_id);
       if (!evt || !evt.start_at) return null;
-      const dt = new Date(evt.start_at);
-      const hour = dt.getHours();
+      const hour = getAppHour(evt.start_at, wildlifeTimeZone);
+      if (hour === null) return null;
+
       return {
         eventId: r.event_id,
         cameraId: evt.camera_id,
@@ -628,7 +641,9 @@ export default async function WildlifePage(props: {
 
   for (const evt of wildlifeEvents) {
     if (!evt.start_at) continue;
-    const h = new Date(evt.start_at).getHours();
+    const h = getAppHour(evt.start_at, wildlifeTimeZone);
+    if (h === null) continue;
+
     overallHourly[h].count += 1;
   }
 

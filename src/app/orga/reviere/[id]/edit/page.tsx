@@ -1,4 +1,4 @@
-// src/app/orga/reviere/[id]/edit/page.tsx #9
+// src/app/orga/reviere/[id]/edit/page.tsx #10
 import Link from "next/link";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
@@ -7,11 +7,14 @@ import { redirectIfDemoWrite } from "@/lib/auth";
 import { requirePathAccess } from "@/lib/authz";
 import { supabaseServer } from "@/lib/supabaseServer";
 import SubmitButton from "@/components/SubmitButton";
+import TimeZoneSelect from "@/components/TimeZoneSelect";
 import {
   LOCALE_COOKIE,
   resolveLanguage,
   type AppLanguage,
 } from "@/lib/i18n";
+
+const DEFAULT_TIME_ZONE = "Europe/Berlin";
 
 type RevierRow = {
   id: string;
@@ -22,14 +25,15 @@ type RevierRow = {
   notes: string | null;
   status: string;
   organization_id: string;
+  timezone: string;
 };
 
 async function resolveUiLanguageForProtectedPath(pathname: string) {
   const ctx = await requirePathAccess(pathname);
 
-if (!ctx.user) {
-  throw new Error("Authenticated user required");
-}
+  if (!ctx.user) {
+    throw new Error("Authenticated user required");
+  }
 
   const supabase = supabaseServer();
   const cookieStore = await cookies();
@@ -54,6 +58,7 @@ function t(language: AppLanguage) {
         nameRequired: "Ground name is required.",
         areaRequired: "Area in ha is required.",
         areaInvalid: "Area in ha must be a valid positive number.",
+        timezoneInvalid: "Invalid time zone.",
         updateFailedPrefix: "Failed to update ground:",
         eyebrow: "Edit ground",
         title: "Edit ground",
@@ -63,6 +68,9 @@ function t(language: AppLanguage) {
         areaLabel: "Area in ha *",
         regionLabel: "Region",
         countryLabel: "Country",
+        timezoneLabel: "Time zone",
+        timezoneHelp:
+          "Used for wildlife, image and event times in this ground.",
         statusLabel: "Status",
         notesLabel: "Notes",
         active: "Active",
@@ -77,6 +85,7 @@ function t(language: AppLanguage) {
         nameRequired: "Reviername ist erforderlich.",
         areaRequired: "Fläche in ha ist erforderlich.",
         areaInvalid: "Fläche in ha muss eine gültige positive Zahl sein.",
+        timezoneInvalid: "Ungültige Zeitzone.",
         updateFailedPrefix: "Failed to update revier:",
         eyebrow: "Revier bearbeiten",
         title: "Revier bearbeiten",
@@ -87,6 +96,9 @@ function t(language: AppLanguage) {
         areaLabel: "Fläche in ha *",
         regionLabel: "Region",
         countryLabel: "Land",
+        timezoneLabel: "Zeitzone",
+        timezoneHelp:
+          "Wird für Wildlife-, Bild- und Eventzeiten in diesem Revier verwendet.",
         statusLabel: "Status",
         notesLabel: "Notizen",
         active: "Active",
@@ -97,6 +109,25 @@ function t(language: AppLanguage) {
         demoMode: "Demo-Modus",
         cancel: "Abbrechen",
       };
+}
+
+function isValidTimeZone(value: string): boolean {
+  try {
+    new Intl.DateTimeFormat("en-US", { timeZone: value }).format(new Date());
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function normalizeTimeZone(value: FormDataEntryValue | null): string {
+  if (typeof value !== "string") return DEFAULT_TIME_ZONE;
+
+  const trimmed = value.trim();
+
+  if (!trimmed || trimmed.length > 100) return DEFAULT_TIME_ZONE;
+
+  return isValidTimeZone(trimmed) ? trimmed : DEFAULT_TIME_ZONE;
 }
 
 async function updateRevier(revierId: string, formData: FormData) {
@@ -122,6 +153,7 @@ async function updateRevier(revierId: string, formData: FormData) {
   const areaHaRaw = String(formData.get("area_ha") ?? "").trim();
   const region = String(formData.get("region") ?? "").trim();
   const country = String(formData.get("country") ?? "DE").trim() || "DE";
+  const timezone = normalizeTimeZone(formData.get("timezone"));
   const status = String(formData.get("status") ?? "active").trim() || "active";
   const notes = String(formData.get("notes") ?? "").trim();
 
@@ -139,6 +171,10 @@ async function updateRevier(revierId: string, formData: FormData) {
     throw new Error(text.areaInvalid);
   }
 
+  if (!isValidTimeZone(timezone)) {
+    throw new Error(text.timezoneInvalid);
+  }
+
   const areaHa = Math.round(parsed);
 
   const { error } = await supabase
@@ -148,6 +184,7 @@ async function updateRevier(revierId: string, formData: FormData) {
       area_ha: areaHa,
       region: region || null,
       country,
+      timezone,
       status,
       notes: notes || null,
     })
@@ -193,7 +230,7 @@ export default async function EditRevierPage({
 
   const { data, error } = await supabase
     .from("reviers")
-    .select("id,name,area_ha,region,country,notes,status,organization_id")
+    .select("id,name,area_ha,region,country,notes,status,organization_id,timezone")
     .eq("id", id)
     .eq("organization_id", organization.id)
     .single();
@@ -304,6 +341,14 @@ export default async function EditRevierPage({
                 title={isDemo ? text.demoReadOnly : ""}
               />
             </div>
+
+            <TimeZoneSelect
+              label={text.timezoneLabel}
+              helpText={text.timezoneHelp}
+              disabled={isDemo}
+              title={isDemo ? text.demoReadOnly : ""}
+              initialValue={revier.timezone}
+            />
 
             <div>
               <label

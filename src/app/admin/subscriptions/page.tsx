@@ -1,4 +1,4 @@
-// src/app/admin/subscriptions/page.tsx #5
+// src/app/admin/subscriptions/page.tsx #6
 import { cookies } from "next/headers";
 import { requirePathAccess } from "@/lib/authz";
 import { supabaseServer } from "@/lib/supabaseServer";
@@ -8,6 +8,7 @@ import {
   resolveLanguage,
   type AppLanguage,
 } from "@/lib/i18n";
+import { formatAppDateTime } from "@/lib/dateTime";
 
 type RequestStatus = "open" | "approved" | "rejected" | "canceled";
 type PlanKey = "starter" | "pro" | "enterprise";
@@ -72,15 +73,6 @@ function normalizeRequestRow(row: RequestRowDb): RequestRow {
     resolution_note: row.resolution_note,
     organization: normalizeOrganization(row.organizations),
   };
-}
-
-function formatDateTime(value: string | null, language: AppLanguage) {
-  if (!value) return "—";
-
-  return new Intl.DateTimeFormat(language === "en" ? "en-GB" : "de-DE", {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(new Date(value));
 }
 
 function planLabel(planKey: PlanKey) {
@@ -390,7 +382,7 @@ export default async function AdminSubscriptionsPage() {
                       <span className="font-medium text-white">
                         {text.createdLabel}:
                       </span>{" "}
-                      {formatDateTime(request.created_at, language)}
+                      {formatAppDateTime(request.created_at, language)}
                     </div>
                     <div className="mt-1 break-all">
                       <span className="font-medium text-white">
@@ -473,13 +465,13 @@ export default async function AdminSubscriptionsPage() {
                       <span className="font-medium text-white">
                         {text.createdLabel}:
                       </span>{" "}
-                      {formatDateTime(request.created_at, language)}
+                      {formatAppDateTime(request.created_at, language)}
                     </div>
                     <div className="mt-1">
                       <span className="font-medium text-white">
                         {text.processedLabel}:
                       </span>{" "}
-                      {formatDateTime(request.processed_at, language)}
+                      {formatAppDateTime(request.processed_at, language)}
                     </div>
                   </div>
 

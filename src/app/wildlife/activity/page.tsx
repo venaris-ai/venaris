@@ -1,4 +1,4 @@
-// src/app/wildlife/activity/page.tsx #4
+// src/app/wildlife/activity/page.tsx #5
 export const runtime = "nodejs";
 
 import Link from "next/link";
@@ -19,6 +19,11 @@ import {
   getSpeciesLabel,
   loadSpeciesMeta,
 } from "@/lib/speciesMeta";
+import {
+  DEFAULT_APP_TIME_ZONE,
+  formatAppDateTime,
+  getAppHour,
+} from "@/lib/dateTime";
 
 type PeriodKey = "30d" | "90d" | "365d";
 
@@ -55,11 +60,8 @@ type CameraRow = {
 type RevierRow = {
   id: string;
   name: string;
+  timezone: string | null;
 };
-
-function locale(language: AppLanguage) {
-  return language === "en" ? "en-GB" : "de-DE";
-}
 
 function resolvePeriodRange(period: PeriodKey) {
   const end = new Date();
@@ -75,9 +77,12 @@ function resolvePeriodRange(period: PeriodKey) {
   };
 }
 
-function fmtTs(ts: string | null, language: AppLanguage) {
-  if (!ts) return "—";
-  return new Date(ts).toLocaleString(locale(language));
+function fmtTs(
+  ts: string | null,
+  language: AppLanguage,
+  timeZone: string
+) {
+  return formatAppDateTime(ts, language, timeZone);
 }
 
 function fmtHour(hour: number) {
@@ -160,43 +165,43 @@ function t(language: AppLanguage) {
   }
 
   return {
-eyebrow: "Aktivität",
-title: "Aktivität",
-intro: "Aktivitätsmuster im aktuellen Revier-Scope nach Stunde und Kamera.",
-activeOrganizationNotFound: "Aktive Organisation nicht gefunden.",
-reviersLoadFailed: "Fehler beim Laden der Reviere:",
-noActiveGrounds:
-  "Für die aktive Organisation sind derzeit keine aktiven Reviere vorhanden.",
-camerasLoadFailed: "Fehler beim Laden der Kameras:",
-noCamerasInScope:
-  "Für den aktuellen Revier-Scope sind keine Kameras vorhanden.",
-eventsLoadFailed: "Fehler beim Laden der Ereignisse:",
-speciesSummaryLoadFailed: "Fehler beim Laden der Artenzusammenfassung:",
-unknownError: "Unbekannter Fehler",
-wildlifeEvents: "Wildtier-Ereignisse",
-inPeriod: "im Zeitraum",
-camerasInScope: "Kameras im Scope",
-currentGroundScope: "Aktueller Revier-Scope",
-peakActivity: "Aktivitätsspitze",
-events: "Ereignisse",
-speciesInActivity: "Arten in der Aktivität",
-withActivitySignal: "mit Aktivitätssignal",
-overallWildlifeActivityByHour: "Gesamte Wildtieraktivität nach Stunde",
-overallWildlifeActivityByHourText:
-  "Stündliche Verteilung aller Wildtier-Ereignisse im gewählten Zeitraum.",
-cameraActivity: "Kamera-Aktivität",
-cameraActivityText:
-  "Aktivität je Kamera, inklusive Relevanz und führender Art.",
-camera: "Kamera",
-avgRelevance: "Ø Relevanz",
-leadingSpecies: "Führende Art",
-noCameraActivity: "Keine Kamera-Aktivität im gewählten Zeitraum.",
-latestWildlifeEvents: "Neueste Wildtier-Ereignisse",
-latestWildlifeEventsText:
-  "Jüngste Wildtier-Ereignisse im aktuellen Revier-Scope.",
-toIngest: "Zum Ingest",
-assets: "Assets",
-noWildlifeEventsYet: "Noch keine Wildtier-Ereignisse vorhanden.",
+    eyebrow: "Aktivität",
+    title: "Aktivität",
+    intro: "Aktivitätsmuster im aktuellen Revier-Scope nach Stunde und Kamera.",
+    activeOrganizationNotFound: "Aktive Organisation nicht gefunden.",
+    reviersLoadFailed: "Fehler beim Laden der Reviere:",
+    noActiveGrounds:
+      "Für die aktive Organisation sind derzeit keine aktiven Reviere vorhanden.",
+    camerasLoadFailed: "Fehler beim Laden der Kameras:",
+    noCamerasInScope:
+      "Für den aktuellen Revier-Scope sind keine Kameras vorhanden.",
+    eventsLoadFailed: "Fehler beim Laden der Ereignisse:",
+    speciesSummaryLoadFailed: "Fehler beim Laden der Artenzusammenfassung:",
+    unknownError: "Unbekannter Fehler",
+    wildlifeEvents: "Wildtier-Ereignisse",
+    inPeriod: "im Zeitraum",
+    camerasInScope: "Kameras im Scope",
+    currentGroundScope: "Aktueller Revier-Scope",
+    peakActivity: "Aktivitätsspitze",
+    events: "Ereignisse",
+    speciesInActivity: "Arten in der Aktivität",
+    withActivitySignal: "mit Aktivitätssignal",
+    overallWildlifeActivityByHour: "Gesamte Wildtieraktivität nach Stunde",
+    overallWildlifeActivityByHourText:
+      "Stündliche Verteilung aller Wildtier-Ereignisse im gewählten Zeitraum.",
+    cameraActivity: "Kamera-Aktivität",
+    cameraActivityText:
+      "Aktivität je Kamera, inklusive Relevanz und führender Art.",
+    camera: "Kamera",
+    avgRelevance: "Ø Relevanz",
+    leadingSpecies: "Führende Art",
+    noCameraActivity: "Keine Kamera-Aktivität im gewählten Zeitraum.",
+    latestWildlifeEvents: "Neueste Wildtier-Ereignisse",
+    latestWildlifeEventsText:
+      "Jüngste Wildtier-Ereignisse im aktuellen Revier-Scope.",
+    toIngest: "Zum Ingest",
+    assets: "Assets",
+    noWildlifeEventsYet: "Noch keine Wildtier-Ereignisse vorhanden.",
   };
 }
 
@@ -316,7 +321,7 @@ export default async function WildlifeActivityPage(props: {
 
   const { data: reviersData, error: reviersError } = await supabase
     .from("reviers")
-    .select("id,name")
+    .select("id,name,timezone")
     .eq("organization_id", activeOrganization.id)
     .eq("status", "active")
     .order("name", { ascending: true });
@@ -337,6 +342,10 @@ export default async function WildlifeActivityPage(props: {
     id: r.id,
     name: r.name,
   }));
+
+  const timezoneByRevierId = new Map(
+    reviers.map((r) => [r.id, r.timezone ?? DEFAULT_APP_TIME_ZONE])
+  );
 
   const revierScope = resolveRevierScope(rawRevier, allowedReviers);
   const currentRevierValue =
@@ -389,6 +398,12 @@ export default async function WildlifeActivityPage(props: {
     cameraList.map((c) => [
       c.id,
       c.location_name ? `${c.name} (${c.location_name})` : c.name,
+    ])
+  );
+  const timeZoneByCameraId = new Map(
+    cameraList.map((c) => [
+      c.id,
+      timezoneByRevierId.get(c.revier_id) ?? DEFAULT_APP_TIME_ZONE,
     ])
   );
 
@@ -505,8 +520,9 @@ export default async function WildlifeActivityPage(props: {
   }));
 
   for (const evt of events) {
-    if (!evt.start_at) continue;
-    const h = new Date(evt.start_at).getHours();
+    const timeZone = timeZoneByCameraId.get(evt.camera_id) ?? DEFAULT_APP_TIME_ZONE;
+    const h = getAppHour(evt.start_at, timeZone);
+    if (h === null) continue;
     overallHourly[h].count += 1;
   }
 
@@ -673,30 +689,36 @@ export default async function WildlifeActivityPage(props: {
         </div>
 
         <div className="space-y-3">
-          {latestEvents.map((evt) => (
-            <Link
-              key={evt.id}
-              href={`/cameras/events/${evt.id}`}
-              className="block rounded-[20px] border border-white/10 bg-white/5 p-3 text-sm hover:bg-white/8"
-            >
-              <div className="flex items-center justify-between gap-3">
-                <div className="font-medium text-white">
-                  {getSpeciesLabel(evt.top_species, language, speciesMetaMap)}
-                  {typeof evt.top_count === "number" ? ` (${evt.top_count})` : ""}
-                </div>
-                <div className="text-white/72">
-                  {typeof evt.relevance_score === "number"
-                    ? evt.relevance_score.toFixed(3)
-                    : "—"}
-                </div>
-              </div>
+          {latestEvents.map((evt) => {
+            const timeZone =
+              timeZoneByCameraId.get(evt.camera_id) ?? DEFAULT_APP_TIME_ZONE;
 
-              <div className="mt-1 text-xs text-white/45">
-                {cameraLabelById[evt.camera_id] ?? evt.camera_id} ·{" "}
-                {fmtTs(evt.start_at, language)} · {text.assets} {evt.asset_count ?? 0}
-              </div>
-            </Link>
-          ))}
+            return (
+              <Link
+                key={evt.id}
+                href={`/cameras/events/${evt.id}`}
+                className="block rounded-[20px] border border-white/10 bg-white/5 p-3 text-sm hover:bg-white/8"
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <div className="font-medium text-white">
+                    {getSpeciesLabel(evt.top_species, language, speciesMetaMap)}
+                    {typeof evt.top_count === "number" ? ` (${evt.top_count})` : ""}
+                  </div>
+                  <div className="text-white/72">
+                    {typeof evt.relevance_score === "number"
+                      ? evt.relevance_score.toFixed(3)
+                      : "—"}
+                  </div>
+                </div>
+
+                <div className="mt-1 text-xs text-white/45">
+                  {cameraLabelById[evt.camera_id] ?? evt.camera_id} ·{" "}
+                  {fmtTs(evt.start_at, language, timeZone)} · {text.assets}{" "}
+                  {evt.asset_count ?? 0}
+                </div>
+              </Link>
+            );
+          })}
 
           {latestEvents.length === 0 && (
             <div className="text-sm text-white/68">{text.noWildlifeEventsYet}</div>

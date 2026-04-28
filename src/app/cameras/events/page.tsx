@@ -1,4 +1,4 @@
-// src/app/cameras/events/page.tsx #7
+// src/app/cameras/events/page.tsx #8
 export const runtime = "nodejs";
 
 import Link from "next/link";
@@ -8,8 +8,8 @@ import { requirePathAccess } from "@/lib/authz";
 import {
   LOCALE_COOKIE,
   resolveLanguage,
-  type AppLanguage,
 } from "@/lib/i18n";
+import { formatAppDateTime } from "@/lib/dateTime";
 import {
   resolveRevierScope,
   type RevierOption,
@@ -27,14 +27,17 @@ type SearchParams = {
 type RevierRow = {
   id: string;
   name: string;
+  timezone: string | null;
 };
 
-function fmt(ts: string | null, language: AppLanguage) {
-  if (!ts) return "—";
-  return new Date(ts).toLocaleString(language === "en" ? "en-GB" : "de-DE");
-}
+type CameraRow = {
+  id: string;
+  name: string | null;
+  location_name: string | null;
+  revier_id: string | null;
+};
 
-function scoreBadge(score: number | null, language: AppLanguage) {
+function scoreBadge(score: number | null, language: "de" | "en") {
   if (typeof score !== "number") return "—";
 
   if (language === "en") {
@@ -50,7 +53,7 @@ function scoreBadge(score: number | null, language: AppLanguage) {
   return "niedrig";
 }
 
-function t(language: AppLanguage) {
+function t(language: "de" | "en") {
   if (language === "en") {
     return {
       eyebrow: "Events",
@@ -123,7 +126,9 @@ export default async function CameraEventsPage(props: {
           <div className="text-xs font-medium uppercase tracking-[0.22em] text-amber-200/80">
             {text.eyebrow}
           </div>
-          <h1 className="mt-3 text-3xl font-semibold text-white">{text.title}</h1>
+          <h1 className="mt-3 text-3xl font-semibold text-white">
+            {text.title}
+          </h1>
           <p className="mt-2 text-sm text-white/68">{text.intro}</p>
         </section>
 
@@ -136,7 +141,7 @@ export default async function CameraEventsPage(props: {
 
   const { data: reviersData, error: reviersError } = await supabase
     .from("reviers")
-    .select("id,name")
+    .select("id,name,timezone")
     .eq("organization_id", activeOrganization.id)
     .eq("status", "active")
     .order("name", { ascending: true });
@@ -148,7 +153,9 @@ export default async function CameraEventsPage(props: {
           <div className="text-xs font-medium uppercase tracking-[0.22em] text-amber-200/80">
             {text.eyebrow}
           </div>
-          <h1 className="mt-3 text-3xl font-semibold text-white">{text.title}</h1>
+          <h1 className="mt-3 text-3xl font-semibold text-white">
+            {text.title}
+          </h1>
           <p className="mt-2 text-sm text-white/68">{text.intro}</p>
         </section>
 
@@ -166,6 +173,9 @@ export default async function CameraEventsPage(props: {
   }));
   const revierScope = resolveRevierScope(rawRevier, allowedReviers);
   const allowedRevierIds = allowedReviers.map((revier) => revier.id);
+  const revierTimeZoneById = Object.fromEntries(
+    reviers.map((revier) => [revier.id, revier.timezone])
+  );
 
   const scopeLabel =
     revierScope.type === "single"
@@ -182,7 +192,9 @@ export default async function CameraEventsPage(props: {
               <div className="text-xs font-medium uppercase tracking-[0.22em] text-amber-200/80">
                 {text.eyebrow}
               </div>
-              <h1 className="mt-3 text-3xl font-semibold text-white">{text.title}</h1>
+              <h1 className="mt-3 text-3xl font-semibold text-white">
+                {text.title}
+              </h1>
               <p className="mt-2 text-sm text-white/68">{text.intro}</p>
             </div>
             <div className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-white/72">
@@ -200,7 +212,7 @@ export default async function CameraEventsPage(props: {
 
   let camerasQuery = supabase
     .from("cameras")
-    .select("id,name,location_name")
+    .select("id,name,location_name,revier_id")
     .eq("organization_id", activeOrganization.id);
 
   camerasQuery =
@@ -217,7 +229,9 @@ export default async function CameraEventsPage(props: {
           <div className="text-xs font-medium uppercase tracking-[0.22em] text-amber-200/80">
             {text.eyebrow}
           </div>
-          <h1 className="mt-3 text-3xl font-semibold text-white">{text.title}</h1>
+          <h1 className="mt-3 text-3xl font-semibold text-white">
+            {text.title}
+          </h1>
           <p className="mt-2 text-sm text-white/68">{text.intro}</p>
         </section>
 
@@ -228,7 +242,8 @@ export default async function CameraEventsPage(props: {
     );
   }
 
-  const allowedCameraIds = (cameras ?? []).map((camera) => camera.id);
+  const cameraRows = (cameras ?? []) as CameraRow[];
+  const allowedCameraIds = cameraRows.map((camera) => camera.id);
 
   if (allowedCameraIds.length === 0) {
     return (
@@ -239,7 +254,9 @@ export default async function CameraEventsPage(props: {
               <div className="text-xs font-medium uppercase tracking-[0.22em] text-amber-200/80">
                 {text.eyebrow}
               </div>
-              <h1 className="mt-3 text-3xl font-semibold text-white">{text.title}</h1>
+              <h1 className="mt-3 text-3xl font-semibold text-white">
+                {text.title}
+              </h1>
               <p className="mt-2 text-sm text-white/68">{text.intro}</p>
             </div>
             <div className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-white/72">
@@ -272,7 +289,9 @@ export default async function CameraEventsPage(props: {
           <div className="text-xs font-medium uppercase tracking-[0.22em] text-amber-200/80">
             {text.eyebrow}
           </div>
-          <h1 className="mt-3 text-3xl font-semibold text-white">{text.title}</h1>
+          <h1 className="mt-3 text-3xl font-semibold text-white">
+            {text.title}
+          </h1>
           <p className="mt-2 text-sm text-white/68">{text.intro}</p>
         </section>
 
@@ -284,11 +303,18 @@ export default async function CameraEventsPage(props: {
   }
 
   const camerasById = Object.fromEntries(
-    (cameras ?? []).map((camera) => [
+    cameraRows.map((camera) => [
       camera.id,
       camera.name
         ? `${camera.name}${camera.location_name ? ` (${camera.location_name})` : ""}`
         : camera.id,
+    ])
+  );
+
+  const cameraTimeZoneById = Object.fromEntries(
+    cameraRows.map((camera) => [
+      camera.id,
+      camera.revier_id ? revierTimeZoneById[camera.revier_id] : null,
     ])
   );
 
@@ -300,7 +326,9 @@ export default async function CameraEventsPage(props: {
             <div className="text-xs font-medium uppercase tracking-[0.22em] text-amber-200/80">
               {text.eyebrow}
             </div>
-            <h1 className="mt-3 text-3xl font-semibold text-white">{text.title}</h1>
+            <h1 className="mt-3 text-3xl font-semibold text-white">
+              {text.title}
+            </h1>
             <p className="mt-2 text-sm text-white/68">{text.intro}</p>
           </div>
           <div className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-white/72">
@@ -312,8 +340,11 @@ export default async function CameraEventsPage(props: {
       <div className="space-y-3">
         {(events ?? []).map((event) => {
           const cameraLabel = camerasById[event.camera_id] ?? event.camera_id ?? "—";
+          const eventTimeZone = cameraTimeZoneById[event.camera_id] ?? null;
           const href = rawRevier
-            ? `/cameras/events/${event.id}?${new URLSearchParams({ revier: rawRevier }).toString()}`
+            ? `/cameras/events/${event.id}?${new URLSearchParams({
+                revier: rawRevier,
+              }).toString()}`
             : `/cameras/events/${event.id}`;
 
           return (
@@ -329,7 +360,8 @@ export default async function CameraEventsPage(props: {
                     {event.top_count ? ` (${event.top_count})` : ""}
                   </div>
                   <div className="mt-1 text-xs text-white/45">
-                    {fmt(event.start_at, language)} – {fmt(event.end_at, language)}
+                    {formatAppDateTime(event.start_at, language, eventTimeZone)} –{" "}
+                    {formatAppDateTime(event.end_at, language, eventTimeZone)}
                   </div>
                 </div>
 
@@ -340,7 +372,8 @@ export default async function CameraEventsPage(props: {
                       : "—"}
                   </div>
                   <div className="text-xs text-white/45">
-                    {text.score} · {scoreBadge(event.relevance_score ?? null, language)}
+                    {text.score} ·{" "}
+                    {scoreBadge(event.relevance_score ?? null, language)}
                   </div>
                 </div>
               </div>

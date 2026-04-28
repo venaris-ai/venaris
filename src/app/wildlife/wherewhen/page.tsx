@@ -1,4 +1,4 @@
-// src/app/wildlife/wherewhen/page.tsx #4
+// src/app/wildlife/wherewhen/page.tsx #5
 export const runtime = "nodejs";
 
 import Link from "next/link";
@@ -19,6 +19,10 @@ import {
   getSpeciesLabel,
   loadSpeciesMeta,
 } from "@/lib/speciesMeta";
+import {
+  DEFAULT_APP_TIME_ZONE,
+  getAppHour,
+} from "@/lib/dateTime";
 
 type PeriodKey = "30d" | "90d" | "365d";
 
@@ -53,6 +57,7 @@ type CameraRow = {
 type RevierRow = {
   id: string;
   name: string;
+  timezone: string | null;
 };
 
 function resolvePeriodRange(period: PeriodKey) {
@@ -346,7 +351,7 @@ export default async function WildlifeWhereWhenPage(props: {
 
   const { data: reviersData, error: reviersError } = await supabase
     .from("reviers")
-    .select("id,name")
+    .select("id,name,timezone")
     .eq("organization_id", activeOrganization.id)
     .eq("status", "active")
     .order("name", { ascending: true });
@@ -367,6 +372,9 @@ export default async function WildlifeWhereWhenPage(props: {
   }
 
   const reviers = (reviersData ?? []) as RevierRow[];
+  const revierTimeZoneById = Object.fromEntries(
+    reviers.map((r) => [r.id, r.timezone ?? DEFAULT_APP_TIME_ZONE])
+  );
   const allowedReviers: RevierOption[] = reviers.map((r) => ({
     id: r.id,
     name: r.name,
@@ -428,6 +436,9 @@ export default async function WildlifeWhereWhenPage(props: {
       c.id,
       c.location_name ? `${c.name} (${c.location_name})` : c.name,
     ])
+  );
+  const cameraRevierIdById = Object.fromEntries(
+    cameraList.map((c) => [c.id, c.revier_id])
   );
 
   if (cameraIds.length === 0) {
@@ -517,8 +528,14 @@ export default async function WildlifeWhereWhenPage(props: {
       const evt = eventById.get(r.event_id);
       if (!evt || !evt.start_at) return null;
 
-      const dt = new Date(evt.start_at);
-      const hour = dt.getHours();
+      const cameraRevierId = cameraRevierIdById[evt.camera_id] ?? null;
+      const eventTimeZone = cameraRevierId
+        ? revierTimeZoneById[cameraRevierId] ?? DEFAULT_APP_TIME_ZONE
+        : DEFAULT_APP_TIME_ZONE;
+
+      const hour = getAppHour(evt.start_at, eventTimeZone);
+
+      if (hour === null) return null;
 
       return {
         eventId: r.event_id,

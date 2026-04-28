@@ -1,4 +1,4 @@
-// src/app/orga/reviere/page.tsx #12
+// src/app/orga/reviere/page.tsx #13
 import Link from "next/link";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
@@ -14,6 +14,8 @@ import {
   type AppLanguage,
 } from "@/lib/i18n";
 
+const DEFAULT_TIME_ZONE = "Europe/Berlin";
+
 type RevierStatus = "active" | "paused" | "archived";
 
 type RevierRow = {
@@ -26,18 +28,38 @@ type RevierRow = {
   status: RevierStatus;
   created_at: string;
   is_default: boolean;
+  timezone: string;
 };
 
 function isRevierStatus(value: string): value is RevierStatus {
   return ["active", "paused", "archived"].includes(value);
 }
 
+function isValidTimeZone(value: string): boolean {
+  try {
+    new Intl.DateTimeFormat("en-US", { timeZone: value }).format(new Date());
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function normalizeTimeZone(value: FormDataEntryValue | null): string {
+  if (typeof value !== "string") return DEFAULT_TIME_ZONE;
+
+  const trimmed = value.trim();
+
+  if (!trimmed || trimmed.length > 100) return DEFAULT_TIME_ZONE;
+
+  return isValidTimeZone(trimmed) ? trimmed : DEFAULT_TIME_ZONE;
+}
+
 async function resolveUiLanguageForProtectedPath(pathname: string) {
   const ctx = await requirePathAccess(pathname);
 
-if (!ctx.user) {
-  throw new Error("Authenticated user required");
-}
+  if (!ctx.user) {
+    throw new Error("Authenticated user required");
+  }
 
   const supabase = supabaseServer();
   const cookieStore = await cookies();
@@ -64,6 +86,7 @@ function t(language: AppLanguage) {
         areaRequired: "Area in ha is required.",
         areaInvalid: "Area in ha must be a valid positive number.",
         statusInvalid: "Invalid ground status.",
+        timezoneInvalid: "Invalid time zone.",
         targetNotFound: "Target ground not found.",
         saveFailedPrefix: "Failed to save ground changes:",
         defaultDeleteBlocked: "The default ground cannot be deleted.",
@@ -93,45 +116,48 @@ function t(language: AppLanguage) {
         firstGround: "Create first ground",
         nameCol: "Name",
         areaCol: "Area",
+        timezoneCol: "Time zone",
         statusCol: "Status",
         actionsCol: "Actions",
       }
     : {
-missingTarget: "Ziel-Revier fehlt.",
-nameRequired: "Reviername ist erforderlich.",
-areaRequired: "Fläche in ha ist erforderlich.",
-areaInvalid: "Fläche in ha muss eine gültige positive Zahl sein.",
-statusInvalid: "Ungültiger Revierstatus.",
-targetNotFound: "Ziel-Revier wurde nicht gefunden.",
-saveFailedPrefix: "Fehler beim Speichern der Revieränderungen:",
-defaultDeleteBlocked: "Das Standard-Revier kann nicht gelöscht werden.",
-deleteFailedPrefix: "Fehler beim Löschen des Reviers:",
-eyebrow: "Reviere",
-title: "Reviere",
-intro:
-  "Reviere sind der fachliche Flächenscope Deiner Organisation. Sie strukturieren Kamerazuordnung, Wildlife-Auswertungen und spätere populationsbezogene Berechnungen innerhalb von Venaris.",
-demoReadOnly: "Demo-Modus: Änderungen sind deaktiviert.",
-created: "Revier wurde erfolgreich angelegt.",
-updated: "Revier wurde erfolgreich aktualisiert.",
-deleted: "Revier wurde erfolgreich gelöscht.",
-activeTitle: "Aktiv",
-activeText: "Produktiv genutzte Reviere im aktuellen Organisationskontext.",
-pausedTitle: "Pausiert",
-pausedText: "Vorübergehend aus dem aktiven Fokus genommene Reviere.",
-archivedTitle: "Archiviert",
-archivedText:
-  "Historisch erhaltene, aber nicht mehr aktiv genutzte Reviere.",
-listTitle: "Revierliste",
-listText: "Aktuelle Reviere der aktiven Organisation.",
-createGround: "Revier anlegen",
-emptyTitle: "Noch keine Reviere angelegt",
-emptyText:
-  "Für die aktive Organisation sind aktuell noch keine Reviere vorhanden. Reviere bilden den fachlichen Scope für Kameras, Wildlife-Auswertungen und spätere Populationsschätzungen.",
-firstGround: "Erstes Revier anlegen",
-nameCol: "Name",
-areaCol: "Fläche",
-statusCol: "Status",
-actionsCol: "Aktionen",
+        missingTarget: "Ziel-Revier fehlt.",
+        nameRequired: "Reviername ist erforderlich.",
+        areaRequired: "Fläche in ha ist erforderlich.",
+        areaInvalid: "Fläche in ha muss eine gültige positive Zahl sein.",
+        statusInvalid: "Ungültiger Revierstatus.",
+        timezoneInvalid: "Ungültige Zeitzone.",
+        targetNotFound: "Ziel-Revier wurde nicht gefunden.",
+        saveFailedPrefix: "Fehler beim Speichern der Revieränderungen:",
+        defaultDeleteBlocked: "Das Standard-Revier kann nicht gelöscht werden.",
+        deleteFailedPrefix: "Fehler beim Löschen des Reviers:",
+        eyebrow: "Reviere",
+        title: "Reviere",
+        intro:
+          "Reviere sind der fachliche Flächenscope Deiner Organisation. Sie strukturieren Kamerazuordnung, Wildlife-Auswertungen und spätere populationsbezogene Berechnungen innerhalb von Venaris.",
+        demoReadOnly: "Demo-Modus: Änderungen sind deaktiviert.",
+        created: "Revier wurde erfolgreich angelegt.",
+        updated: "Revier wurde erfolgreich aktualisiert.",
+        deleted: "Revier wurde erfolgreich gelöscht.",
+        activeTitle: "Aktiv",
+        activeText: "Produktiv genutzte Reviere im aktuellen Organisationskontext.",
+        pausedTitle: "Pausiert",
+        pausedText: "Vorübergehend aus dem aktiven Fokus genommene Reviere.",
+        archivedTitle: "Archiviert",
+        archivedText:
+          "Historisch erhaltene, aber nicht mehr aktiv genutzte Reviere.",
+        listTitle: "Revierliste",
+        listText: "Aktuelle Reviere der aktiven Organisation.",
+        createGround: "Revier anlegen",
+        emptyTitle: "Noch keine Reviere angelegt",
+        emptyText:
+          "Für die aktive Organisation sind aktuell noch keine Reviere vorhanden. Reviere bilden den fachlichen Scope für Kameras, Wildlife-Auswertungen und spätere Populationsschätzungen.",
+        firstGround: "Erstes Revier anlegen",
+        nameCol: "Name",
+        areaCol: "Fläche",
+        timezoneCol: "Zeitzone",
+        statusCol: "Status",
+        actionsCol: "Aktionen",
       };
 }
 
@@ -143,7 +169,7 @@ async function loadRevierForMutation(params: {
 
   const { data, error } = await supabase
     .from("reviers")
-    .select("id,name,area_ha,region,country,notes,status,created_at,is_default")
+    .select("id,name,area_ha,region,country,notes,status,created_at,is_default,timezone")
     .eq("organization_id", params.organizationId)
     .eq("id", params.revierId)
     .maybeSingle();
@@ -173,6 +199,7 @@ async function saveRevierChanges(formData: FormData) {
   const revierId = String(formData.get("revier_id") ?? "").trim();
   const name = String(formData.get("name") ?? "").trim();
   const areaHaRaw = String(formData.get("area_ha") ?? "").trim();
+  const timezone = normalizeTimeZone(formData.get("timezone"));
   const statusRaw = String(formData.get("status") ?? "active").trim();
 
   if (!organization) {
@@ -197,6 +224,10 @@ async function saveRevierChanges(formData: FormData) {
     throw new Error(text.areaInvalid);
   }
 
+  if (!isValidTimeZone(timezone)) {
+    throw new Error(text.timezoneInvalid);
+  }
+
   if (!isRevierStatus(statusRaw)) {
     throw new Error(text.statusInvalid);
   }
@@ -215,6 +246,7 @@ async function saveRevierChanges(formData: FormData) {
   if (
     targetRevier.name === name &&
     (targetRevier.area_ha ?? null) === areaHa &&
+    targetRevier.timezone === timezone &&
     targetRevier.status === statusRaw
   ) {
     revalidatePath("/orga/reviere");
@@ -226,6 +258,7 @@ async function saveRevierChanges(formData: FormData) {
     .update({
       name,
       area_ha: areaHa,
+      timezone,
       status: statusRaw,
     })
     .eq("id", revierId)
@@ -345,7 +378,7 @@ export default async function OrgaRevierePage({
 
   const { data, error } = await supabase
     .from("reviers")
-    .select("id,name,area_ha,region,country,notes,status,created_at,is_default")
+    .select("id,name,area_ha,region,country,notes,status,created_at,is_default,timezone")
     .eq("organization_id", organization.id)
     .order("is_default", { ascending: false })
     .order("name", { ascending: true });
@@ -464,6 +497,9 @@ export default async function OrgaRevierePage({
                     {text.areaCol}
                   </th>
                   <th className="px-6 py-3 font-medium whitespace-nowrap">
+                    {text.timezoneCol}
+                  </th>
+                  <th className="px-6 py-3 font-medium whitespace-nowrap">
                     {text.statusCol}
                   </th>
                   <th className="px-6 py-3 font-medium whitespace-nowrap text-right">
@@ -478,6 +514,7 @@ export default async function OrgaRevierePage({
                       revierId={revier.id}
                       initialName={revier.name}
                       initialAreaHa={revier.area_ha ?? 1}
+                      initialTimeZone={revier.timezone}
                       initialStatus={revier.status}
                       saveAction={saveRevierChanges}
                       isDemo={isDemo}

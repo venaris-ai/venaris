@@ -11,6 +11,7 @@ import {
   type BillingPlanKey,
 } from "@/lib/billing/plans";
 import type { AppLanguage } from "@/lib/i18n";
+import { formatAppDate } from "@/lib/dateTime";
 
 type PlanKey = BillingPlanKey;
 
@@ -215,9 +216,7 @@ function choosePlanButtonLabel(params: {
 function formatScheduledDate(value: string | null | undefined, language: AppLanguage) {
   if (!value) return null;
 
-  return new Intl.DateTimeFormat(language === "en" ? "en-GB" : "de-DE", {
-    dateStyle: "medium",
-  }).format(new Date(value));
+  return formatAppDate(value, language);
 }
 
 export default function PlanSelectionCards({

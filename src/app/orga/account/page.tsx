@@ -10,6 +10,7 @@ import {
   resolveLanguage,
   type AppLanguage,
 } from "@/lib/i18n";
+import { formatAppDateTime } from "@/lib/dateTime";
 
 type OrganizationRow = {
   id: string;
@@ -44,13 +45,6 @@ function formatStatus(status: string) {
   if (status === "inactive") return "Inactive";
   if (status === "archived") return "Archived";
   return status;
-}
-
-function formatDate(value: string, language: AppLanguage) {
-  return new Intl.DateTimeFormat(language === "en" ? "en-GB" : "de-DE", {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(new Date(value));
 }
 
 function show(value: string | null) {
@@ -601,7 +595,9 @@ export default async function OrgaAccountPage({
 
             <div className="grid gap-2 py-3">
               <dt className="text-sm font-medium text-white/45">{text.createdAt}</dt>
-              <dd className="text-sm text-white">{formatDate(org.created_at, language)}</dd>
+              <dd className="text-sm text-white">
+  {formatAppDateTime(org.created_at, language)}
+</dd>
             </div>
 
             <div className="grid gap-2 py-3">

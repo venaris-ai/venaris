@@ -1,5 +1,9 @@
-// src/lib/email/sendInviteEmail.ts #3
+// src/lib/email/sendInviteEmail.ts #4
 import type { AppLanguage } from "@/lib/i18n";
+import {
+  DEFAULT_APP_TIME_ZONE,
+  formatAppDateTime,
+} from "@/lib/dateTime";
 import {
   getAppBaseUrl,
   getResendClient,
@@ -29,10 +33,7 @@ function formatExpiry(value: string | null, language: AppLanguage) {
     return language === "en" ? "no fixed expiry date" : "ohne festes Ablaufdatum";
   }
 
-  return new Intl.DateTimeFormat(language === "en" ? "en-GB" : "de-DE", {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(new Date(value));
+  return formatAppDateTime(value, language, DEFAULT_APP_TIME_ZONE);
 }
 
 export async function sendInviteEmail({

@@ -21,6 +21,10 @@ import {
   resolveLanguage,
   type AppLanguage,
 } from "@/lib/i18n";
+import {
+  DEFAULT_APP_TIME_ZONE,
+  formatAppDate,
+} from "@/lib/dateTime";
 
 export const metadata = {
   title: "Venaris",
@@ -39,11 +43,7 @@ type SubscriptionRow = {
 };
 
 function formatDate(value: string | null, language: AppLanguage) {
-  if (!value) return "—";
-
-  return new Intl.DateTimeFormat(language === "en" ? "en-GB" : "de-DE", {
-    dateStyle: "medium",
-  }).format(new Date(value));
+  return formatAppDate(value, language, DEFAULT_APP_TIME_ZONE);
 }
 
 function billingCycleLabel(cycle: BillingCycle, language: AppLanguage) {

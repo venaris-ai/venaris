@@ -14,6 +14,10 @@ import {
   resolveLanguage,
   type AppLanguage,
 } from "@/lib/i18n";
+import {
+  DEFAULT_APP_TIME_ZONE,
+  formatAppDateTime,
+} from "@/lib/dateTime";
 
 type MemberRole = "owner" | "admin" | "member" | "viewer";
 type MemberStatus = "active" | "disabled";
@@ -96,14 +100,7 @@ function formatInviteStatus(status: string) {
 }
 
 function formatDateTime(value: string | null, language: AppLanguage) {
-  if (!value) return "—";
-  return new Intl.DateTimeFormat(language === "en" ? "en-GB" : "de-DE", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(new Date(value));
+  return formatAppDateTime(value, language, DEFAULT_APP_TIME_ZONE);
 }
 
 function formatDeliveryState(invite: InviteRow, language: AppLanguage) {

@@ -1,4 +1,4 @@
-// src/app/page.tsx #8
+// src/app/page.tsx #9
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { cookies } from "next/headers";
@@ -11,6 +11,7 @@ import {
 } from "@/lib/billing/subscriptionPolicy";
 import {
   LOCALE_COOKIE,
+  getIntlLocale,
   resolveLanguage,
   type AppLanguage,
 } from "@/lib/i18n";
@@ -19,6 +20,11 @@ import {
   getSpeciesLabel,
   loadSpeciesMeta,
 } from "@/lib/speciesMeta";
+import {
+  DEFAULT_APP_TIME_ZONE,
+  formatAppDate,
+  formatAppDateTime,
+} from "@/lib/dateTime";
 
 type SubscriptionRow = {
   plan_key: "starter" | "pro" | "enterprise";
@@ -38,6 +44,12 @@ type CameraRow = {
   location_name: string | null;
   last_seen_at: string | null;
   created_at: string | null;
+  revier_id: string | null;
+};
+
+type RevierRow = {
+  id: string;
+  timezone: string | null;
 };
 
 type EventFeedRow = {
@@ -51,42 +63,18 @@ type EventFeedRow = {
   asset_count: number | null;
 };
 
-function locale(language: AppLanguage) {
-  return language === "en" ? "en-GB" : "de-DE";
-}
-
-function formatDate(value: string | null, language: AppLanguage) {
-  if (!value) return "—";
-
-  return new Intl.DateTimeFormat(locale(language), {
-    dateStyle: "medium",
-  }).format(new Date(value));
-}
-
-function formatDateTime(value: string | null, language: AppLanguage) {
-  if (!value) return "—";
-
-  return new Intl.DateTimeFormat(locale(language), {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(new Date(value));
-}
-
 function formatMoney(
   amountCents: number,
   currency: string,
   language: AppLanguage
 ) {
-  return new Intl.NumberFormat(locale(language), {
+  return new Intl.NumberFormat(getIntlLocale(language), {
     style: "currency",
     currency,
   }).format(amountCents / 100);
 }
 
-function formatPlanPrice(
-  subscription: SubscriptionRow,
-  language: AppLanguage
-) {
+function formatPlanPrice(subscription: SubscriptionRow, language: AppLanguage) {
   const plan = getBillingPlan(subscription.plan_key);
 
   if (subscription.price_amount_cents > 0) {
@@ -245,10 +233,7 @@ function t(language: AppLanguage) {
         "As soon as cameras are created and connected, this becomes the operational backbone for wildlife and monitoring.",
 
       managePlanAndLimits: "Actively manage plan and limits",
-      managePlanAndLimitsText: (
-        plan: string,
-        status: string
-      ) =>
+      managePlanAndLimitsText: (plan: string, status: string) =>
         `${plan} is currently running with status ${status}. This is where you manage growth, limits and plan changes.`,
       noSubscriptionText:
         "No subscription is stored yet for this organization. That should be clarified next.",
@@ -454,13 +439,7 @@ function SectionCard({
   );
 }
 
-function ActionLink({
-  href,
-  label,
-}: {
-  href: string;
-  label: string;
-}) {
+function ActionLink({ href, label }: { href: string; label: string }) {
   return (
     <Link
       href={href}
@@ -565,14 +544,14 @@ export default async function HomePage() {
   ] = await Promise.all([
     supabase
       .from("cameras")
-      .select("id,name,location_name,last_seen_at,created_at")
+      .select("id,name,location_name,last_seen_at,created_at,revier_id")
       .eq("organization_id", organization.id)
       .order("created_at", { ascending: false })
       .limit(6),
 
     supabase
       .from("reviers")
-      .select("id", { count: "exact", head: true })
+      .select("id,timezone", { count: "exact" })
       .eq("organization_id", organization.id),
 
     supabase
@@ -630,6 +609,25 @@ export default async function HomePage() {
 
   const cameras = (camerasResult.data ?? []) as CameraRow[];
   const cameraIds = cameras.map((camera) => camera.id);
+
+  const reviers = (reviersResult.data ?? []) as RevierRow[];
+
+  const timezoneByRevierId = new Map(
+    reviers.map((revier) => [
+      revier.id,
+      revier.timezone || DEFAULT_APP_TIME_ZONE,
+    ])
+  );
+
+  const timezoneByCameraId = new Map(
+    cameras.map((camera) => [
+      camera.id,
+      camera.revier_id
+        ? timezoneByRevierId.get(camera.revier_id) ?? DEFAULT_APP_TIME_ZONE
+        : DEFAULT_APP_TIME_ZONE,
+    ])
+  );
+
   const reviersCount = reviersResult.count ?? 0;
   const membersCount = membersResult.count ?? 0;
   const openInvitesCount = invitesResult.count ?? 0;
@@ -922,9 +920,18 @@ export default async function HomePage() {
                     {billingCycleLabel(subscription.billing_cycle, language)}
                   </p>
                   <p className="mt-2 text-sm leading-6 text-white/60">
-                    {text.trialEnds}: {formatDate(subscription.trial_ends_at, language)} ·{" "}
-                    {text.periodUntil}:{" "}
-                    {formatDate(subscription.current_period_end, language)}
+                    {text.trialEnds}:{" "}
+                    {formatAppDate(
+                      subscription.trial_ends_at,
+                      language,
+                      DEFAULT_APP_TIME_ZONE
+                    )}{" "}
+                    · {text.periodUntil}:{" "}
+                    {formatAppDate(
+                      subscription.current_period_end,
+                      language,
+                      DEFAULT_APP_TIME_ZONE
+                    )}
                   </p>
                 </div>
 
@@ -988,9 +995,17 @@ export default async function HomePage() {
                       </div>
 
                       <div className="text-right text-xs text-white/45">
-                        <div>{formatDateTime(event.start_at, language)}</div>
+                        <div>
+                          {formatAppDateTime(
+                            event.start_at,
+                            language,
+                            timezoneByCameraId.get(event.camera_id) ??
+                              DEFAULT_APP_TIME_ZONE
+                          )}
+                        </div>
                         <div className="mt-1">
-                          {text.assetsLabel}: {event.asset_count ?? 0} · {text.scoreLabel}:{" "}
+                          {text.assetsLabel}: {event.asset_count ?? 0} ·{" "}
+                          {text.scoreLabel}:{" "}
                           {event.relevance_score != null
                             ? Math.round(event.relevance_score)
                             : "—"}
@@ -1045,9 +1060,17 @@ export default async function HomePage() {
                         </div>
 
                         <div className="text-right text-xs text-white/45">
-                          <div>{formatDateTime(event.start_at, language)}</div>
+                          <div>
+                            {formatAppDateTime(
+                              event.start_at,
+                              language,
+                              timezoneByCameraId.get(event.camera_id) ??
+                                DEFAULT_APP_TIME_ZONE
+                            )}
+                          </div>
                           <div className="mt-1">
-                            {text.assetsLabel}: {event.asset_count ?? 0} · {text.scoreLabel}:{" "}
+                            {text.assetsLabel}: {event.asset_count ?? 0} ·{" "}
+                            {text.scoreLabel}:{" "}
                             {event.relevance_score != null
                               ? Math.round(event.relevance_score)
                               : "—"}
@@ -1099,11 +1122,21 @@ export default async function HomePage() {
                         <div className="text-right text-xs text-white/45">
                           <div>
                             {text.createdLabel}:{" "}
-                            {formatDate(camera.created_at, language)}
+                            {formatAppDate(
+                              camera.created_at,
+                              language,
+                              timezoneByCameraId.get(camera.id) ??
+                                DEFAULT_APP_TIME_ZONE
+                            )}
                           </div>
                           <div className="mt-1">
                             {text.lastSeenLabel}:{" "}
-                            {formatDateTime(camera.last_seen_at, language)}
+                            {formatAppDateTime(
+                              camera.last_seen_at,
+                              language,
+                              timezoneByCameraId.get(camera.id) ??
+                                DEFAULT_APP_TIME_ZONE
+                            )}
                           </div>
                         </div>
                       </div>
@@ -1152,11 +1185,22 @@ export default async function HomePage() {
 
                       <div className="text-right text-xs text-white/45">
                         <div>
-                          {text.createdLabel}: {formatDate(camera.created_at, language)}
+                          {text.createdLabel}:{" "}
+                          {formatAppDate(
+                            camera.created_at,
+                            language,
+                            timezoneByCameraId.get(camera.id) ??
+                              DEFAULT_APP_TIME_ZONE
+                          )}
                         </div>
                         <div className="mt-1">
                           {text.lastSeenLabel}:{" "}
-                          {formatDateTime(camera.last_seen_at, language)}
+                          {formatAppDateTime(
+                            camera.last_seen_at,
+                            language,
+                            timezoneByCameraId.get(camera.id) ??
+                              DEFAULT_APP_TIME_ZONE
+                          )}
                         </div>
                       </div>
                     </div>

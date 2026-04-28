@@ -1,9 +1,13 @@
-// src/app/cameras/CamerasPageClient.tsx #1
+// src/app/cameras/CamerasPageClient.tsx #2
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { getIntlLocale, type AppLanguage } from "@/lib/i18n";
+import type { AppLanguage } from "@/lib/i18n";
+import {
+  DEFAULT_APP_TIME_ZONE,
+  formatAppDateTime,
+} from "@/lib/dateTime";
 
 type AssetRow = {
   id: string;
@@ -143,8 +147,7 @@ function formatAgo(ts: string | null | undefined, language: AppLanguage) {
 }
 
 function formatDateTime(ts: string | null | undefined, language: AppLanguage) {
-  if (!ts) return "—";
-  return new Date(ts).toLocaleString(getIntlLocale(language));
+  return formatAppDateTime(ts, language, DEFAULT_APP_TIME_ZONE);
 }
 
 function statusBadgeTone(status?: string | null) {

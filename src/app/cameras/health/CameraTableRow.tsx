@@ -1,8 +1,9 @@
-// src/app/cameras/health/CameraTableRow.tsx #3
+// src/app/cameras/health/CameraTableRow.tsx #4
 "use client";
 
 import { useState } from "react";
 import { type AppLanguage } from "@/lib/i18n";
+import { formatAppDateTime } from "@/lib/dateTime";
 import CameraRowFields from "./CameraRowFields";
 import CameraRowActions from "./CameraRowActions";
 
@@ -158,15 +159,7 @@ function formatHealthLabel(value: string, language: AppLanguage) {
 }
 
 function formatDateTime(value: string | null, language: AppLanguage) {
-  if (!value) return "—";
-
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return value;
-
-  return new Intl.DateTimeFormat(language === "en" ? "en-GB" : "de-DE", {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(d);
+  return formatAppDateTime(value, language);
 }
 
 function formatCoordinate(value: number | null) {
@@ -334,7 +327,6 @@ export default function CameraTableRow({
             </span>
           )}
         </td>
-
 
         <td className="px-6 py-4 whitespace-nowrap">
           {hasLocation ? (

@@ -1,4 +1,4 @@
-// src/app/cameras/ingest/page.tsx #10
+// src/app/cameras/ingest/page.tsx #11
 export const dynamic = "force-dynamic";
 
 import Link from "next/link";
@@ -14,6 +14,7 @@ import {
   resolveLanguage,
   type AppLanguage,
 } from "@/lib/i18n";
+import { formatAppDateTime } from "@/lib/dateTime";
 import {
   buildSpeciesMetaMap,
   getSpeciesLabel,
@@ -83,8 +84,13 @@ type SearchParams = {
 type RevierRow = {
   id: string;
   name: string;
+  timezone: string | null;
 };
 
+type CameraScopeRow = {
+  id: string;
+  revier_id: string | null;
+};
 
 type BatchCameraRelation =
   | {
@@ -107,10 +113,6 @@ type BatchDb = {
   error_summary: string | null;
   cameras: BatchCameraRelation;
 };
-
-
-
-
 
 type Batch = {
   id: string;
@@ -155,6 +157,7 @@ type IngestEventRow = {
   fileCount: number | null;
   startAt: string | null;
   endAt: string | null;
+  timeZone: string | null;
   assetCount: number;
   topSpecies: string | null;
   topCount: number | null;
@@ -166,7 +169,6 @@ function extractCameraName(value: BatchCameraRelation): string | null {
   if (Array.isArray(value)) return value[0]?.name ?? null;
   return value.name ?? null;
 }
-
 
 function normalizeBatch(row: BatchDb): Batch {
   return {
@@ -241,16 +243,6 @@ function errorTone(status?: string | null, error?: string | null) {
   return "warn" as const;
 }
 
-function formatDateTime(value: string | null | undefined, language: AppLanguage) {
-  if (!value) return "—";
-
-  const d = new Date(value);
-
-  if (Number.isNaN(d.getTime())) return "—";
-
-  return d.toLocaleString(language === "en" ? "en-GB" : "de-DE");
-}
-
 function formatProbability(value?: number | null) {
   if (typeof value !== "number") return "—";
   return `${Math.round(value * 100)}%`;
@@ -312,7 +304,7 @@ export default async function CamerasIngestPage(props: {
 
   const { data: reviersData, error: reviersError } = await supabase
     .from("reviers")
-    .select("id,name")
+    .select("id,name,timezone")
     .eq("organization_id", activeOrganization.id)
     .eq("status", "active")
     .order("name", { ascending: true });
@@ -321,6 +313,10 @@ export default async function CamerasIngestPage(props: {
     apiError = reviersError.message;
   } else {
     const reviers = (reviersData ?? []) as RevierRow[];
+    const timeZoneByRevierId = new Map(
+      reviers.map((revier) => [revier.id, revier.timezone] as const)
+    );
+
     const allowedReviers: RevierOption[] = reviers.map((revier) => ({
       id: revier.id,
       name: revier.name,
@@ -337,7 +333,7 @@ export default async function CamerasIngestPage(props: {
     if (allowedRevierIds.length > 0) {
       let camerasQuery = supabase
         .from("cameras")
-        .select("id")
+        .select("id,revier_id")
         .eq("organization_id", activeOrganization.id);
 
       camerasQuery =
@@ -350,7 +346,11 @@ export default async function CamerasIngestPage(props: {
       if (camerasError) {
         apiError = camerasError.message;
       } else {
-        const allowedCameraIds = (cameras ?? []).map((camera) => camera.id);
+        const cameraRows = (cameras ?? []) as CameraScopeRow[];
+        const allowedCameraIds = cameraRows.map((camera) => camera.id);
+        const revierIdByCameraId = new Map(
+          cameraRows.map((camera) => [camera.id, camera.revier_id] as const)
+        );
 
         if (allowedCameraIds.length > 0) {
           const { data: batchData, error: batchError } = await supabase
@@ -450,6 +450,8 @@ export default async function CamerasIngestPage(props: {
                             const event = eventById.get(eventId);
                             if (!event) continue;
 
+                            const revierId = revierIdByCameraId.get(event.camera_id);
+
                             resolvedRows.push({
                               eventId: event.id,
                               batchId: batch.id,
@@ -461,6 +463,9 @@ export default async function CamerasIngestPage(props: {
                               fileCount: batch.fileCount,
                               startAt: event.start_at,
                               endAt: event.end_at,
+                              timeZone: revierId
+                                ? timeZoneByRevierId.get(revierId) ?? null
+                                : null,
                               assetCount: event.asset_count ?? 0,
                               topSpecies: event.top_species,
                               topCount: event.top_count,
@@ -535,16 +540,29 @@ export default async function CamerasIngestPage(props: {
                       ? "text-amber-200"
                       : "text-white/72";
 
+                const eventHref = rawRevier
+                  ? `/cameras/events/${row.eventId}?${new URLSearchParams({
+                      revier: rawRevier,
+                    }).toString()}`
+                  : `/cameras/events/${row.eventId}`;
+
                 return (
                   <tr
                     key={`${row.batchId}:${row.eventId}`}
                     className="border-b border-white/8 last:border-b-0"
                   >
                     <td className="px-3 py-3 text-white/72 whitespace-nowrap">
-                      <div>{formatDateTime(row.startAt ?? row.receivedAt, language)}</div>
+                      <div>
+                        {formatAppDateTime(
+                          row.startAt ?? row.receivedAt,
+                          language,
+                          row.timeZone
+                        )}
+                      </div>
                       {row.endAt && row.endAt !== row.startAt ? (
                         <div className="text-xs text-white/45">
-                          {text.until} {formatDateTime(row.endAt, language)}
+                          {text.until}{" "}
+                          {formatAppDateTime(row.endAt, language, row.timeZone)}
                         </div>
                       ) : null}
                     </td>
@@ -562,7 +580,9 @@ export default async function CamerasIngestPage(props: {
                         {getSpeciesLabel(row.topSpecies, language, speciesMetaMap)}
                       </div>
                       {row.errorSummary ? (
-                        <div className={`mt-1 text-xs ${errorClass}`}>{row.errorSummary}</div>
+                        <div className={`mt-1 text-xs ${errorClass}`}>
+                          {row.errorSummary}
+                        </div>
                       ) : null}
                     </td>
 
@@ -576,7 +596,7 @@ export default async function CamerasIngestPage(props: {
 
                     <td className="px-3 py-3">
                       <Link
-                        href={`/cameras/events/${row.eventId}`}
+                        href={eventHref}
                         className="text-amber-200 underline underline-offset-4 hover:text-amber-100"
                       >
                         {text.showDetails}

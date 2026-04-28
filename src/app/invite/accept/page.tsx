@@ -1,4 +1,4 @@
-// src/app/invite/accept/page.tsx #9
+// src/app/invite/accept/page.tsx #10
 import { cookies } from "next/headers";
 import { getOptionalUser } from "@/lib/auth";
 import {
@@ -6,6 +6,10 @@ import {
   normalizeLanguage,
   type AppLanguage,
 } from "@/lib/i18n";
+import {
+  DEFAULT_APP_TIME_ZONE,
+  formatAppDateTime,
+} from "@/lib/dateTime";
 import { supabaseServer } from "@/lib/supabaseServer";
 import InviteAcceptForm from "./InviteAcceptForm";
 import AcceptExistingInviteButton from "./AcceptExistingInviteButton";
@@ -36,11 +40,7 @@ function formatRole(role: string) {
 }
 
 function formatDateTime(value: string | null, language: AppLanguage) {
-  if (!value) return "—";
-  return new Intl.DateTimeFormat(language === "en" ? "en-GB" : "de-DE", {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(new Date(value));
+  return formatAppDateTime(value, language, DEFAULT_APP_TIME_ZONE);
 }
 
 function isExpired(expiresAt: string | null) {
@@ -132,11 +132,10 @@ export default async function InviteAcceptPage({
   const params = (await searchParams) ?? {};
   const token = params.token?.trim() ?? "";
 
-const cookieStore = await cookies();
-const fallbackLanguage = normalizeLanguage(
-  cookieStore.get(LOCALE_COOKIE)?.value
-);
-
+  const cookieStore = await cookies();
+  const fallbackLanguage = normalizeLanguage(
+    cookieStore.get(LOCALE_COOKIE)?.value
+  );
 
   const fallbackText = t(fallbackLanguage);
   const user = await getOptionalUser();

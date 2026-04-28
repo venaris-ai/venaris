@@ -1,4 +1,4 @@
-// src/app/orga/subscription/page.tsx #22
+// src/app/orga/subscription/page.tsx #23
 import type { ReactNode } from "react";
 import SubscriptionSyncNotice from "@/components/SubscriptionSyncNotice";
 import StripeBillingPortalButton from "@/components/StripeBillingPortalButton";
@@ -16,6 +16,7 @@ import {
   resolveLanguage,
   type AppLanguage,
 } from "@/lib/i18n";
+import { formatAppDate as formatDate } from "@/lib/dateTime";
 
 type ScheduledChangeType = "upgrade" | "downgrade" | "cancel";
 
@@ -67,14 +68,6 @@ async function resolveUiLanguageForProtectedPath(pathname: string) {
   });
 
   return { ctx, supabase, language };
-}
-
-function formatDate(value: string | null, language: AppLanguage) {
-  if (!value) return "—";
-
-  return new Intl.DateTimeFormat(language === "en" ? "en-GB" : "de-DE", {
-    dateStyle: "medium",
-  }).format(new Date(value));
 }
 
 function formatMoney(

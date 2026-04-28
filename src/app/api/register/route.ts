@@ -1,11 +1,14 @@
-// src/app/api/register/route.ts #2
+// src/app/api/register/route.ts #3
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabaseServer";
 import { supabaseAuthServer } from "@/lib/supabaseAuthServer";
 import { getLanguageFromRequest, type AppLanguage } from "@/lib/i18n";
 
+const DEFAULT_TIME_ZONE = "Europe/Berlin";
+
 type Payload = {
   organizationName: string;
+  clientTimeZone?: string | null;
 };
 
 type OrganizationRow = {
@@ -59,6 +62,25 @@ function slugifyOrganizationName(value: string): string {
   return base || "org";
 }
 
+function isValidTimeZone(value: string): boolean {
+  try {
+    new Intl.DateTimeFormat("en-US", { timeZone: value }).format(new Date());
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function normalizeTimeZone(value: unknown): string {
+  if (typeof value !== "string") return DEFAULT_TIME_ZONE;
+
+  const trimmed = value.trim();
+
+  if (!trimmed || trimmed.length > 100) return DEFAULT_TIME_ZONE;
+
+  return isValidTimeZone(trimmed) ? trimmed : DEFAULT_TIME_ZONE;
+}
+
 async function findAvailableOrganizationSlug(
   supabase: ReturnType<typeof supabaseServer>,
   desiredBase: string
@@ -100,6 +122,7 @@ export async function POST(req: NextRequest) {
     }
 
     const body = (await req.json()) as Partial<Payload>;
+    const revierTimeZone = normalizeTimeZone(body.clientTimeZone);
 
     if (!body.organizationName || !body.organizationName.trim()) {
       return NextResponse.json(
@@ -192,6 +215,24 @@ export async function POST(req: NextRequest) {
     }
 
     const organization = insertOrganization.data;
+
+    const updateDefaultRevier = await supabase
+      .from("reviers")
+      .update({ timezone: revierTimeZone })
+      .eq("organization_id", organization.id)
+      .eq("is_default", true);
+
+    if (updateDefaultRevier.error) {
+      await supabase.from("organizations").delete().eq("id", organization.id);
+
+      return NextResponse.json(
+        {
+          error: text.organizationCreationFailed,
+          details: updateDefaultRevier.error.message,
+        },
+        { status: 500 }
+      );
+    }
 
     const insertMembership = await supabase.from("organization_members").insert({
       organization_id: organization.id,

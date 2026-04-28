@@ -1,4 +1,4 @@
-// src/app/register/RegisterForm.tsx #6
+// src/app/register/RegisterForm.tsx #7
 "use client";
 
 import { useState } from "react";
@@ -70,6 +70,17 @@ function setLocaleCookie(language: AppLanguage) {
   document.cookie = `${LOCALE_COOKIE}=${encodeURIComponent(language)}; path=/; max-age=31536000; samesite=lax`;
 }
 
+function getClientTimeZone() {
+  try {
+    const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    return typeof timeZone === "string" && timeZone.trim()
+      ? timeZone.trim()
+      : "Europe/Berlin";
+  } catch {
+    return "Europe/Berlin";
+  }
+}
+
 export default function RegisterForm({
   initialLanguage,
 }: {
@@ -96,6 +107,7 @@ export default function RegisterForm({
     const orgName = organizationName.trim();
     const userEmail = email.trim().toLowerCase();
     const resolvedLanguage = normalizeLanguage(language);
+    const clientTimeZone = getClientTimeZone();
 
     if (!orgName) {
       setLoading(false);
@@ -169,7 +181,10 @@ export default function RegisterForm({
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ organizationName: orgName }),
+      body: JSON.stringify({
+        organizationName: orgName,
+        clientTimeZone,
+      }),
     });
 
     const registerData = await registerResponse.json();

@@ -1,4 +1,4 @@
-// src/app/orga/reviere/new/page.tsx #10
+// src/app/orga/reviere/new/page.tsx #11
 import Link from "next/link";
 import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
@@ -7,18 +7,21 @@ import { redirectIfDemoWrite } from "@/lib/auth";
 import { requirePathAccess } from "@/lib/authz";
 import { supabaseServer } from "@/lib/supabaseServer";
 import SubmitButton from "@/components/SubmitButton";
+import TimeZoneSelect from "@/components/TimeZoneSelect";
 import {
   LOCALE_COOKIE,
   resolveLanguage,
   type AppLanguage,
 } from "@/lib/i18n";
 
+const DEFAULT_TIME_ZONE = "Europe/Berlin";
+
 async function resolveUiLanguageForProtectedPath(pathname: string) {
   const ctx = await requirePathAccess(pathname);
 
-if (!ctx.user) {
-  throw new Error("Authenticated user required");
-}
+  if (!ctx.user) {
+    throw new Error("Authenticated user required");
+  }
 
   const supabase = supabaseServer();
   const cookieStore = await cookies();
@@ -44,6 +47,7 @@ function t(language: AppLanguage) {
         areaRequired: "Area in ha is required.",
         areaInvalid: "Area in ha must be a valid positive number.",
         statusInvalid: "Invalid ground status.",
+        timezoneInvalid: "Invalid time zone.",
         createFailedPrefix: "Failed to create ground:",
         eyebrow: "Create ground",
         title: "Create ground",
@@ -54,6 +58,9 @@ function t(language: AppLanguage) {
         namePlaceholder: "e.g. Demo North",
         areaLabel: "Area in ha *",
         areaPlaceholder: "e.g. 250",
+        timezoneLabel: "Time zone",
+        timezoneHelp:
+          "Used for wildlife, image and event times in this ground.",
         statusLabel: "Status",
         active: "Active",
         paused: "Paused",
@@ -68,6 +75,7 @@ function t(language: AppLanguage) {
         areaRequired: "Fläche in ha ist erforderlich.",
         areaInvalid: "Fläche in ha muss eine gültige positive Zahl sein.",
         statusInvalid: "Ungültiger Revierstatus.",
+        timezoneInvalid: "Ungültige Zeitzone.",
         createFailedPrefix: "Failed to create revier:",
         eyebrow: "Revier anlegen",
         title: "Revier anlegen",
@@ -78,6 +86,9 @@ function t(language: AppLanguage) {
         namePlaceholder: "z. B. Demo-Nord",
         areaLabel: "Fläche in ha *",
         areaPlaceholder: "z. B. 250",
+        timezoneLabel: "Zeitzone",
+        timezoneHelp:
+          "Wird für Wildlife-, Bild- und Eventzeiten in diesem Revier verwendet.",
         statusLabel: "Status",
         active: "Active",
         paused: "Paused",
@@ -87,6 +98,25 @@ function t(language: AppLanguage) {
         demoMode: "Demo-Modus",
         cancel: "Abbrechen",
       };
+}
+
+function isValidTimeZone(value: string): boolean {
+  try {
+    new Intl.DateTimeFormat("en-US", { timeZone: value }).format(new Date());
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function normalizeTimeZone(value: FormDataEntryValue | null): string {
+  if (typeof value !== "string") return DEFAULT_TIME_ZONE;
+
+  const trimmed = value.trim();
+
+  if (!trimmed || trimmed.length > 100) return DEFAULT_TIME_ZONE;
+
+  return isValidTimeZone(trimmed) ? trimmed : DEFAULT_TIME_ZONE;
 }
 
 async function createRevier(formData: FormData) {
@@ -110,6 +140,7 @@ async function createRevier(formData: FormData) {
 
   const name = String(formData.get("name") ?? "").trim();
   const areaHaRaw = String(formData.get("area_ha") ?? "").trim();
+  const timezone = normalizeTimeZone(formData.get("timezone"));
   const status = String(formData.get("status") ?? "active").trim() || "active";
 
   if (!name) {
@@ -126,6 +157,10 @@ async function createRevier(formData: FormData) {
     throw new Error(text.areaInvalid);
   }
 
+  if (!isValidTimeZone(timezone)) {
+    throw new Error(text.timezoneInvalid);
+  }
+
   if (!["active", "paused", "archived"].includes(status)) {
     throw new Error(text.statusInvalid);
   }
@@ -138,6 +173,7 @@ async function createRevier(formData: FormData) {
     status,
     organization_id: organization.id,
     is_default: false,
+    timezone,
   });
 
   if (error) {
@@ -227,6 +263,13 @@ export default async function NewRevierPage({
                 title={isDemo ? text.demoReadOnly : ""}
               />
             </div>
+
+            <TimeZoneSelect
+              label={text.timezoneLabel}
+              helpText={text.timezoneHelp}
+              disabled={isDemo}
+              title={isDemo ? text.demoReadOnly : ""}
+            />
 
             <div>
               <label

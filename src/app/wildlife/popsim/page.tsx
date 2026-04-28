@@ -1,4 +1,4 @@
-// src/app/wildlife/popsim/page.tsx #6
+// src/app/wildlife/popsim/page.tsx #7
 export const runtime = "nodejs";
 
 import { cookies } from "next/headers";
@@ -18,6 +18,10 @@ import {
   getSpeciesLabel,
   loadSpeciesMeta,
 } from "@/lib/speciesMeta";
+import {
+  DEFAULT_APP_TIME_ZONE,
+  formatAppDate,
+} from "@/lib/dateTime";
 
 type SearchParams = {
   revier?: string;
@@ -29,6 +33,7 @@ type RevierRow = {
   area_ha: number | null;
   organization_id: string | null;
   status: string;
+  timezone: string | null;
 };
 
 type PopulationEstimateRow = {
@@ -52,11 +57,6 @@ function locale(language: AppLanguage) {
 function fmtInt(value: number | null | undefined, language: AppLanguage) {
   if (typeof value !== "number" || Number.isNaN(value)) return "—";
   return Math.round(value).toLocaleString(locale(language));
-}
-
-function fmtDate(value: string | null | undefined, language: AppLanguage) {
-  if (!value) return "—";
-  return new Date(value).toLocaleDateString(locale(language));
 }
 
 function getPopulationStatus(
@@ -277,7 +277,7 @@ export default async function PopSimPage({
 
   const { data: reviersData, error: reviersError } = await supabase
     .from("reviers")
-    .select("id,name,area_ha,organization_id,status")
+    .select("id,name,area_ha,organization_id,status,timezone")
     .eq("organization_id", activeOrganization.id)
     .eq("status", "active")
     .order("name", { ascending: true });
@@ -362,6 +362,9 @@ export default async function PopSimPage({
       </main>
     );
   }
+
+  const selectedTimeZone =
+    selectedRevier.timezone ?? DEFAULT_APP_TIME_ZONE;
 
   const { data: latestEstimateRow, error: latestEstimateError } = await supabase
     .from("population_estimates")
@@ -459,7 +462,7 @@ export default async function PopSimPage({
         />
         <StatCard
           title={text.snapshotDate}
-          value={fmtDate(latestEstimateDate, language)}
+          value={formatAppDate(latestEstimateDate, language, selectedTimeZone)}
           subline={text.latestCalculation}
         />
         <StatCard
