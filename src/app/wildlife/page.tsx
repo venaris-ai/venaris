@@ -1,7 +1,6 @@
 // src/app/wildlife/page.tsx #6
 export const runtime = "nodejs";
 
-import Link from "next/link";
 import { cookies } from "next/headers";
 import { supabaseServer } from "@/lib/supabaseServer";
 import { requirePathAccess } from "@/lib/authz";
@@ -129,8 +128,6 @@ function t(language: AppLanguage) {
       eventsLoadFailed: "Failed to load events:",
       speciesSummaryLoadFailed: "Failed to load species summary:",
       unknownError: "unknown error",
-      allActiveGrounds: "All active grounds",
-      oneGround: "One ground",
       cameras: "Cameras",
       currentGroundScope: "current ground scope",
       wildlifeEvents: "Wildlife Events",
@@ -142,7 +139,6 @@ function t(language: AppLanguage) {
       events: "events",
       speciesSnapshot: "Species Snapshot",
       speciesSnapshotText: "Most frequent species in the current period.",
-      more: "More",
       topCamera: "Top camera",
       totalAnimals: "animals total",
       noSpeciesSignalsYet: "No species signals yet.",
@@ -183,8 +179,6 @@ function t(language: AppLanguage) {
     eventsLoadFailed: "Fehler beim Laden der Ereignisse:",
     speciesSummaryLoadFailed: "Fehler beim Laden der Artenzusammenfassung:",
     unknownError: "Unbekannter Fehler",
-    allActiveGrounds: "Alle aktiven Reviere",
-    oneGround: "Ein Revier",
     cameras: "Kameras",
     currentGroundScope: "Aktueller Revier-Scope",
     wildlifeEvents: "Wildtier-Ereignisse",
@@ -196,7 +190,6 @@ function t(language: AppLanguage) {
     events: "Ereignisse",
     speciesSnapshot: "Arten-Snapshot",
     speciesSnapshotText: "Häufigste Arten im aktuellen Zeitraum.",
-    more: "Mehr",
     topCamera: "Top-Kamera",
     totalAnimals: "Tiere gesamt",
     noSpeciesSignalsYet: "Noch keine Artensignale vorhanden.",
@@ -238,17 +231,6 @@ function StatCard({
       <div className="mt-2 text-3xl font-semibold text-white">{value}</div>
       <div className="mt-1 text-sm text-white/65">{subline}</div>
     </div>
-  );
-}
-
-function ActionLink({ href, label }: { href: string; label: string }) {
-  return (
-    <Link
-      href={href}
-      className="rounded-full border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/78 backdrop-blur-sm hover:border-amber-300/20 hover:bg-white/8 hover:text-white"
-    >
-      {label}
-    </Link>
   );
 }
 
@@ -348,14 +330,6 @@ export default async function WildlifePage(props: {
   }));
 
   const revierScope = resolveRevierScope(searchParams?.revier, allowedReviers);
-  const currentRevierValue =
-    revierScope.type === "single" ? revierScope.revierId : "all";
-
-  const scopeLabel =
-    currentRevierValue === "all"
-      ? text.allActiveGrounds
-      : reviers.find((r) => r.id === currentRevierValue)?.name ?? text.oneGround;
-
   const selectedRevier =
     revierScope.type === "single"
       ? reviers.find((r) => r.id === revierScope.revierId) ?? null
@@ -423,18 +397,11 @@ export default async function WildlifePage(props: {
     return (
       <main className="space-y-8">
         <section className="rounded-[32px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(201,149,46,0.16),transparent_24%),linear-gradient(135deg,rgba(255,255,255,0.06),rgba(255,255,255,0.03))] p-6 backdrop-blur-sm">
-          <div className="flex flex-wrap items-start justify-between gap-4">
-            <div>
-              <div className="text-xs font-medium uppercase tracking-[0.22em] text-amber-200/80">
-                {text.eyebrow}
-              </div>
-              <h1 className="mt-3 text-3xl font-semibold text-white">{text.title}</h1>
-              <p className="mt-2 text-sm text-white/68">{text.intro}</p>
-            </div>
-            <div className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-white/72">
-              {scopeLabel}
-            </div>
+          <div className="text-xs font-medium uppercase tracking-[0.22em] text-amber-200/80">
+            {text.eyebrow}
           </div>
+          <h1 className="mt-3 text-3xl font-semibold text-white">{text.title}</h1>
+          <p className="mt-2 text-sm text-white/68">{text.intro}</p>
         </section>
 
         <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
@@ -662,18 +629,11 @@ export default async function WildlifePage(props: {
   return (
     <main className="space-y-8">
       <section className="rounded-[32px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(201,149,46,0.16),transparent_24%),linear-gradient(135deg,rgba(255,255,255,0.06),rgba(255,255,255,0.03))] p-6 backdrop-blur-sm">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div>
-            <div className="text-xs font-medium uppercase tracking-[0.22em] text-amber-200/80">
-              {text.eyebrow}
-            </div>
-            <h1 className="mt-3 text-3xl font-semibold text-white">{text.title}</h1>
-            <p className="mt-2 max-w-3xl text-sm text-white/68">{text.intro}</p>
-          </div>
-          <div className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-white/72">
-            {scopeLabel}
-          </div>
+        <div className="text-xs font-medium uppercase tracking-[0.22em] text-amber-200/80">
+          {text.eyebrow}
         </div>
+        <h1 className="mt-3 text-3xl font-semibold text-white">{text.title}</h1>
+        <p className="mt-2 max-w-3xl text-sm text-white/68">{text.intro}</p>
       </section>
 
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
@@ -706,12 +666,11 @@ export default async function WildlifePage(props: {
 
       <section className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
         <div className="rounded-[28px] border border-white/10 bg-white/5 p-5 backdrop-blur-sm">
-          <div className="mb-4 flex items-center justify-between">
+          <div className="mb-4">
             <div>
               <h2 className="text-lg font-medium text-white">{text.speciesSnapshot}</h2>
               <p className="text-sm text-white/65">{text.speciesSnapshotText}</p>
             </div>
-            <ActionLink href="/wildlife/species" label={text.more} />
           </div>
 
           <div className="space-y-3">
@@ -752,12 +711,11 @@ export default async function WildlifePage(props: {
         </div>
 
         <div className="rounded-[28px] border border-white/10 bg-white/5 p-5 backdrop-blur-sm">
-          <div className="mb-4 flex items-center justify-between">
+          <div className="mb-4">
             <div>
               <h2 className="text-lg font-medium text-white">{text.whereWhenHint}</h2>
               <p className="text-sm text-white/65">{text.whereWhenHintText}</p>
             </div>
-            <ActionLink href="/wildlife/wherewhen" label={text.more} />
           </div>
 
           {!selectedSpecies || !topComboEntry ? (
@@ -792,12 +750,11 @@ export default async function WildlifePage(props: {
 
       <section className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
         <div className="rounded-[28px] border border-white/10 bg-white/5 p-5 backdrop-blur-sm">
-          <div className="mb-4 flex items-center justify-between">
+          <div className="mb-4">
             <div>
               <h2 className="text-lg font-medium text-white">{text.activitySnapshot}</h2>
               <p className="text-sm text-white/65">{text.activitySnapshotText}</p>
             </div>
-            <ActionLink href="/wildlife/activity" label={text.more} />
           </div>
 
           <div className="space-y-2">
@@ -825,12 +782,11 @@ export default async function WildlifePage(props: {
         </div>
 
         <div className="rounded-[28px] border border-amber-300/15 bg-[radial-gradient(circle_at_top_left,rgba(201,149,46,0.16),transparent_34%),linear-gradient(135deg,rgba(255,255,255,0.08),rgba(255,255,255,0.04))] p-5 backdrop-blur-sm">
-          <div className="mb-4 flex items-center justify-between">
+          <div className="mb-4">
             <div>
               <h2 className="text-lg font-medium text-white">{text.popsim}</h2>
               <p className="text-sm text-white/65">{text.popsimText}</p>
             </div>
-            <ActionLink href="/wildlife/popsim" label={text.more} />
           </div>
 
           <div className="space-y-4">

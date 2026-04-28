@@ -1,5 +1,4 @@
-// src/app/orga/page.tsx #7
-import Link from "next/link";
+// src/app/orga/page.tsx #8
 import { cookies } from "next/headers";
 import { requirePathAccess, canAccessPath } from "@/lib/authz";
 import { supabaseServer } from "@/lib/supabaseServer";
@@ -165,7 +164,6 @@ function t(language: AppLanguage) {
         statSubscriptionTextNoPlan: "No subscription stored",
         myAccountTitle: "My Account",
         myAccountText: "Active organizational context and your role.",
-        openMyAccount: "Open my account",
         organizationLabel: "Organization",
         slugLabel: "Camera code",
         roleLabel: "Your role",
@@ -173,22 +171,17 @@ function t(language: AppLanguage) {
         groundsTitle: "Grounds",
         groundsText:
           "Operational area and ground structure of the organization.",
-        openGrounds: "Open grounds",
-        newGround: "New ground",
         groundsStatus: "Status",
         groundsStatusText:
           "Grounds are created and administratively managed in organization settings.",
         membersTitle: "Members",
         membersText: "Team access, roles and open invitations.",
-        openMembers: "Open members",
-        inviteMember: "Invite member",
         activeMembers: "Active members",
         openInvites: "Open invites",
         countedMembers: (usage: number, max: number) =>
           `Currently counted: ${usage} of ${max} members.`,
         subscriptionTitle: "Subscription",
         subscriptionText: "Commercial setup, plan and current usage limits.",
-        openSubscription: "Open subscription",
         noSubscription: "No subscription was found for this organization.",
         priceTitle: "Price",
         usageTitle: "Usage",
@@ -217,7 +210,6 @@ function t(language: AppLanguage) {
         statSubscriptionTextNoPlan: "Kein Abo hinterlegt",
         myAccountTitle: "Mein Konto",
         myAccountText: "Aktiver Organisationskontext und Deine Rolle.",
-        openMyAccount: "Mein Konto öffnen",
         organizationLabel: "Organization",
         slugLabel: "Kamera-Code",
         roleLabel: "Deine Rolle",
@@ -225,15 +217,11 @@ function t(language: AppLanguage) {
         groundsTitle: "Reviere",
         groundsText:
           "Fachliche Flächen- und Revierstruktur der Organization.",
-        openGrounds: "Reviere öffnen",
-        newGround: "Neues Revier",
         groundsStatus: "Status",
         groundsStatusText:
           "Reviere sind angelegt und über die Orga-Verwaltung administrierbar.",
         membersTitle: "Mitglieder",
         membersText: "Teamzugänge, Rollen und offene Einladungen.",
-        openMembers: "Mitglieder öffnen",
-        inviteMember: "Mitglied einladen",
         activeMembers: "Aktive Mitglieder",
         openInvites: "Offene Invites",
         countedMembers: (usage: number, max: number) =>
@@ -241,7 +229,6 @@ function t(language: AppLanguage) {
         subscriptionTitle: "Abo",
         subscriptionText:
           "Kommerzieller Rahmen, Plan und aktuelle Nutzungsgrenzen.",
-        openSubscription: "Abo öffnen",
         noSubscription:
           "Für diese Organisation wurde noch kein Abo gefunden.",
         priceTitle: "Preis",
@@ -272,23 +259,6 @@ function StatCard({
         <p className="mt-2 text-sm leading-6 text-white/68">{subline}</p>
       ) : null}
     </div>
-  );
-}
-
-function ActionLink({
-  href,
-  label,
-}: {
-  href: string;
-  label: string;
-}) {
-  return (
-    <Link
-      href={href}
-      className="inline-flex rounded-full border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/78 backdrop-blur-sm hover:border-amber-300/20 hover:bg-white/8 hover:text-white"
-    >
-      {label}
-    </Link>
   );
 }
 
@@ -503,12 +473,9 @@ export default async function OrgaPage() {
         }`}
       >
         <div className="rounded-[28px] border border-white/10 bg-white/5 p-6 backdrop-blur-sm">
-          <div className="flex items-center justify-between gap-4">
-            <div>
-              <h2 className="text-lg font-medium text-white">{text.myAccountTitle}</h2>
-              <p className="mt-1 text-sm text-white/65">{text.myAccountText}</p>
-            </div>
-            <ActionLink href="/orga/account" label={text.openMyAccount} />
+          <div>
+            <h2 className="text-lg font-medium text-white">{text.myAccountTitle}</h2>
+            <p className="mt-1 text-sm text-white/65">{text.myAccountText}</p>
           </div>
 
           <dl className="mt-6 space-y-3 text-sm">
@@ -540,15 +507,9 @@ export default async function OrgaPage() {
         </div>
 
         <div className="rounded-[28px] border border-white/10 bg-white/5 p-6 backdrop-blur-sm">
-          <div className="flex items-center justify-between gap-4">
-            <div>
-              <h2 className="text-lg font-medium text-white">{text.groundsTitle}</h2>
-              <p className="mt-1 text-sm text-white/65">{text.groundsText}</p>
-            </div>
-            <div className="flex gap-2">
-              <ActionLink href="/orga/reviere" label={text.openGrounds} />
-              <ActionLink href="/orga/reviere/new" label={text.newGround} />
-            </div>
+          <div>
+            <h2 className="text-lg font-medium text-white">{text.groundsTitle}</h2>
+            <p className="mt-1 text-sm text-white/65">{text.groundsText}</p>
           </div>
 
           <div className="mt-6 rounded-[24px] border border-white/10 bg-white/5 p-4">
@@ -565,15 +526,9 @@ export default async function OrgaPage() {
         </div>
 
         <div className="rounded-[28px] border border-white/10 bg-white/5 p-6 backdrop-blur-sm">
-          <div className="flex items-center justify-between gap-4">
-            <div>
-              <h2 className="text-lg font-medium text-white">{text.membersTitle}</h2>
-              <p className="mt-1 text-sm text-white/65">{text.membersText}</p>
-            </div>
-            <div className="flex gap-2">
-              <ActionLink href="/orga/members" label={text.openMembers} />
-              <ActionLink href="/orga/members/invite" label={text.inviteMember} />
-            </div>
+          <div>
+            <h2 className="text-lg font-medium text-white">{text.membersTitle}</h2>
+            <p className="mt-1 text-sm text-white/65">{text.membersText}</p>
           </div>
 
           <div className="mt-6 grid gap-4 md:grid-cols-2">
@@ -608,19 +563,13 @@ export default async function OrgaPage() {
 
         {canSeeSubscription ? (
           <div className="rounded-[28px] border border-white/10 bg-white/5 p-6 backdrop-blur-sm">
-            <div className="flex items-center justify-between gap-4">
-              <div>
-                <h2 className="text-lg font-medium text-white">
-                  {text.subscriptionTitle}
-                </h2>
-                <p className="mt-1 text-sm text-white/65">
-                  {text.subscriptionText}
-                </p>
-              </div>
-              <ActionLink
-                href="/orga/subscription"
-                label={text.openSubscription}
-              />
+            <div>
+              <h2 className="text-lg font-medium text-white">
+                {text.subscriptionTitle}
+              </h2>
+              <p className="mt-1 text-sm text-white/65">
+                {text.subscriptionText}
+              </p>
             </div>
 
             {!subscription ? (

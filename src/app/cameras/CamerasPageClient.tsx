@@ -1,4 +1,4 @@
-// src/app/cameras/CamerasPageClient.tsx #2
+// src/app/cameras/CamerasPageClient.tsx #3
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
@@ -55,13 +55,6 @@ function t(language: AppLanguage) {
       recentlySeen: "recently seen",
       needsAttention: "needs attention",
       criticalCameras: "critical cameras",
-      currentView: "in current view",
-      attention: "Attention",
-      attentionText: (stale: number, offline: number) =>
-        `${stale} stale and ${offline} offline cameras need attention.`,
-      cameraFilter: "Camera filter",
-      allCameras: "All cameras",
-      onlyRelevantAssets: "Only relevant assets",
       latestIngestBatches: "Latest ingest batches",
       ingestText: "Recent import and ingest activity.",
       loading: "loading…",
@@ -71,13 +64,12 @@ function t(language: AppLanguage) {
       relevant: "Relevant",
       notRelevant: "Not relevant",
       noIngestBatches: "No ingest batches yet.",
-      noAssets: "No assets in the current view yet.",
+      noAssets: "No assets in the current scope yet.",
       unknown: "?",
       sourceFiles: (count: number | null) => `files: ${count ?? "?"}`,
       online: "Online",
       stale: "Stale",
       offline: "Offline",
-      relevantAssets: "Relevant assets",
     };
   }
 
@@ -94,13 +86,6 @@ function t(language: AppLanguage) {
     recentlySeen: "zuletzt gesehen",
     needsAttention: "Aufmerksamkeit nötig",
     criticalCameras: "kritische Kameras",
-    currentView: "in aktueller Ansicht",
-    attention: "Achtung",
-    attentionText: (stale: number, offline: number) =>
-      `${stale} veraltete und ${offline} offline Kameras benötigen Aufmerksamkeit.`,
-    cameraFilter: "Kamerafilter",
-    allCameras: "Alle Kameras",
-    onlyRelevantAssets: "Nur relevante Assets",
     latestIngestBatches: "Letzte Ingest-Batches",
     ingestText: "Jüngste Import- und Ingest-Aktivität.",
     loading: "lädt…",
@@ -110,21 +95,13 @@ function t(language: AppLanguage) {
     relevant: "Relevant",
     notRelevant: "Nicht relevant",
     noIngestBatches: "Noch keine Ingest-Batches.",
-    noAssets: "Noch keine Assets in der aktuellen Ansicht.",
+    noAssets: "Noch keine Assets im aktuellen Scope.",
     unknown: "?",
     sourceFiles: (count: number | null) => `Dateien: ${count ?? "?"}`,
     online: "Online",
     stale: "Veraltet",
     offline: "Offline",
-    relevantAssets: "Relevante Assets",
   };
-}
-
-function healthEmoji(status?: string) {
-  if (status === "online") return "🟢";
-  if (status === "stale") return "🟡";
-  if (status === "offline") return "🔴";
-  return "⚪";
 }
 
 function formatAgo(ts: string | null | undefined, language: AppLanguage) {
@@ -214,12 +191,10 @@ export default function CamerasPageClient({
   const searchParams = useSearchParams();
   const revierParam = searchParams.get("revier");
 
-  const [cameraId, setCameraId] = useState<string>("");
   const [cameras, setCameras] = useState<CameraRow[]>([]);
   const [assets, setAssets] = useState<AssetRow[]>([]);
   const [batches, setBatches] = useState<BatchRow[]>([]);
   const [urls, setUrls] = useState<Record<string, string>>({});
-  const [onlyRelevant, setOnlyRelevant] = useState(true);
   const [msg, setMsg] = useState("");
   const [loadingInitial, setLoadingInitial] = useState(false);
   const [loadingAssets, setLoadingAssets] = useState(false);
@@ -271,18 +246,11 @@ export default function CamerasPageClient({
           language
         )
       );
+      setCameras([]);
       return;
     }
 
-    const list = (json.items ?? []) as CameraRow[];
-    setCameras(list);
-
-    setCameraId((current) => {
-      if (list.length === 0) return "";
-      if (!current) return list[0].id;
-      if (!list.some((camera) => camera.id === current)) return list[0].id;
-      return current;
-    });
+    setCameras((json.items ?? []) as CameraRow[]);
   }
 
   async function loadAssets() {
@@ -292,8 +260,6 @@ export default function CamerasPageClient({
       const params = new URLSearchParams();
       params.set("limit", String(assetLimit));
 
-      if (cameraId) params.set("cameraId", cameraId);
-      if (onlyRelevant) params.set("onlyRelevant", "true");
       if (revierParam) params.set("revier", revierParam);
 
       const res = await fetch(`/api/assets?${params.toString()}`, {
@@ -328,7 +294,6 @@ export default function CamerasPageClient({
       const params = new URLSearchParams();
       params.set("limit", String(batchLimit));
 
-      if (cameraId) params.set("cameraId", cameraId);
       if (revierParam) params.set("revier", revierParam);
 
       const res = await fetch(`/api/ingest-batches?${params.toString()}`, {
@@ -358,8 +323,7 @@ export default function CamerasPageClient({
     setLoadingInitial(true);
 
     try {
-      await loadCameras();
-      await Promise.all([loadAssets(), loadBatches()]);
+      await Promise.all([loadCameras(), loadAssets(), loadBatches()]);
     } finally {
       setLoadingInitial(false);
     }
@@ -369,22 +333,6 @@ export default function CamerasPageClient({
     void loadOverview();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [revierParam, language]);
-
-  useEffect(() => {
-    void loadAssets();
-    void loadBatches();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cameraId, onlyRelevant, revierParam, language]);
-
-  const cameraOptions = useMemo(() => {
-    return [
-      { id: "", label: text.allCameras },
-      ...cameras.map((camera) => ({
-        id: camera.id,
-        label: `${healthEmoji(camera.health_status)} ${camera.name}`,
-      })),
-    ];
-  }, [cameras, text.allCameras]);
 
   const cameraNameById = useMemo(() => {
     return Object.fromEntries(cameras.map((camera) => [camera.id, camera.name]));
@@ -406,13 +354,6 @@ export default function CamerasPageClient({
     );
   }, [cameras]);
 
-  const relevantAssetsCount = useMemo(
-    () => assets.filter((asset) => asset.relevant_effective === true).length,
-    [assets]
-  );
-
-  const attentionCount = healthCounts.stale + healthCounts.offline;
-
   return (
     <main className="space-y-8">
       <section className="rounded-[32px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(201,149,46,0.16),transparent_24%),linear-gradient(135deg,rgba(255,255,255,0.06),rgba(255,255,255,0.03))] p-6 backdrop-blur-sm">
@@ -427,7 +368,7 @@ export default function CamerasPageClient({
         </div>
       </section>
 
-      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <StatCard
           title={text.camerasTitle}
           value={cameras.length}
@@ -448,56 +389,6 @@ export default function CamerasPageClient({
           value={healthCounts.offline}
           subline={text.criticalCameras}
         />
-        <StatCard
-          title={text.relevantAssets}
-          value={relevantAssetsCount}
-          subline={text.currentView}
-        />
-      </section>
-
-      {attentionCount > 0 ? (
-        <section className="rounded-[28px] border border-amber-300/20 bg-amber-300/10 p-6 backdrop-blur-sm">
-          <h2 className="text-lg font-medium text-amber-100">{text.attention}</h2>
-          <p className="mt-2 text-sm leading-6 text-amber-100/85">
-            {text.attentionText(healthCounts.stale, healthCounts.offline)}
-          </p>
-        </section>
-      ) : null}
-
-      <section className="rounded-[22px] border border-white/10 bg-white/5 px-4 py-4 backdrop-blur-sm">
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-          <div className="text-sm font-medium text-white">{text.cameraFilter}</div>
-
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center lg:justify-end">
-            <div className="min-w-[280px]">
-              <select
-                className="w-full rounded-full border border-white/10 bg-white/5 px-3 py-2 text-white outline-none backdrop-blur-sm"
-                value={cameraId}
-                onChange={(e) => setCameraId(e.target.value)}
-              >
-                {cameraOptions.map((option) => (
-                  <option
-                    key={option.id || "all"}
-                    value={option.id}
-                    className="bg-[#102018] text-white"
-                  >
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <label className="flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/78">
-              <input
-                type="checkbox"
-                checked={onlyRelevant}
-                onChange={(e) => setOnlyRelevant(e.target.checked)}
-                className="rounded border-white/10 bg-white/5"
-              />
-              {text.onlyRelevantAssets}
-            </label>
-          </div>
-        </div>
       </section>
 
       {msg ? (
@@ -564,7 +455,9 @@ export default function CamerasPageClient({
         <section className="rounded-[28px] border border-white/10 bg-white/5 p-6 backdrop-blur-sm">
           <div className="mb-4 flex items-center justify-between">
             <div>
-              <h2 className="text-lg font-medium text-white">{text.latestAssets}</h2>
+              <h2 className="text-lg font-medium text-white">
+                {text.latestAssets}
+              </h2>
               <p className="text-sm text-white/65">{text.latestAssetsText}</p>
             </div>
             {loadingInitial || loadingAssets ? (

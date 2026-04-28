@@ -1,5 +1,4 @@
-// src/app/page.tsx #9
-import type { ReactNode } from "react";
+// src/app/page.tsx #12
 import Link from "next/link";
 import { cookies } from "next/headers";
 import { requirePathAccess, canAccessPath } from "@/lib/authz";
@@ -20,11 +19,8 @@ import {
   getSpeciesLabel,
   loadSpeciesMeta,
 } from "@/lib/speciesMeta";
-import {
-  DEFAULT_APP_TIME_ZONE,
-  formatAppDate,
-  formatAppDateTime,
-} from "@/lib/dateTime";
+import { DEFAULT_APP_TIME_ZONE, formatAppDateTime } from "@/lib/dateTime";
+import { resolveAssetPreviewUrl } from "@/lib/demoAssetResolver";
 
 type SubscriptionRow = {
   plan_key: "starter" | "pro" | "enterprise";
@@ -52,7 +48,7 @@ type RevierRow = {
   timezone: string | null;
 };
 
-type EventFeedRow = {
+type EventRow = {
   id: string;
   camera_id: string;
   start_at: string | null;
@@ -60,13 +56,21 @@ type EventFeedRow = {
   top_species: string | null;
   top_count: number | null;
   relevance_score: number | null;
-  asset_count: number | null;
+  created_at: string | null;
+};
+
+type AssetPreviewRow = {
+  id: string;
+  camera_id: string;
+  storage_path: string | null;
+  created_at: string | null;
+  captured_at: string | null;
 };
 
 function formatMoney(
   amountCents: number,
   currency: string,
-  language: AppLanguage
+  language: AppLanguage,
 ) {
   return new Intl.NumberFormat(getIntlLocale(language), {
     style: "currency",
@@ -81,7 +85,7 @@ function formatPlanPrice(subscription: SubscriptionRow, language: AppLanguage) {
     return formatMoney(
       subscription.price_amount_cents,
       subscription.price_currency,
-      language
+      language,
     );
   }
 
@@ -103,16 +107,6 @@ function formatPlanPrice(subscription: SubscriptionRow, language: AppLanguage) {
     : language === "en"
       ? "Not set yet"
       : "Noch nicht festgelegt";
-}
-
-function billingCycleLabel(
-  cycle: "monthly" | "yearly",
-  language: AppLanguage
-) {
-  if (language === "en") {
-    return cycle === "yearly" ? "Yearly" : "Monthly";
-  }
-  return cycle === "yearly" ? "Jährlich" : "Monatlich";
 }
 
 function planLabel(planKey: SubscriptionRow["plan_key"]) {
@@ -139,7 +133,8 @@ function statusUi(status: SubscriptionStatus, language: AppLanguage) {
       case "active":
         return {
           label: "Active",
-          badgeClass: "border-emerald-300/25 bg-emerald-300/10 text-emerald-200",
+          badgeClass:
+            "border-emerald-300/25 bg-emerald-300/10 text-emerald-200",
         };
       case "past_due":
         return {
@@ -198,56 +193,44 @@ function statusUi(status: SubscriptionStatus, language: AppLanguage) {
   }
 }
 
+function scoreBadge(score: number | null, language: AppLanguage) {
+  if (typeof score !== "number") return "—";
+
+  if (language === "en") {
+    if (score >= 0.9) return "very high";
+    if (score >= 0.75) return "high";
+    if (score >= 0.5) return "medium";
+    return "low";
+  }
+
+  if (score >= 0.9) return "sehr hoch";
+  if (score >= 0.75) return "hoch";
+  if (score >= 0.5) return "mittel";
+  return "niedrig";
+}
+
 function t(language: AppLanguage) {
   if (language === "en") {
     return {
       pageEyebrow: "Home",
       pageTitle: "Venaris Home",
       pageBody:
-        "Central overview of wildlife, cameras and organization in the active context.",
+        "Central overview of setup, wildlife activity and organization in the active context.",
 
-      open: "Open →",
+      setupEyebrow: "Setup",
+      setupGroundTitle: "Set up ground",
+      setupGroundText:
+        "Create the first ground so cameras, events and insights can be assigned correctly.",
+      setupCamerasTitle: "Set up cameras",
+      setupCamerasText:
+        "Connect your first cameras so Venaris can receive and analyze images.",
+      inviteMembersTitle: "Invite members",
+      inviteMembersText:
+        "Invite more users and extend access to organization, grounds and cameras.",
+      setupOpen: "Start setup →",
 
-      wildlifeEyebrow: "Wildlife",
-      operationsEyebrow: "Operations",
-      commercialEyebrow: "Commercial",
-      teamEyebrow: "Team",
-
-      signalMissing: "No signal yet",
-      camerasMetric: (count: number) => `${count} cameras`,
-      events14dMetric: (count: number) => `${count} events / 14 days`,
-      noPlan: "No plan",
-
-      understandMovement: "Understand movement in the ground",
-      buildWildlife: "Build wildlife visibility",
-      wildlifeWithSignalText: (count: number) =>
-        `${count} relevant wildlife events in the last 14 days. This gives you an immediate view of what is actually happening right now.`,
-      wildlifeNoSignalText:
-        "No recent wildlife events are visible yet. The best next step is the wildlife overview.",
-
-      keepCameraSituationInView: "Keep camera operations in view",
-      activateFirstCameras: "Activate first cameras",
-      camerasWithSignalText: (count: number) =>
-        `${count} cameras are visible in the scope of the active organization. Status and Ingest are the fastest operational entry points.`,
-      camerasNoSignalText:
-        "As soon as cameras are created and connected, this becomes the operational backbone for wildlife and monitoring.",
-
-      managePlanAndLimits: "Actively manage plan and limits",
-      managePlanAndLimitsText: (plan: string, status: string) =>
-        `${plan} is currently running with status ${status}. This is where you manage growth, limits and plan changes.`,
-      noSubscriptionText:
-        "No subscription is stored yet for this organization. That should be clarified next.",
-
-      unlockAccessForMoreUsers: "Enable access for more users",
-      memberUsageText: (used: number, max: number) =>
-        `${used} of ${max} member slots are currently in use.`,
-      extendTeam: "Expand team",
-      inviteUsersText:
-        "Invite more users and extend operational access to the organization.",
-
-      wildlifeEvents14d: "Wildlife Events (14 days)",
-      wildlifeEvents14dSubline:
-        "Fast activity anchor for the current period.",
+      wildlifeEvents30d: "Wildlife Events (30 days)",
+      wildlifeEvents30dSubline: "Fast activity anchor for the current period.",
       camerasTitle: "Cameras",
       camerasPlanSubline: (current: number, max: number) =>
         `${current} / ${max} in the active plan`,
@@ -259,40 +242,19 @@ function t(language: AppLanguage) {
         `${price} incl. VAT · ${status}`,
       noSubscriptionStored: "No subscription stored",
 
-      wildlifeOpen: "Open wildlife",
-      camerasOpen: "Open cameras",
-      orgaOpen: "Open organization",
-
-      organizationAndSubscription: "Organization & Subscription",
-      organizationAndSubscriptionText:
-        "Commercial framework, team and ground scope of the active organization.",
-      subscriptionMissingForOrg:
-        "No subscription has been found for this organization.",
-
-      scope: "Scope",
-      grounds: "Grounds",
-      members: "Members",
-      openInvitesLabel: "Open invites",
-
-      trialEnds: "Trial ends",
-      periodUntil: "Period until",
-
-      wildlifeSnapshot: "Wildlife Snapshot",
-      wildlifeSnapshotText:
-        "The latest visible events and the fastest entry into wildlife.",
+      latestEventTitle: "Latest Wildlife Event",
+      latestEventText:
+        "Compact view of the most recent visible wildlife event in the current scope.",
       noRecentEvents:
-        "No recent events are visible in the dashboard scope yet.",
+        "No wildlife event is visible in the dashboard scope yet.",
       cameraLabel: "Camera",
+      timeLabel: "Time",
       assetsLabel: "Assets",
-      scoreLabel: "Score",
-
-      cameraSnapshot: "Camera Snapshot",
-      cameraSnapshotText:
-        "Most recently created or most recently visible cameras with quick access to setup.",
-      noCamerasYet: "No cameras created yet.",
-      noLocationLabel: "No location label",
-      createdLabel: "Created",
-      lastSeenLabel: "Last seen",
+      probabilityLabel: "Probability",
+      countLabel: "Count",
+      speciesUnknown: "Unknown species",
+      noPreview: "No preview",
+      previewAlt: "Latest wildlife event preview",
     };
   }
 
@@ -300,49 +262,22 @@ function t(language: AppLanguage) {
     pageEyebrow: "Home",
     pageTitle: "Venaris Home",
     pageBody:
-      "Zentrale Übersicht über Wildlife, Cameras und Organization der aktiven Umgebung.",
+      "Zentrale Übersicht über Setup, Wildlife-Aktivität und Organisation der aktiven Umgebung.",
 
-    open: "Öffnen →",
+    setupEyebrow: "Setup",
+    setupGroundTitle: "Revier einrichten",
+    setupGroundText:
+      "Lege Dein erstes Revier an, damit Kameras, Events und Auswertungen sauber zugeordnet werden können.",
+    setupCamerasTitle: "Kameras einrichten",
+    setupCamerasText:
+      "Verbinde Deine ersten Kameras, damit Venaris Bilder empfangen und auswerten kann.",
+    inviteMembersTitle: "Mitglieder einladen",
+    inviteMembersText:
+      "Lade weitere Nutzer ein und verteile den Zugriff auf Organisation, Reviere und Kameras.",
+    setupOpen: "Einrichten →",
 
-    wildlifeEyebrow: "Wildlife",
-    operationsEyebrow: "Operations",
-    commercialEyebrow: "Commercial",
-    teamEyebrow: "Team",
-
-    signalMissing: "Noch kein Signal",
-    camerasMetric: (count: number) => `${count} Kameras`,
-    events14dMetric: (count: number) => `${count} Events / 14 Tage`,
-    noPlan: "Kein Plan",
-
-    understandMovement: "Bewegung im Revier verstehen",
-    buildWildlife: "Wildlife aufbauen",
-    wildlifeWithSignalText: (count: number) =>
-      `${count} relevante Wildlife-Events in den letzten 14 Tagen. Hier siehst Du sofort, was gerade wirklich los ist.`,
-    wildlifeNoSignalText:
-      "Noch keine aktuellen Wildlife-Events sichtbar. Der beste Startpunkt ist jetzt die Wildlife-Übersicht.",
-
-    keepCameraSituationInView: "Kamera-Lage im Blick behalten",
-    activateFirstCameras: "Erste Kameras aktivieren",
-    camerasWithSignalText: (count: number) =>
-      `${count} Kameras sind im Scope der aktiven Organisation sichtbar. Status und Ingest sind der schnellste operative Einstieg.`,
-    camerasNoSignalText:
-      "Sobald Kameras angelegt und verbunden sind, entsteht hier der operative Backbone für Wildlife und Monitoring.",
-
-    managePlanAndLimits: "Plan und Limits aktiv steuern",
-    managePlanAndLimitsText: (plan: string, status: string) =>
-      `${plan} läuft aktuell mit Status ${status}. Hier steuerst Du Wachstum, Limits und Planwechsel.`,
-    noSubscriptionText:
-      "Für diese Organisation ist noch kein Abo hinterlegt. Das solltest Du als Nächstes klären.",
-
-    unlockAccessForMoreUsers: "Zugang für weitere Nutzer freischalten",
-    memberUsageText: (used: number, max: number) =>
-      `${used} von ${max} Member-Slots sind aktuell genutzt.`,
-    extendTeam: "Team erweitern",
-    inviteUsersText:
-      "Lade weitere Nutzer ein und erweitere den operativen Zugriff auf die Organisation.",
-
-    wildlifeEvents14d: "Wildtier-Ereignisse (14 Tage)",
-    wildlifeEvents14dSubline:
+    wildlifeEvents30d: "Wildtier-Ereignisse (30 Tage)",
+    wildlifeEvents30dSubline:
       "Schneller Aktivitätsanker für den aktuellen Zeitraum.",
     camerasTitle: "Kameras",
     camerasPlanSubline: (current: number, max: number) =>
@@ -355,40 +290,18 @@ function t(language: AppLanguage) {
       `${price} inkl. MwSt. · ${status}`,
     noSubscriptionStored: "Kein Abo hinterlegt",
 
-    wildlifeOpen: "Wildlife öffnen",
-    camerasOpen: "Cameras öffnen",
-    orgaOpen: "Orga öffnen",
-
-    organizationAndSubscription: "Organisation & Abo",
-    organizationAndSubscriptionText:
-      "Kommerzieller Rahmen, Team und Revier-Scope der aktiven Organization.",
-    subscriptionMissingForOrg:
-      "Für diese Organisation wurde noch kein Abo gefunden.",
-
-    scope: "Scope",
-    grounds: "Reviere",
-    members: "Members",
-    openInvitesLabel: "Offene Invites",
-
-    trialEnds: "Trial endet",
-    periodUntil: "Periode bis",
-
-    wildlifeSnapshot: "Wildlife Snapshot",
-    wildlifeSnapshotText:
-      "Die letzten sichtbaren Ereignisse und der schnellste Einstieg in Wildlife.",
-    noRecentEvents:
-      "Noch keine aktuellen Events im Dashboard-Scope sichtbar.",
+    latestEventTitle: "Letztes Wildlife Event",
+    latestEventText:
+      "Kompakte Sicht auf das zuletzt sichtbare Wildlife Event im aktuellen Scope.",
+    noRecentEvents: "Noch kein Wildlife Event im Dashboard-Scope sichtbar.",
     cameraLabel: "Kamera",
+    timeLabel: "Zeitpunkt",
     assetsLabel: "Assets",
-    scoreLabel: "Score",
-
-    cameraSnapshot: "Kamera Snapshot",
-    cameraSnapshotText:
-      "Zuletzt angelegte bzw. zuletzt sichtbare Kameras mit schnellem Zugang zur Anlage.",
-    noCamerasYet: "Noch keine Kameras angelegt.",
-    noLocationLabel: "Keine Ortsbezeichnung",
-    createdLabel: "Erstellt",
-    lastSeenLabel: "Last seen",
+    probabilityLabel: "Wahrscheinlichkeit",
+    countLabel: "Anzahl",
+    speciesUnknown: "Unbekannte Art",
+    noPreview: "Kein Preview",
+    previewAlt: "Vorschau des letzten Wildlife Events",
   };
 }
 
@@ -414,55 +327,17 @@ function StatCard({
   );
 }
 
-function SectionCard({
-  title,
-  text,
-  actions,
-  children,
-}: {
-  title: string;
-  text: string;
-  actions?: ReactNode;
-  children: ReactNode;
-}) {
-  return (
-    <section className="rounded-[28px] border border-white/10 bg-white/5 p-6 backdrop-blur-sm">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h2 className="text-lg font-medium text-white">{title}</h2>
-          <p className="mt-1 text-sm text-white/65">{text}</p>
-        </div>
-        {actions ? <div className="flex flex-wrap gap-2">{actions}</div> : null}
-      </div>
-      <div className="mt-6">{children}</div>
-    </section>
-  );
-}
-
-function ActionLink({ href, label }: { href: string; label: string }) {
-  return (
-    <Link
-      href={href}
-      className="inline-flex rounded-full border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/78 backdrop-blur-sm hover:border-amber-300/20 hover:bg-white/8 hover:text-white"
-    >
-      {label}
-    </Link>
-  );
-}
-
-function FocusCard({
+function SetupCard({
   href,
   eyebrow,
   title,
   text,
-  metric,
   openLabel,
 }: {
   href: string;
   eyebrow: string;
   title: string;
   text: string;
-  metric?: string;
   openLabel: string;
 }) {
   return (
@@ -470,28 +345,142 @@ function FocusCard({
       href={href}
       className="group rounded-[28px] border border-white/10 bg-[linear-gradient(135deg,rgba(255,255,255,0.07),rgba(255,255,255,0.03))] p-5 backdrop-blur-sm transition hover:border-amber-300/20 hover:bg-[linear-gradient(135deg,rgba(255,255,255,0.08),rgba(255,255,255,0.04))]"
     >
-      <div className="flex items-start justify-between gap-4">
-        <div className="text-xs font-medium uppercase tracking-[0.14em] text-white/45">
-          {eyebrow}
-        </div>
-        {metric ? (
-          <div className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-medium text-white/72">
-            {metric}
-          </div>
-        ) : null}
+      <div className="text-xs font-medium uppercase tracking-[0.14em] text-white/45">
+        {eyebrow}
       </div>
-
-      <div className="mt-4">
-        <div className="text-xl font-semibold tracking-tight text-white">
-          {title}
-        </div>
-        <p className="mt-2 text-sm leading-6 text-white/68">{text}</p>
+      <div className="mt-4 text-xl font-semibold tracking-tight text-white">
+        {title}
       </div>
-
+      <p className="mt-2 text-sm leading-6 text-white/68">{text}</p>
       <div className="mt-5 text-sm font-medium text-amber-200 group-hover:text-amber-100">
         {openLabel}
       </div>
     </Link>
+  );
+}
+
+function EventDetailCard({
+  event,
+  cameraName,
+  timeZone,
+  language,
+  speciesLabel,
+  previewUrl,
+  heroTimestamp,
+  assetCount,
+}: {
+  event: EventRow | null;
+  cameraName: string | null;
+  timeZone: string;
+  language: AppLanguage;
+  speciesLabel: string;
+  previewUrl: string | null;
+  heroTimestamp: string | null;
+  assetCount: number;
+}) {
+  const text = t(language);
+
+  return (
+    <section className="rounded-[28px] border border-white/10 bg-white/5 p-6 backdrop-blur-sm">
+      <div>
+        <h2 className="text-lg font-medium text-white">
+          {text.latestEventTitle}
+        </h2>
+        <p className="mt-1 text-sm text-white/65">{text.latestEventText}</p>
+      </div>
+
+      {!event ? (
+        <div className="mt-6 rounded-[24px] border border-white/10 bg-white/5 p-5 text-sm text-white/68">
+          {text.noRecentEvents}
+        </div>
+      ) : (
+        <div className="mt-6 grid gap-5 lg:grid-cols-[minmax(0,1.25fr)_minmax(280px,0.75fr)]">
+          <div className="rounded-[24px] border border-white/10 bg-white/5 p-4">
+            <div className="aspect-[4/3] w-full overflow-hidden rounded-[20px] bg-white/5">
+              {previewUrl ? (
+                <img
+                  src={previewUrl}
+                  alt={text.previewAlt}
+                  className="h-full w-full object-cover"
+                />
+              ) : (
+                <div className="flex h-full items-center justify-center text-sm text-white/45">
+                  {text.noPreview}
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="rounded-[24px] border border-white/10 bg-white/5 p-5">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div>
+                <div className="text-2xl font-semibold tracking-tight text-white">
+                  {speciesLabel || text.speciesUnknown}
+                </div>
+              </div>
+
+            </div>
+
+            <div className="mt-5 grid gap-3">
+              <div className="rounded-[18px] border border-white/10 bg-white/5 p-4">
+                <div className="text-xs uppercase tracking-wide text-white/45">
+                  {text.cameraLabel}
+                </div>
+                <div className="mt-2 text-sm font-medium text-white/78">
+                  {cameraName ?? "—"}
+                </div>
+              </div>
+
+              <div className="rounded-[18px] border border-white/10 bg-white/5 p-4">
+                <div className="text-xs uppercase tracking-wide text-white/45">
+                  {text.probabilityLabel}
+                </div>
+                <div className="mt-2 text-sm font-medium text-white/78">
+                  {typeof event.relevance_score === "number"
+                    ? `${Math.round(event.relevance_score * 100)}% · ${scoreBadge(
+                        event.relevance_score,
+                        language,
+                      )}`
+                    : "—"}
+                </div>
+              </div>
+
+              <div className="rounded-[18px] border border-white/10 bg-white/5 p-4">
+                <div className="text-xs uppercase tracking-wide text-white/45">
+                  {text.timeLabel}
+                </div>
+                <div className="mt-2 text-sm text-white/78">
+                  {formatAppDateTime(
+                    heroTimestamp ?? event.start_at,
+                    language,
+                    timeZone,
+                  )}
+                </div>
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="rounded-[18px] border border-white/10 bg-white/5 p-4">
+                  <div className="text-xs uppercase tracking-wide text-white/45">
+                    {text.assetsLabel}
+                  </div>
+                  <div className="mt-2 text-sm text-white/78">{assetCount}</div>
+                </div>
+
+                <div className="rounded-[18px] border border-white/10 bg-white/5 p-4">
+                  <div className="text-xs uppercase tracking-wide text-white/45">
+                    {text.countLabel}
+                  </div>
+                  <div className="mt-2 text-sm text-white/78">
+                    {event.top_count ?? "—"}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      )}
+    </section>
   );
 }
 
@@ -527,7 +516,7 @@ export default async function HomePage() {
   const role = ctx.activeMembership.role;
   const email = ctx.user.email ?? null;
   const recentWindow = new Date();
-  recentWindow.setDate(recentWindow.getDate() - 14);
+  recentWindow.setDate(recentWindow.getDate() - 30);
   const recentWindowIso = recentWindow.toISOString();
   const nowIso = new Date().toISOString();
 
@@ -546,8 +535,7 @@ export default async function HomePage() {
       .from("cameras")
       .select("id,name,location_name,last_seen_at,created_at,revier_id")
       .eq("organization_id", organization.id)
-      .order("created_at", { ascending: false })
-      .limit(6),
+      .order("created_at", { ascending: false }),
 
     supabase
       .from("reviers")
@@ -579,7 +567,7 @@ export default async function HomePage() {
         price_currency,
         max_cameras,
         max_members
-        `
+        `,
       )
       .eq("organization_id", organization.id)
       .maybeSingle<SubscriptionRow>(),
@@ -603,74 +591,134 @@ export default async function HomePage() {
 
   if (subscriptionResult.error) {
     throw new Error(
-      `Failed to load subscription: ${subscriptionResult.error.message}`
+      `Failed to load subscription: ${subscriptionResult.error.message}`,
     );
   }
 
   const cameras = (camerasResult.data ?? []) as CameraRow[];
   const cameraIds = cameras.map((camera) => camera.id);
-
   const reviers = (reviersResult.data ?? []) as RevierRow[];
 
   const timezoneByRevierId = new Map(
     reviers.map((revier) => [
       revier.id,
       revier.timezone || DEFAULT_APP_TIME_ZONE,
-    ])
+    ]),
   );
 
   const timezoneByCameraId = new Map(
     cameras.map((camera) => [
       camera.id,
       camera.revier_id
-        ? timezoneByRevierId.get(camera.revier_id) ?? DEFAULT_APP_TIME_ZONE
+        ? (timezoneByRevierId.get(camera.revier_id) ?? DEFAULT_APP_TIME_ZONE)
         : DEFAULT_APP_TIME_ZONE,
-    ])
+    ]),
   );
 
-  const reviersCount = reviersResult.count ?? 0;
   const membersCount = membersResult.count ?? 0;
   const openInvitesCount = invitesResult.count ?? 0;
   const subscription = subscriptionResult.data;
 
-  let recentEvents: EventFeedRow[] = [];
+  let latestEvent: EventRow | null = null;
   let recentEventsCount = 0;
+  let latestEventAssetCount = 0;
+  let latestEventHeroAsset: AssetPreviewRow | null = null;
+  let latestEventPreviewUrl: string | null = null;
 
   if (cameraIds.length > 0) {
-    const [eventsListResult, eventsCountResult] = await Promise.all([
+    const [latestEventResult, eventsCountResult] = await Promise.all([
       supabase
-        .from("event_feed")
+        .from("events")
         .select(
-          "id,camera_id,start_at,end_at,top_species,top_count,relevance_score,asset_count"
+          "id,camera_id,start_at,end_at,top_species,top_count,relevance_score,created_at",
         )
         .in("camera_id", cameraIds)
         .order("start_at", { ascending: false })
-        .limit(5),
+        .limit(1)
+        .maybeSingle<EventRow>(),
 
       supabase
-        .from("event_feed")
+        .from("events")
         .select("id", { count: "exact", head: true })
         .in("camera_id", cameraIds)
         .gte("start_at", recentWindowIso),
     ]);
 
-    if (eventsListResult.error) {
+    if (latestEventResult.error) {
       throw new Error(
-        `Failed to load recent events: ${eventsListResult.error.message}`
+        `Failed to load latest event: ${latestEventResult.error.message}`,
       );
     }
 
     if (eventsCountResult.error) {
       throw new Error(
-        `Failed to load event count: ${eventsCountResult.error.message}`
+        `Failed to load event count: ${eventsCountResult.error.message}`,
       );
     }
 
-    recentEvents = (eventsListResult.data ?? []) as EventFeedRow[];
+    latestEvent = latestEventResult.data ?? null;
     recentEventsCount = eventsCountResult.count ?? 0;
   }
 
-  const cameraNameById = new Map(cameras.map((camera) => [camera.id, camera.name]));
+  if (latestEvent) {
+    const { data: eventAssets, error: eventAssetsError } = await supabase
+      .from("event_assets")
+      .select("asset_id")
+      .eq("event_id", latestEvent.id);
+
+    if (eventAssetsError) {
+      throw new Error(
+        `Failed to load latest event assets: ${eventAssetsError.message}`,
+      );
+    }
+
+    const assetIds = (eventAssets ?? [])
+      .map((row: { asset_id: string | null }) => row.asset_id)
+      .filter(Boolean) as string[];
+
+    latestEventAssetCount = assetIds.length;
+
+    if (assetIds.length > 0) {
+      const { data: assetsData, error: assetsDataError } = await supabase
+        .from("assets")
+        .select("id,camera_id,storage_path,created_at,captured_at")
+        .in("id", assetIds)
+        .order("captured_at", { ascending: true, nullsFirst: false })
+        .order("created_at", { ascending: true })
+        .limit(1)
+        .returns<AssetPreviewRow[]>();
+
+      if (assetsDataError) {
+        throw new Error(
+          `Failed to load latest event preview asset: ${assetsDataError.message}`,
+        );
+      }
+
+      latestEventHeroAsset = assetsData?.[0] ?? null;
+    }
+
+    if (latestEventHeroAsset) {
+      latestEventPreviewUrl = await resolveAssetPreviewUrl({
+        asset: {
+          id: latestEventHeroAsset.id,
+          camera_id: latestEventHeroAsset.camera_id,
+          storage_path: latestEventHeroAsset.storage_path ?? null,
+        },
+        isDemo: Boolean(organization.is_demo),
+      });
+    }
+  }
+
+  const cameraNameById = new Map(
+    cameras.map((camera) => [
+      camera.id,
+      camera.name
+        ? `${camera.name}${
+            camera.location_name ? ` (${camera.location_name})` : ""
+          }`
+        : "—",
+    ]),
+  );
 
   const resolvedSubscription = subscription
     ? resolveSubscriptionState({
@@ -686,7 +734,10 @@ export default async function HomePage() {
     : null;
 
   const effectiveStatus = subscription
-    ? statusUi(resolvedSubscription?.effectiveStatus ?? subscription.status, language)
+    ? statusUi(
+        resolvedSubscription?.effectiveStatus ?? subscription.status,
+        language,
+      )
     : null;
 
   const subscriptionPrice = subscription
@@ -704,89 +755,41 @@ export default async function HomePage() {
   const showCameras = canSee("/cameras");
   const showOrga = canSee("/orga");
   const showSubscription = canSee("/orga/subscription");
-  const showInvite = canSee("/orga/members/invite");
 
-  const focusCards = [
-    showWildlife
+  const setupCards = [
+    showOrga
       ? {
-          href: "/wildlife",
-          eyebrow: text.wildlifeEyebrow,
-          title:
-            recentEventsCount > 0
-              ? text.understandMovement
-              : text.buildWildlife,
-          text:
-            recentEventsCount > 0
-              ? text.wildlifeWithSignalText(recentEventsCount)
-              : text.wildlifeNoSignalText,
-          metric:
-            recentEventsCount > 0
-              ? text.events14dMetric(recentEventsCount)
-              : text.signalMissing,
+          href: "/orga/reviers/new",
+          title: text.setupGroundTitle,
+          text: text.setupGroundText,
         }
       : null,
-
-    showCameras
+    canSee("/cameras/new")
       ? {
-          href: "/cameras",
-          eyebrow: text.operationsEyebrow,
-          title:
-            cameras.length > 0
-              ? text.keepCameraSituationInView
-              : text.activateFirstCameras,
-          text:
-            cameras.length > 0
-              ? text.camerasWithSignalText(cameras.length)
-              : text.camerasNoSignalText,
-          metric: text.camerasMetric(cameras.length),
+          href: "/cameras/new",
+          title: text.setupCamerasTitle,
+          text: text.setupCamerasText,
         }
       : null,
-
-    showSubscription
+    canSee("/orga/members/invite")
       ? {
-          href: "/orga/subscription",
-          eyebrow: text.commercialEyebrow,
-          title: text.managePlanAndLimits,
-          text: subscription
-            ? text.managePlanAndLimitsText(
-                planLabel(subscription.plan_key),
-                effectiveStatus?.label ?? "—"
-              )
-            : text.noSubscriptionText,
-          metric: subscription ? planLabel(subscription.plan_key) : text.noPlan,
+          href: "/orga/members/invite",
+          title: text.inviteMembersTitle,
+          text: text.inviteMembersText,
         }
-      : showInvite
-        ? {
-            href: "/orga/members/invite",
-            eyebrow: text.teamEyebrow,
-            title: text.unlockAccessForMoreUsers,
-            text:
-              subscription && resolvedSubscription
-                ? text.memberUsageText(
-                    resolvedSubscription.currentMemberUsage,
-                    subscription.max_members
-                  )
-                : text.inviteUsersText,
-            metric:
-              subscription && resolvedSubscription
-                ? `${resolvedSubscription.currentMemberUsage} / ${subscription.max_members}`
-                : text.extendTeam,
-          }
-        : null,
+      : null,
   ].filter(Boolean) as {
     href: string;
-    eyebrow: string;
     title: string;
     text: string;
-    metric?: string;
   }[];
 
   const statCards = [
     {
       visible: showWildlife,
-      title: text.wildlifeEvents14d,
+      title: text.wildlifeEvents30d,
       value: String(recentEventsCount),
-      subline: text.wildlifeEvents14dSubline,
+      subline: text.wildlifeEvents30dSubline,
     },
     {
       visible: showCameras,
@@ -809,23 +812,19 @@ export default async function HomePage() {
       subline: subscription
         ? text.subscriptionSubline(
             subscriptionPrice,
-            effectiveStatus?.label ?? "—"
+            effectiveStatus?.label ?? "—",
           )
         : text.noSubscriptionStored,
     },
   ].filter((item) => item.visible);
 
-  const wildlifeActions = [{ href: "/wildlife", label: text.wildlifeOpen }].filter(
-    (item) => canSee(item.href)
-  );
+  const latestEventTimeZone = latestEvent
+    ? (timezoneByCameraId.get(latestEvent.camera_id) ?? DEFAULT_APP_TIME_ZONE)
+    : DEFAULT_APP_TIME_ZONE;
 
-  const cameraActions = [{ href: "/cameras", label: text.camerasOpen }].filter(
-    (item) => canSee(item.href)
-  );
-
-  const orgaActions = [{ href: "/orga", label: text.orgaOpen }].filter((item) =>
-    canSee(item.href)
-  );
+  const latestEventSpeciesLabel = latestEvent
+    ? getSpeciesLabel(latestEvent.top_species, language, speciesMetaMap)
+    : "";
 
   return (
     <main className="space-y-8">
@@ -842,17 +841,16 @@ export default async function HomePage() {
           </p>
         </div>
 
-        {focusCards.length > 0 ? (
+        {setupCards.length > 0 ? (
           <div className="mt-6 grid gap-4 xl:grid-cols-3">
-            {focusCards.map((card) => (
-              <FocusCard
+            {setupCards.map((card) => (
+              <SetupCard
                 key={card.href}
                 href={card.href}
-                eyebrow={card.eyebrow}
+                eyebrow={text.setupEyebrow}
                 title={card.title}
                 text={card.text}
-                metric={card.metric}
-                openLabel={text.open}
+                openLabel={text.setupOpen}
               />
             ))}
           </div>
@@ -882,334 +880,26 @@ export default async function HomePage() {
         </section>
       ) : null}
 
-      {showOrga ? (
-        <section className="grid gap-4 xl:grid-cols-2">
-          <SectionCard
-            title={text.organizationAndSubscription}
-            text={text.organizationAndSubscriptionText}
-            actions={
-              orgaActions.length > 0 ? (
-                <>
-                  {orgaActions.map((item) => (
-                    <ActionLink key={item.href} href={item.href} label={item.label} />
-                  ))}
-                </>
-              ) : undefined
-            }
-          >
-            {!subscription ? (
-              <div className="rounded-[24px] border border-amber-300/20 bg-amber-300/10 p-5 text-sm text-amber-100">
-                {text.subscriptionMissingForOrg}
-              </div>
-            ) : (
-              <div className="grid gap-4 md:grid-cols-2">
-                <div className="rounded-[24px] border border-white/10 bg-white/5 p-5">
-                  <div className="flex flex-wrap items-center gap-3">
-                    <div className="text-lg font-semibold text-white">
-                      {planLabel(subscription.plan_key)}
-                    </div>
-                    <span
-                      className={`inline-flex rounded-full border px-3 py-1 text-xs font-medium ${effectiveStatus?.badgeClass}`}
-                    >
-                      {effectiveStatus?.label}
-                    </span>
-                  </div>
-                  <p className="mt-3 text-sm leading-6 text-white/68">
-                    {subscriptionPrice}{" "}
-                    {language === "en" ? "incl. VAT" : "inkl. MwSt."} ·{" "}
-                    {billingCycleLabel(subscription.billing_cycle, language)}
-                  </p>
-                  <p className="mt-2 text-sm leading-6 text-white/60">
-                    {text.trialEnds}:{" "}
-                    {formatAppDate(
-                      subscription.trial_ends_at,
-                      language,
-                      DEFAULT_APP_TIME_ZONE
-                    )}{" "}
-                    · {text.periodUntil}:{" "}
-                    {formatAppDate(
-                      subscription.current_period_end,
-                      language,
-                      DEFAULT_APP_TIME_ZONE
-                    )}
-                  </p>
-                </div>
-
-                <div className="rounded-[24px] border border-white/10 bg-white/5 p-5">
-                  <div className="text-sm font-medium text-white/50">{text.scope}</div>
-                  <div className="mt-3 space-y-2 text-sm text-white/72">
-                    <div>
-                      {text.grounds}: {reviersCount}
-                    </div>
-                    <div>
-                      {text.members}:{" "}
-                      {resolvedSubscription?.currentMemberUsage ?? membersCount} /{" "}
-                      {subscription.max_members}
-                    </div>
-                    <div>
-                      {text.camerasTitle}: {cameras.length} / {subscription.max_cameras}
-                    </div>
-                    <div>
-                      {text.openInvitesLabel}: {openInvitesCount}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-          </SectionCard>
-
-          <SectionCard
-            title={text.wildlifeSnapshot}
-            text={text.wildlifeSnapshotText}
-            actions={
-              wildlifeActions.length > 0 ? (
-                <>
-                  {wildlifeActions.map((item) => (
-                    <ActionLink key={item.href} href={item.href} label={item.label} />
-                  ))}
-                </>
-              ) : undefined
-            }
-          >
-            {recentEvents.length === 0 ? (
-              <div className="rounded-[24px] border border-white/10 bg-white/5 p-5 text-sm text-white/68">
-                {text.noRecentEvents}
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {recentEvents.map((event) => (
-                  <div
-                    key={event.id}
-                    className="rounded-[24px] border border-white/10 bg-white/5 p-4"
-                  >
-                    <div className="flex flex-wrap items-start justify-between gap-3">
-                      <div>
-                        <div className="text-sm font-medium text-white">
-                          {getSpeciesLabel(event.top_species, language, speciesMetaMap)}
-                          {event.top_count ? ` · ${event.top_count}` : ""}
-                        </div>
-                        <p className="mt-1 text-sm text-white/65">
-                          {text.cameraLabel}:{" "}
-                          {cameraNameById.get(event.camera_id) ?? "—"}
-                        </p>
-                      </div>
-
-                      <div className="text-right text-xs text-white/45">
-                        <div>
-                          {formatAppDateTime(
-                            event.start_at,
-                            language,
-                            timezoneByCameraId.get(event.camera_id) ??
-                              DEFAULT_APP_TIME_ZONE
-                          )}
-                        </div>
-                        <div className="mt-1">
-                          {text.assetsLabel}: {event.asset_count ?? 0} ·{" "}
-                          {text.scoreLabel}:{" "}
-                          {event.relevance_score != null
-                            ? Math.round(event.relevance_score)
-                            : "—"}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </SectionCard>
-        </section>
-      ) : null}
-
-      {!showOrga ? (
-        <section className={`grid gap-4 ${showCameras ? "xl:grid-cols-2" : ""}`}>
-          {showWildlife ? (
-            <SectionCard
-              title={text.wildlifeSnapshot}
-              text={text.wildlifeSnapshotText}
-              actions={
-                wildlifeActions.length > 0 ? (
-                  <>
-                    {wildlifeActions.map((item) => (
-                      <ActionLink key={item.href} href={item.href} label={item.label} />
-                    ))}
-                  </>
-                ) : undefined
-              }
-            >
-              {recentEvents.length === 0 ? (
-                <div className="rounded-[24px] border border-white/10 bg-white/5 p-5 text-sm text-white/68">
-                  {text.noRecentEvents}
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {recentEvents.map((event) => (
-                    <div
-                      key={event.id}
-                      className="rounded-[24px] border border-white/10 bg-white/5 p-4"
-                    >
-                      <div className="flex flex-wrap items-start justify-between gap-3">
-                        <div>
-                          <div className="text-sm font-medium text-white">
-                            {getSpeciesLabel(event.top_species, language, speciesMetaMap)}
-                            {event.top_count ? ` · ${event.top_count}` : ""}
-                          </div>
-                          <p className="mt-1 text-sm text-white/65">
-                            {text.cameraLabel}:{" "}
-                            {cameraNameById.get(event.camera_id) ?? "—"}
-                          </p>
-                        </div>
-
-                        <div className="text-right text-xs text-white/45">
-                          <div>
-                            {formatAppDateTime(
-                              event.start_at,
-                              language,
-                              timezoneByCameraId.get(event.camera_id) ??
-                                DEFAULT_APP_TIME_ZONE
-                            )}
-                          </div>
-                          <div className="mt-1">
-                            {text.assetsLabel}: {event.asset_count ?? 0} ·{" "}
-                            {text.scoreLabel}:{" "}
-                            {event.relevance_score != null
-                              ? Math.round(event.relevance_score)
-                              : "—"}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </SectionCard>
-          ) : null}
-
-          {showCameras ? (
-            <SectionCard
-              title={text.cameraSnapshot}
-              text={text.cameraSnapshotText}
-              actions={
-                cameraActions.length > 0 ? (
-                  <>
-                    {cameraActions.map((item) => (
-                      <ActionLink key={item.href} href={item.href} label={item.label} />
-                    ))}
-                  </>
-                ) : undefined
-              }
-            >
-              {cameras.length === 0 ? (
-                <div className="rounded-[24px] border border-white/10 bg-white/5 p-5 text-sm text-white/68">
-                  {text.noCamerasYet}
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {cameras.map((camera) => (
-                    <div
-                      key={camera.id}
-                      className="rounded-[24px] border border-white/10 bg-white/5 p-4"
-                    >
-                      <div className="flex flex-wrap items-start justify-between gap-3">
-                        <div>
-                          <div className="text-sm font-medium text-white">
-                            {camera.name}
-                          </div>
-                          <p className="mt-1 text-sm text-white/65">
-                            {camera.location_name || text.noLocationLabel}
-                          </p>
-                        </div>
-
-                        <div className="text-right text-xs text-white/45">
-                          <div>
-                            {text.createdLabel}:{" "}
-                            {formatAppDate(
-                              camera.created_at,
-                              language,
-                              timezoneByCameraId.get(camera.id) ??
-                                DEFAULT_APP_TIME_ZONE
-                            )}
-                          </div>
-                          <div className="mt-1">
-                            {text.lastSeenLabel}:{" "}
-                            {formatAppDateTime(
-                              camera.last_seen_at,
-                              language,
-                              timezoneByCameraId.get(camera.id) ??
-                                DEFAULT_APP_TIME_ZONE
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </SectionCard>
-          ) : null}
-        </section>
-      ) : showCameras ? (
-        <section>
-          <SectionCard
-            title={text.cameraSnapshot}
-            text={text.cameraSnapshotText}
-            actions={
-              cameraActions.length > 0 ? (
-                <>
-                  {cameraActions.map((item) => (
-                    <ActionLink key={item.href} href={item.href} label={item.label} />
-                  ))}
-                </>
-              ) : undefined
-            }
-          >
-            {cameras.length === 0 ? (
-              <div className="rounded-[24px] border border-white/10 bg-white/5 p-5 text-sm text-white/68">
-                {text.noCamerasYet}
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {cameras.map((camera) => (
-                  <div
-                    key={camera.id}
-                    className="rounded-[24px] border border-white/10 bg-white/5 p-4"
-                  >
-                    <div className="flex flex-wrap items-start justify-between gap-3">
-                      <div>
-                        <div className="text-sm font-medium text-white">
-                          {camera.name}
-                        </div>
-                        <p className="mt-1 text-sm text-white/65">
-                          {camera.location_name || text.noLocationLabel}
-                        </p>
-                      </div>
-
-                      <div className="text-right text-xs text-white/45">
-                        <div>
-                          {text.createdLabel}:{" "}
-                          {formatAppDate(
-                            camera.created_at,
-                            language,
-                            timezoneByCameraId.get(camera.id) ??
-                              DEFAULT_APP_TIME_ZONE
-                          )}
-                        </div>
-                        <div className="mt-1">
-                          {text.lastSeenLabel}:{" "}
-                          {formatAppDateTime(
-                            camera.last_seen_at,
-                            language,
-                            timezoneByCameraId.get(camera.id) ??
-                              DEFAULT_APP_TIME_ZONE
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </SectionCard>
-        </section>
+      {showWildlife ? (
+        <EventDetailCard
+          event={latestEvent}
+          cameraName={
+            latestEvent
+              ? (cameraNameById.get(latestEvent.camera_id) ?? null)
+              : null
+          }
+          timeZone={latestEventTimeZone}
+          language={language}
+          speciesLabel={latestEventSpeciesLabel}
+          previewUrl={latestEventPreviewUrl}
+          heroTimestamp={
+            latestEventHeroAsset
+              ? (latestEventHeroAsset.captured_at ??
+                latestEventHeroAsset.created_at)
+              : null
+          }
+          assetCount={latestEventAssetCount}
+        />
       ) : null}
     </main>
   );

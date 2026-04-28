@@ -501,6 +501,9 @@ export default async function CameraEventDetailPage(props: {
             language={language}
             speciesOptions={speciesOptions}
             speciesLabelByCode={speciesLabelByCode}
+            topSpeciesLabel={topSpeciesLabel}
+            eventCount={event.top_count}
+            assetCount={initialAssets.length}
           />
 
           <div className="rounded-[20px] border border-white/10 bg-white/5 p-4">

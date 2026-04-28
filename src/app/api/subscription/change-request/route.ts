@@ -1,9 +1,10 @@
-// src/app/api/subscription/change-request/route.ts #8
+// src/app/api/subscription/change-request/route.ts #9
 import { NextRequest, NextResponse } from "next/server";
 import { assertNotDemoWrite, requireOrganizationRole } from "@/lib/auth";
 import { supabaseServer } from "@/lib/supabaseServer";
 import { getLanguageFromRequest, type AppLanguage } from "@/lib/i18n";
 import { isSelfServeBillingPlanKey } from "@/lib/billing/plans";
+import { sendSubscriptionChangeRequestNotificationEmail } from "@/lib/email/sendSubscriptionChangeRequestNotificationEmail";
 
 type PlanKey = "starter" | "pro" | "enterprise";
 type RequestType = "upgrade" | "downgrade" | "change";
@@ -16,6 +17,16 @@ type Payload = {
 type SubscriptionRow = {
   plan_key: PlanKey;
   status: string;
+};
+
+type InsertedChangeRequestRow = {
+  id: string;
+  organization_id: string;
+  current_plan_key: PlanKey;
+  requested_plan_key: PlanKey;
+  status: string;
+  request_type: RequestType;
+  created_at: string;
 };
 
 const PLAN_ORDER: Record<PlanKey, number> = {
@@ -186,7 +197,7 @@ export async function POST(req: NextRequest) {
       .select(
         "id,organization_id,current_plan_key,requested_plan_key,status,request_type,created_at"
       )
-      .single();
+      .single<InsertedChangeRequestRow>();
 
     if (insertResult.error || !insertResult.data) {
       return NextResponse.json(
@@ -195,6 +206,28 @@ export async function POST(req: NextRequest) {
           details: insertResult.error?.message ?? "no row returned",
         },
         { status: 500 }
+      );
+    }
+
+    try {
+      await sendSubscriptionChangeRequestNotificationEmail({
+        requestId: insertResult.data.id,
+        organizationId: organization.id,
+        organizationName: organization.name,
+        organizationSlug:
+          typeof organization.slug === "string" ? organization.slug : null,
+        requestedByUserId: user.id,
+        requestedByEmail: user.email ?? null,
+        currentPlanKey,
+        requestedPlanKey,
+        requestType,
+        message: message || null,
+        createdAt: insertResult.data.created_at,
+      });
+    } catch (emailError) {
+      console.error(
+        "[subscription-change-request:notification-email-failed]",
+        emailError
       );
     }
 

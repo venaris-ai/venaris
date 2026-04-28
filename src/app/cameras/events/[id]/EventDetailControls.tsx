@@ -1,4 +1,4 @@
-// src/app/cameras/events/[id]/EventDetailControls.tsx #7
+// src/app/cameras/events/[id]/EventDetailControls.tsx #8
 "use client";
 
 import { useState } from "react";
@@ -45,6 +45,17 @@ function selectToRelevantUser(value: RelevantSelectValue): boolean | null {
   return null;
 }
 
+function formatInteger(
+  value: number | null | undefined,
+  language: AppLanguage
+) {
+  if (typeof value !== "number" || !Number.isFinite(value)) return "—";
+
+  return new Intl.NumberFormat(language === "en" ? "en-US" : "de-DE", {
+    maximumFractionDigits: 0,
+  }).format(value);
+}
+
 function speciesUserToSelect(value: string | null): SpeciesSelectValue {
   if (!value) return "auto";
   return value;
@@ -56,6 +67,10 @@ function t(language: AppLanguage) {
       save: "Save changes",
       relevant: "Relevant",
       species: "Species",
+      count: "Count",
+      assets: "Assets",
+      detections: "Detections",
+      captures: "Captures",
       yes: "Yes",
       no: "No",
       auto: "Auto",
@@ -71,6 +86,10 @@ function t(language: AppLanguage) {
     save: "Änderungen speichern",
     relevant: "Relevant",
     species: "Art",
+    count: "Anzahl",
+    assets: "Assets",
+    detections: "Erkennungen",
+    captures: "Aufnahmen",
     yes: "Ja",
     no: "Nein",
     auto: "Auto",
@@ -92,6 +111,9 @@ export default function EventDetailControls({
   language,
   speciesOptions,
   speciesLabelByCode,
+  topSpeciesLabel,
+  eventCount,
+  assetCount,
 }: {
   assetId: string | null;
   initialRelevantAuto: boolean | null;
@@ -102,6 +124,9 @@ export default function EventDetailControls({
   language: AppLanguage;
   speciesOptions: SpeciesOption[];
   speciesLabelByCode: Record<string, string>;
+  topSpeciesLabel?: string;
+  eventCount?: number | null;
+  assetCount?: number | null;
 }) {
   const text = t(language);
 
@@ -203,53 +228,76 @@ export default function EventDetailControls({
           )}
         </div>
 
-        <div className="rounded-[20px] border border-white/10 bg-white/5 p-4">
-          <div className="text-xs text-white/45">{text.relevant}</div>
-          <select
-            value={relevantValue}
-            onChange={(e) => setRelevantValue(e.target.value as RelevantSelectValue)}
-            disabled={!assetId || busy || isDemo}
-            className="mt-2 w-full rounded-[10px] border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none disabled:bg-white/5 disabled:text-white/35"
-            title={isDemo ? text.demoTitle : ""}
-          >
-            <option value="auto" className="bg-[#102018] text-white">
-              {initialRelevantAuto === true
-                ? text.yes
-                : initialRelevantAuto === false
-                  ? text.no
-                  : text.auto}
-            </option>
-            <option value="yes" className="bg-[#102018] text-white">
-              {text.yes}
-            </option>
-            <option value="no" className="bg-[#102018] text-white">
-              {text.no}
-            </option>
-          </select>
+        <div className="grid grid-cols-2 gap-3">
+          <div className="rounded-[20px] border border-white/10 bg-white/5 p-4">
+            <div className="text-xs text-white/45">{text.count}</div>
+            <div className="mt-1 text-2xl font-semibold text-white">
+              {formatInteger(eventCount, language)}
+            </div>
+            <div className="mt-1 text-xs text-white/55">
+              {topSpeciesLabel ? `${topSpeciesLabel} · ` : ""}
+              {text.detections}
+            </div>
+          </div>
+
+          <div className="rounded-[20px] border border-white/10 bg-white/5 p-4">
+            <div className="text-xs text-white/45">{text.assets}</div>
+            <div className="mt-1 text-2xl font-semibold text-white">
+              {formatInteger(assetCount, language)}
+            </div>
+            <div className="mt-1 text-xs text-white/55">{text.captures}</div>
+          </div>
         </div>
 
-        <div className="rounded-[20px] border border-white/10 bg-white/5 p-4">
-          <div className="text-xs text-white/45">{text.species}</div>
-          <select
-            value={speciesValue}
-            onChange={(e) => setSpeciesValue(e.target.value as SpeciesSelectValue)}
-            disabled={!assetId || busy || isDemo}
-            className="mt-2 w-full rounded-[10px] border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none disabled:bg-white/5 disabled:text-white/35"
-            title={isDemo ? text.demoTitle : ""}
-          >
-            <option value="auto" className="bg-[#102018] text-white">
-              {getSpeciesLabel(initialSpeciesAuto, speciesLabelByCode)}
-            </option>
-            {speciesOptions.map((species) => (
-              <option
-                key={species.value}
-                value={species.value}
-                className="bg-[#102018] text-white"
-              >
-                {species.label}
+        <div className="grid grid-cols-2 gap-3">
+          <div className="rounded-[20px] border border-white/10 bg-white/5 p-4">
+            <div className="text-xs text-white/45">{text.relevant}</div>
+            <select
+              value={relevantValue}
+              onChange={(e) => setRelevantValue(e.target.value as RelevantSelectValue)}
+              disabled={!assetId || busy || isDemo}
+              className="mt-2 w-full rounded-[10px] border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none disabled:bg-white/5 disabled:text-white/35"
+              title={isDemo ? text.demoTitle : ""}
+            >
+              <option value="auto" className="bg-[#102018] text-white">
+                {initialRelevantAuto === true
+                  ? text.yes
+                  : initialRelevantAuto === false
+                    ? text.no
+                    : text.auto}
               </option>
-            ))}
-          </select>
+              <option value="yes" className="bg-[#102018] text-white">
+                {text.yes}
+              </option>
+              <option value="no" className="bg-[#102018] text-white">
+                {text.no}
+              </option>
+            </select>
+          </div>
+  
+          <div className="rounded-[20px] border border-white/10 bg-white/5 p-4">
+            <div className="text-xs text-white/45">{text.species}</div>
+            <select
+              value={speciesValue}
+              onChange={(e) => setSpeciesValue(e.target.value as SpeciesSelectValue)}
+              disabled={!assetId || busy || isDemo}
+              className="mt-2 w-full rounded-[10px] border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none disabled:bg-white/5 disabled:text-white/35"
+              title={isDemo ? text.demoTitle : ""}
+            >
+              <option value="auto" className="bg-[#102018] text-white">
+                {getSpeciesLabel(initialSpeciesAuto, speciesLabelByCode)}
+              </option>
+              {speciesOptions.map((species) => (
+                <option
+                  key={species.value}
+                  value={species.value}
+                  className="bg-[#102018] text-white"
+                >
+                  {species.label}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
 
       </div>
