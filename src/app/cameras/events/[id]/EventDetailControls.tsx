@@ -1,4 +1,4 @@
-// src/app/cameras/events/[id]/EventDetailControls.tsx #8
+// src/app/cameras/events/[id]/EventDetailControls.tsx #9
 "use client";
 
 import { useState } from "react";
@@ -61,6 +61,27 @@ function speciesUserToSelect(value: string | null): SpeciesSelectValue {
   return value;
 }
 
+function scoreBadge(score: number | null, language: AppLanguage) {
+  if (typeof score !== "number") return "—";
+
+  if (language === "en") {
+    if (score >= 0.9) return "very high";
+    if (score >= 0.75) return "high";
+    if (score >= 0.5) return "medium";
+    return "low";
+  }
+
+  if (score >= 0.9) return "sehr hoch";
+  if (score >= 0.75) return "hoch";
+  if (score >= 0.5) return "mittel";
+  return "niedrig";
+}
+
+function formatProbability(score: number | null | undefined, language: AppLanguage) {
+  if (typeof score !== "number" || !Number.isFinite(score)) return "—";
+  return `${Math.round(score * 100)}% · ${scoreBadge(score, language)}`;
+}
+
 function t(language: AppLanguage) {
   if (language === "en") {
     return {
@@ -71,6 +92,9 @@ function t(language: AppLanguage) {
       assets: "Assets",
       detections: "Detections",
       captures: "Captures",
+      probability: "Probability",
+      camera: "Camera",
+      timestamp: "Timestamp",
       yes: "Yes",
       no: "No",
       auto: "Auto",
@@ -90,6 +114,9 @@ function t(language: AppLanguage) {
     assets: "Assets",
     detections: "Erkennungen",
     captures: "Aufnahmen",
+    probability: "Wahrscheinlichkeit",
+    camera: "Kamera",
+    timestamp: "Zeitpunkt",
     yes: "Ja",
     no: "Nein",
     auto: "Auto",
@@ -107,6 +134,9 @@ export default function EventDetailControls({
   initialRelevantUser,
   initialSpeciesAuto,
   initialSpeciesUser,
+  probabilityScore,
+  cameraLabel,
+  timestampLabel,
   isDemo = false,
   language,
   speciesOptions,
@@ -120,6 +150,9 @@ export default function EventDetailControls({
   initialRelevantUser: boolean | null;
   initialSpeciesAuto: string | null;
   initialSpeciesUser: string | null;
+  probabilityScore?: number | null;
+  cameraLabel: string;
+  timestampLabel?: string | null;
   isDemo?: boolean;
   language: AppLanguage;
   speciesOptions: SpeciesOption[];
@@ -300,6 +333,24 @@ export default function EventDetailControls({
           </div>
         </div>
 
+        <div className="rounded-[20px] border border-white/10 bg-white/5 p-4">
+          <div className="text-xs text-white/45">{text.probability}</div>
+          <div className="mt-1 text-sm font-medium text-white">
+            {formatProbability(probabilityScore, language)}
+          </div>
+        </div>
+
+        <div className="rounded-[20px] border border-white/10 bg-white/5 p-4">
+          <div className="text-xs text-white/45">{text.camera}</div>
+          <div className="mt-1 text-sm font-medium text-white">{cameraLabel}</div>
+        </div>
+
+        <div className="rounded-[20px] border border-white/10 bg-white/5 p-4">
+          <div className="text-xs text-white/45">{text.timestamp}</div>
+          <div className="mt-1 text-sm font-medium text-white">
+            {timestampLabel ?? "—"}
+          </div>
+        </div>
       </div>
 
       {isReadOnlyModalOpen ? (

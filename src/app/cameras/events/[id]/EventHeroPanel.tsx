@@ -1,4 +1,4 @@
-// src/app/cameras/events/[id]/EventHeroPanel.tsx #6
+// src/app/cameras/events/[id]/EventHeroPanel.tsx #7
 "use client";
 
 import { type AppLanguage } from "@/lib/i18n";
@@ -18,28 +18,30 @@ function t(language: AppLanguage) {
   if (language === "en") {
     return {
       noPreview: "No preview",
-      bestImageA: "Best image from",
-      bestImageB: "capture",
-      bestImagePlural: "s",
+      selectedImage: "Selected image",
+      of: "of",
+      captures: "captures",
       previewAlt: "Event preview",
     };
   }
 
   return {
     noPreview: "Kein Preview",
-    bestImageA: "Bestes Bild aus",
-    bestImageB: "Aufnahme",
-    bestImagePlural: "n",
+    selectedImage: "Ausgewähltes Bild",
+    of: "von",
+    captures: "Aufnahmen",
     previewAlt: "Event preview",
   };
 }
 
 export default function EventHeroPanel({
   asset,
+  selectedIndex,
   totalCount,
   language,
 }: {
   asset: AssetItem | null;
+  selectedIndex: number;
   totalCount: number;
   language: AppLanguage;
 }) {
@@ -74,9 +76,9 @@ export default function EventHeroPanel({
       </div>
 
       <div className="mt-3 text-sm text-white/68">
-        {text.bestImageA}{" "}
-        <span className="font-medium text-white">{totalCount}</span> {text.bestImageB}
-        {totalCount === 1 ? "" : text.bestImagePlural}
+        {text.selectedImage}{" "}
+        <span className="font-medium text-white">{selectedIndex + 1}</span> {text.of}{" "}
+        <span className="font-medium text-white">{totalCount}</span> {text.captures}
       </div>
     </div>
   );

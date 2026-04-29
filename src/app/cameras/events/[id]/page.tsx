@@ -1,12 +1,10 @@
-// src/app/cameras/events/[id]/page.tsx #14
+// src/app/cameras/events/[id]/page.tsx #15
 export const runtime = "nodejs";
 
 import Link from "next/link";
 import { cookies } from "next/headers";
 import { supabaseServer } from "@/lib/supabaseServer";
-import AssetGrid from "./AssetGrid";
-import EventHeroPanel from "./EventHeroPanel";
-import EventDetailControls from "./EventDetailControls";
+import EventAssetReviewPanel from "./EventAssetReviewPanel";
 import { requirePathAccess } from "@/lib/authz";
 import { resolveAssetPreviewUrl } from "@/lib/demoAssetResolver";
 import {
@@ -48,26 +46,11 @@ type AssetViewItem = {
 };
 
 type DetectionTopRow = {
+  asset_id: string | null;
   species: string | null;
   species_user: string | null;
   score: number | null;
 };
-
-function scoreBadge(score: number | null, language: AppLanguage) {
-  if (typeof score !== "number") return "—";
-
-  if (language === "en") {
-    if (score >= 0.9) return "very high";
-    if (score >= 0.75) return "high";
-    if (score >= 0.5) return "medium";
-    return "low";
-  }
-
-  if (score >= 0.9) return "sehr hoch";
-  if (score >= 0.75) return "hoch";
-  if (score >= 0.5) return "mittel";
-  return "niedrig";
-}
 
 function buildBackHref(revier?: string) {
   if (!revier) return "/cameras/ingest";
@@ -86,15 +69,6 @@ function t(language: AppLanguage) {
       notFound: "Event not found",
       notFoundOrForbidden: "Event not found or not allowed.",
       errorPrefix: "Error:",
-      probability: "Probability",
-      camera: "Camera",
-      timestamp: "Timestamp",
-      additionalShotsTitle: "More captures",
-      additionalShotsText:
-        "Additional images from this event. Relevance can still be reviewed and overridden here.",
-      noAssets:
-        "No assets found (event_assets empty or asset IDs missing).",
-      noAdditionalShots: "There are no additional captures for this event.",
       unnamedCamera: "Unnamed camera",
     };
   }
@@ -108,14 +82,6 @@ function t(language: AppLanguage) {
     notFound: "Event nicht gefunden",
     notFoundOrForbidden: "Event nicht gefunden oder nicht erlaubt.",
     errorPrefix: "Fehler:",
-    probability: "Wahrscheinlichkeit",
-    camera: "Kamera",
-    timestamp: "Zeitpunkt",
-    additionalShotsTitle: "Weitere Aufnahmen",
-    additionalShotsText:
-      "Weitere Bilder dieses Events. Relevanz kann hier weiterhin geprüft und überschrieben werden.",
-    noAssets: "Keine Assets gefunden (event_assets leer oder Asset-IDs fehlen).",
-    noAdditionalShots: "Für dieses Event gibt es keine weiteren Aufnahmen.",
     unnamedCamera: "Unbenannte Kamera",
   };
 }
@@ -428,21 +394,23 @@ export default async function CameraEventDetailPage(props: {
     emptyConfidence: asset.empty_confidence ?? null,
   }));
 
-  const heroAsset = initialAssets[0] ?? null;
-  const additionalAssets = initialAssets.slice(1);
+  const initialSelectedAssetId = initialAssets[0]?.id ?? null;
 
-  let heroDetection: DetectionTopRow | null = null;
-  if (heroAsset) {
+  const detectionsByAssetId: Record<string, DetectionTopRow> = {};
+  if (assetIds.length > 0) {
     const { data: detectionData } = await supabase
       .from("detections")
-      .select("species,species_user,score")
-      .eq("asset_id", heroAsset.id)
+      .select("asset_id,species,species_user,score")
+      .in("asset_id", assetIds)
       .eq("label", "animal")
       .order("score", { ascending: false })
-      .limit(1)
       .returns<DetectionTopRow[]>();
 
-    heroDetection = detectionData?.[0] ?? null;
+    for (const detection of detectionData ?? []) {
+      if (detection.asset_id && !detectionsByAssetId[detection.asset_id]) {
+        detectionsByAssetId[detection.asset_id] = detection;
+      }
+    }
   }
 
   const cameraLabel = camera.name
@@ -481,88 +449,19 @@ export default async function CameraEventDetailPage(props: {
         </div>
       </section>
 
-      <section className="grid gap-6 lg:grid-cols-[minmax(0,1.45fr)_380px]">
-        <div>
-          <EventHeroPanel
-            asset={heroAsset}
-            totalCount={initialAssets.length}
-            language={language}
-          />
-        </div>
+      <EventAssetReviewPanel
+        assets={initialAssets}
+        detectionsByAssetId={detectionsByAssetId}
+        initialSelectedAssetId={initialSelectedAssetId}
+        isDemo={Boolean(activeOrganization.is_demo)}
+        language={language}
+        speciesOptions={speciesOptions}
+        speciesLabelByCode={speciesLabelByCode}
+        topSpeciesLabel={topSpeciesLabel}
+        eventCount={event.top_count}
+        cameraLabel={cameraLabel}
+      />
 
-        <aside className="space-y-4 rounded-[28px] border border-white/10 bg-white/5 p-5 backdrop-blur-sm">
-          <EventDetailControls
-            assetId={heroAsset?.id ?? null}
-            initialRelevantAuto={heroAsset?.relevant ?? null}
-            initialRelevantUser={heroAsset?.relevantUser ?? null}
-            initialSpeciesAuto={heroDetection?.species ?? null}
-            initialSpeciesUser={heroDetection?.species_user ?? null}
-            isDemo={Boolean(activeOrganization.is_demo)}
-            language={language}
-            speciesOptions={speciesOptions}
-            speciesLabelByCode={speciesLabelByCode}
-            topSpeciesLabel={topSpeciesLabel}
-            eventCount={event.top_count}
-            assetCount={initialAssets.length}
-          />
-
-          <div className="rounded-[20px] border border-white/10 bg-white/5 p-4">
-            <div className="text-xs text-white/45">{text.probability}</div>
-            <div className="mt-1 text-sm font-medium text-white">
-              {typeof event.relevance_score === "number"
-                ? `${Math.round(event.relevance_score * 100)}% · ${scoreBadge(
-                    event.relevance_score,
-                    language
-                  )}`
-                : "—"}
-            </div>
-          </div>
-
-          <div className="rounded-[20px] border border-white/10 bg-white/5 p-4">
-            <div className="text-xs text-white/45">{text.camera}</div>
-            <div className="mt-1 text-sm font-medium text-white">
-              {cameraLabel}
-            </div>
-          </div>
-
-          <div className="rounded-[20px] border border-white/10 bg-white/5 p-4">
-            <div className="text-xs text-white/45">{text.timestamp}</div>
-            <div className="mt-1 text-sm font-medium text-white">
-              {heroAsset?.timestampLabel ??
-                formatAppDateTime(event.start_at, language, eventTimeZone)}
-            </div>
-          </div>
-        </aside>
-      </section>
-
-      <section className="space-y-3">
-        <div className="flex items-end justify-between gap-4">
-          <div>
-            <h2 className="text-xl font-medium text-white">
-              {text.additionalShotsTitle}
-            </h2>
-            <p className="mt-1 text-sm text-white/62">
-              {text.additionalShotsText}
-            </p>
-          </div>
-        </div>
-
-        {initialAssets.length === 0 ? (
-          <div className="rounded-[24px] border border-white/10 bg-white/5 p-4 text-sm text-white/68">
-            {text.noAssets}
-          </div>
-        ) : additionalAssets.length === 0 ? (
-          <div className="rounded-[24px] border border-white/10 bg-white/5 p-4 text-sm text-white/68">
-            {text.noAdditionalShots}
-          </div>
-        ) : (
-          <AssetGrid
-            initialAssets={additionalAssets}
-            isDemo={Boolean(activeOrganization.is_demo)}
-            language={language}
-          />
-        )}
-      </section>
     </main>
   );
 }
