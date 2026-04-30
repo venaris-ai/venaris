@@ -38,7 +38,7 @@ export function normalizeSource(metadata: IngestMetadata | null): string {
  * - per-camera SHA256 dedup
  * - storage upload
  * - assets insert
- * - event clustering (non-fatal)
+ * - event clustering is intentionally deferred to the detection worker
  * - cameras.last_seen_at updated
  * - batch status completed/failed + summary
  */
@@ -75,8 +75,6 @@ export async function ingestFiles(params: {
   let accepted = 0;
   let skippedDuplicates = 0;
 
-  // collect warnings without overwriting summary at the end
-  const warnings: string[] = [];
 
   // 2) Process each file
   for (const file of files) {
@@ -172,16 +170,8 @@ export async function ingestFiles(params: {
       throw new Error(dbError?.message ?? "asset insert failed");
     }
 
-    // 2d) Event clustering (non-fatal to keep ingest stable)
-    const { error: eventErr } = await supabase.rpc("upsert_event_for_asset", {
-      p_asset_id: insertedAsset.id,
-      p_window_minutes: 10,
-    });
-
-    if (eventErr) {
-      console.warn("Event clustering failed for asset", insertedAsset.id, eventErr.message);
-      warnings.push(`event_clustering_failed:${eventErr.message}`);
-    }
+    // 2d) Event clustering intentionally happens after detection in the worker.
+    // Empty/noisy assets must not create or extend events.
 
     accepted++;
   }
@@ -195,7 +185,6 @@ export async function ingestFiles(params: {
   // 4) Batch final status + summary
   const summaryParts: string[] = [];
   if (skippedDuplicates > 0) summaryParts.push(`skipped duplicates: ${skippedDuplicates}`);
-  summaryParts.push(...warnings);
 
   await supabase
     .from("ingest_batches")

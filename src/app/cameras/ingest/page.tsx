@@ -1,4 +1,4 @@
-// src/app/cameras/ingest/page.tsx #11
+// src/app/cameras/ingest/page.tsx #13
 export const dynamic = "force-dynamic";
 
 import Link from "next/link";
@@ -26,54 +26,44 @@ function t(language: AppLanguage) {
     return {
       activeOrganizationContextRequired: "Active organization context required",
       activeOrganizationNotFound: "Active organization not found",
-      allActiveGrounds: "All active grounds",
-      oneGround: "One ground",
       eyebrow: "Ingest",
       title: "Ingest",
-      intro: "Clean overview of processed inputs in the current scope.",
+      intro: "Clean overview of processed events in the current scope.",
       time: "Time",
       camera: "Camera",
       channel: "Channel",
       result: "Result",
       truth: "Truth",
+      assets: "Assets",
       status: "Status",
       details: "Details",
-      noEntries: "No processed inputs with event available yet.",
+      noEntries: "No processed events available yet.",
       until: "until",
       unnamedCamera: "Unnamed camera",
       showDetails: "Show details",
       apiError: "API error",
-      prettyUnknown: "—",
-      completed: "completed",
-      processing: "processing",
-      failed: "failed",
     };
   }
 
   return {
     activeOrganizationContextRequired: "Aktiver Organisationskontext erforderlich",
     activeOrganizationNotFound: "Aktive Organisation nicht gefunden",
-    allActiveGrounds: "Alle aktiven Reviere",
-    oneGround: "Ein Revier",
     eyebrow: "Ingest",
     title: "Ingest",
-    intro: "Bereinigte Übersicht der verarbeiteten Eingänge im aktuellen Scope.",
+    intro: "Bereinigte Übersicht der verarbeiteten Events im aktuellen Scope.",
     time: "Zeit",
     camera: "Kamera",
     channel: "Kanal",
     result: "Ergebnis",
     truth: "Wahr",
+    assets: "Assets",
     status: "Status",
     details: "Details",
-    noEntries: "Noch keine verarbeiteten Eingänge mit Event vorhanden.",
+    noEntries: "Noch keine verarbeiteten Events vorhanden.",
     until: "bis",
     unnamedCamera: "Unbenannte Kamera",
     showDetails: "Details anzeigen",
     apiError: "API Fehler",
-    prettyUnknown: "—",
-    completed: "abgeschlossen",
-    processing: "in Bearbeitung",
-    failed: "fehlgeschlagen",
   };
 }
 
@@ -89,6 +79,7 @@ type RevierRow = {
 
 type CameraScopeRow = {
   id: string;
+  name: string | null;
   revier_id: string | null;
 };
 
@@ -146,22 +137,27 @@ type EventFeedRow = {
   relevance_score: number | null;
 };
 
+type EventSpeciesSummaryRow = {
+  event_id: string;
+  species: string;
+  best_score: number | null;
+};
+
 type IngestEventRow = {
   eventId: string;
-  batchId: string;
+  batchId: string | null;
   cameraName: string | null;
-  receivedAt: string;
+  receivedAt: string | null;
   source: string | null;
   ingestStatus: string | null;
   errorSummary: string | null;
-  fileCount: number | null;
   startAt: string | null;
   endAt: string | null;
   timeZone: string | null;
   assetCount: number;
   topSpecies: string | null;
   topCount: number | null;
-  relevanceScore: number | null;
+  probabilityScore: number | null;
 };
 
 function extractCameraName(value: BatchCameraRelation): string | null {
@@ -181,6 +177,59 @@ function normalizeBatch(row: BatchDb): Batch {
     status: row.status,
     errorSummary: row.error_summary,
   };
+}
+
+function pickLatestBatch(
+  batchById: Map<string, Batch>,
+  batchIds: Set<string> | undefined
+): Batch | null {
+  if (!batchIds || batchIds.size === 0) return null;
+
+  let selected: Batch | null = null;
+  let selectedTs = Number.NEGATIVE_INFINITY;
+
+  for (const batchId of batchIds) {
+    const batch = batchById.get(batchId);
+    if (!batch) continue;
+
+    const ts = new Date(batch.receivedAt).getTime();
+    if (ts > selectedTs) {
+      selected = batch;
+      selectedTs = ts;
+    }
+  }
+
+  return selected;
+}
+
+function buildProbabilityScoreByEventId(
+  events: EventFeedRow[],
+  summaryRows: EventSpeciesSummaryRow[]
+) {
+  const rowsByEventId = new Map<string, EventSpeciesSummaryRow[]>();
+
+  for (const row of summaryRows) {
+    const rows = rowsByEventId.get(row.event_id) ?? [];
+    rows.push(row);
+    rowsByEventId.set(row.event_id, rows);
+  }
+
+  const scoreByEventId = new Map<string, number | null>();
+
+  for (const event of events) {
+    const rows = rowsByEventId.get(event.id) ?? [];
+    const candidates = event.top_species
+      ? rows.filter((row) => row.species === event.top_species)
+      : rows;
+
+    const best = [...candidates].sort(
+      (a, b) => (b.best_score ?? -1) - (a.best_score ?? -1)
+    )[0];
+
+    scoreByEventId.set(event.id, best?.best_score ?? null);
+  }
+
+  return scoreByEventId;
 }
 
 function Badge({
@@ -250,8 +299,8 @@ function formatProbability(value?: number | null) {
 
 function sortRows(rows: IngestEventRow[]) {
   return [...rows].sort((a, b) => {
-    const aTs = new Date(a.endAt ?? a.startAt ?? a.receivedAt).getTime();
-    const bTs = new Date(b.endAt ?? b.startAt ?? b.receivedAt).getTime();
+    const aTs = new Date(a.endAt ?? a.startAt ?? a.receivedAt ?? 0).getTime();
+    const bTs = new Date(b.endAt ?? b.startAt ?? b.receivedAt ?? 0).getTime();
     return bTs - aTs;
   });
 }
@@ -300,7 +349,6 @@ export default async function CamerasIngestPage(props: {
 
   let items: IngestEventRow[] = [];
   let apiError: string | null = null;
-  let scopeLabel = text.allActiveGrounds;
 
   const { data: reviersData, error: reviersError } = await supabase
     .from("reviers")
@@ -324,16 +372,10 @@ export default async function CamerasIngestPage(props: {
     const revierScope = resolveRevierScope(rawRevier, allowedReviers);
     const allowedRevierIds = allowedReviers.map((revier) => revier.id);
 
-    if (revierScope.type === "single") {
-      scopeLabel =
-        reviers.find((revier) => revier.id === revierScope.revierId)?.name ??
-        text.oneGround;
-    }
-
     if (allowedRevierIds.length > 0) {
       let camerasQuery = supabase
         .from("cameras")
-        .select("id,revier_id")
+        .select("id,name,revier_id")
         .eq("organization_id", activeOrganization.id);
 
       camerasQuery =
@@ -351,132 +393,162 @@ export default async function CamerasIngestPage(props: {
         const revierIdByCameraId = new Map(
           cameraRows.map((camera) => [camera.id, camera.revier_id] as const)
         );
+        const cameraNameById = new Map(
+          cameraRows.map((camera) => [camera.id, camera.name] as const)
+        );
 
         if (allowedCameraIds.length > 0) {
-          const { data: batchData, error: batchError } = await supabase
-            .from("ingest_batches")
-            .select(`
-              id,
-              camera_id,
-              received_at,
-              source,
-              file_count,
-              status,
-              error_summary,
-              cameras ( id, name )
-            `)
+          const { data: eventsData, error: eventsError } = await supabase
+            .from("event_feed")
+            .select(
+              "id,camera_id,start_at,end_at,asset_count,top_species,top_count,relevance_score"
+            )
             .in("camera_id", allowedCameraIds)
-            .order("received_at", { ascending: false })
+            .order("start_at", { ascending: false, nullsFirst: false })
             .limit(50);
 
-          if (batchError) {
-            apiError = batchError.message;
+          if (eventsError) {
+            apiError = eventsError.message;
           } else {
-            const batches = ((batchData ?? []) as BatchDb[]).map(normalizeBatch);
-            const batchIds = batches.map((batch) => batch.id);
+            const events = (eventsData ?? []) as EventFeedRow[];
+            const eventIds = events.map((event) => event.id);
 
-            if (batchIds.length > 0) {
-              const { data: assetsData, error: assetsError } = await supabase
-                .from("assets")
-                .select("id,ingest_batch_id")
-                .in("ingest_batch_id", batchIds);
+            if (eventIds.length > 0) {
+              const [
+                eventAssetsResult,
+                speciesSummaryResult,
+              ] = await Promise.all([
+                supabase
+                  .from("event_assets")
+                  .select("event_id,asset_id")
+                  .in("event_id", eventIds),
+                supabase
+                  .from("event_species_summary")
+                  .select("event_id,species,best_score")
+                  .in("event_id", eventIds),
+              ]);
 
-              if (assetsError) {
-                apiError = assetsError.message;
+              if (eventAssetsResult.error) {
+                apiError = eventAssetsResult.error.message;
+              } else if (speciesSummaryResult.error) {
+                apiError = speciesSummaryResult.error.message;
               } else {
-                const assets = (assetsData ?? []) as AssetRow[];
-                const assetIds = assets.map((asset) => asset.id);
+                const eventAssets =
+                  (eventAssetsResult.data ?? []) as EventAssetRow[];
+                const speciesSummaryRows =
+                  (speciesSummaryResult.data ?? []) as EventSpeciesSummaryRow[];
 
+                const assetIds = Array.from(
+                  new Set(eventAssets.map((row) => row.asset_id).filter(Boolean))
+                );
+
+                let assets: AssetRow[] = [];
                 if (assetIds.length > 0) {
-                  const { data: eventAssetsData, error: eventAssetsError } =
-                    await supabase
-                      .from("event_assets")
-                      .select("event_id,asset_id")
-                      .in("asset_id", assetIds);
+                  const { data: assetsData, error: assetsError } = await supabase
+                    .from("assets")
+                    .select("id,ingest_batch_id")
+                    .in("id", assetIds);
 
-                  if (eventAssetsError) {
-                    apiError = eventAssetsError.message;
+                  if (assetsError) {
+                    apiError = assetsError.message;
                   } else {
-                    const eventAssets = (eventAssetsData ?? []) as EventAssetRow[];
-                    const eventIds = Array.from(
-                      new Set(eventAssets.map((row) => row.event_id).filter(Boolean))
+                    assets = (assetsData ?? []) as AssetRow[];
+                  }
+                }
+
+                if (!apiError) {
+                  const batchIdByAssetId = new Map<string, string>();
+                  const batchIdsByEventId = new Map<string, Set<string>>();
+
+                  for (const asset of assets) {
+                    if (!asset.ingest_batch_id) continue;
+                    batchIdByAssetId.set(asset.id, asset.ingest_batch_id);
+                  }
+
+                  for (const row of eventAssets) {
+                    const batchId = batchIdByAssetId.get(row.asset_id);
+                    if (!batchId) continue;
+
+                    if (!batchIdsByEventId.has(row.event_id)) {
+                      batchIdsByEventId.set(row.event_id, new Set<string>());
+                    }
+
+                    batchIdsByEventId.get(row.event_id)?.add(batchId);
+                  }
+
+                  const batchIds = Array.from(
+                    new Set(
+                      Array.from(batchIdsByEventId.values()).flatMap((set) =>
+                        Array.from(set)
+                      )
+                    )
+                  );
+
+                  let batches: Batch[] = [];
+                  if (batchIds.length > 0) {
+                    const { data: batchData, error: batchError } = await supabase
+                      .from("ingest_batches")
+                      .select(`
+                        id,
+                        camera_id,
+                        received_at,
+                        source,
+                        file_count,
+                        status,
+                        error_summary,
+                        cameras ( id, name )
+                      `)
+                      .in("id", batchIds);
+
+                    if (batchError) {
+                      apiError = batchError.message;
+                    } else {
+                      batches = ((batchData ?? []) as BatchDb[]).map(normalizeBatch);
+                    }
+                  }
+
+                  if (!apiError) {
+                    const batchById = new Map(
+                      batches.map((batch) => [batch.id, batch] as const)
                     );
 
-                    if (eventIds.length > 0) {
-                      const { data: eventsData, error: eventsError } = await supabase
-                        .from("event_feed")
-                        .select(
-                          "id,camera_id,start_at,end_at,asset_count,top_species,top_count,relevance_score"
-                        )
-                        .in("id", eventIds);
+                    const probabilityScoreByEventId =
+                      buildProbabilityScoreByEventId(events, speciesSummaryRows);
 
-                      if (eventsError) {
-                        apiError = eventsError.message;
-                      } else {
-                        const events = (eventsData ?? []) as EventFeedRow[];
+                    const resolvedRows: IngestEventRow[] = [];
 
-                        const batchById = new Map(
-                          batches.map((batch) => [batch.id, batch] as const)
-                        );
-                        const batchIdByAssetId = new Map<string, string>();
-                        const eventIdsByBatchId = new Map<string, Set<string>>();
-                        const eventById = new Map(
-                          events.map((event) => [event.id, event] as const)
-                        );
+                    for (const event of events) {
+                      const batch = pickLatestBatch(
+                        batchById,
+                        batchIdsByEventId.get(event.id)
+                      );
+                      const revierId = revierIdByCameraId.get(event.camera_id);
 
-                        for (const asset of assets) {
-                          if (!asset.ingest_batch_id) continue;
-                          batchIdByAssetId.set(asset.id, asset.ingest_batch_id);
-                        }
-
-                        for (const row of eventAssets) {
-                          const batchId = batchIdByAssetId.get(row.asset_id);
-                          if (!batchId) continue;
-
-                          if (!eventIdsByBatchId.has(batchId)) {
-                            eventIdsByBatchId.set(batchId, new Set<string>());
-                          }
-
-                          eventIdsByBatchId.get(batchId)?.add(row.event_id);
-                        }
-
-                        const resolvedRows: IngestEventRow[] = [];
-
-                        for (const [batchId, ids] of eventIdsByBatchId.entries()) {
-                          const batch = batchById.get(batchId);
-                          if (!batch) continue;
-
-                          for (const eventId of ids) {
-                            const event = eventById.get(eventId);
-                            if (!event) continue;
-
-                            const revierId = revierIdByCameraId.get(event.camera_id);
-
-                            resolvedRows.push({
-                              eventId: event.id,
-                              batchId: batch.id,
-                              cameraName: batch.cameraName,
-                              receivedAt: batch.receivedAt,
-                              source: batch.source,
-                              ingestStatus: batch.status,
-                              errorSummary: batch.errorSummary,
-                              fileCount: batch.fileCount,
-                              startAt: event.start_at,
-                              endAt: event.end_at,
-                              timeZone: revierId
-                                ? timeZoneByRevierId.get(revierId) ?? null
-                                : null,
-                              assetCount: event.asset_count ?? 0,
-                              topSpecies: event.top_species,
-                              topCount: event.top_count,
-                              relevanceScore: event.relevance_score,
-                            });
-                          }
-                        }
-
-                        items = sortRows(resolvedRows);
-                      }
+                      resolvedRows.push({
+                        eventId: event.id,
+                        batchId: batch?.id ?? null,
+                        cameraName:
+                          batch?.cameraName ??
+                          cameraNameById.get(event.camera_id) ??
+                          null,
+                        receivedAt: batch?.receivedAt ?? null,
+                        source: batch?.source ?? null,
+                        ingestStatus: batch?.status ?? null,
+                        errorSummary: batch?.errorSummary ?? null,
+                        startAt: event.start_at,
+                        endAt: event.end_at,
+                        timeZone: revierId
+                          ? timeZoneByRevierId.get(revierId) ?? null
+                          : null,
+                        assetCount: event.asset_count ?? 0,
+                        topSpecies: event.top_species,
+                        topCount: event.top_count,
+                        probabilityScore:
+                          probabilityScoreByEventId.get(event.id) ?? null,
+                      });
                     }
+
+                    items = sortRows(resolvedRows);
                   }
                 }
               }
@@ -490,20 +562,14 @@ export default async function CamerasIngestPage(props: {
   return (
     <main className="space-y-8">
       <section className="rounded-[32px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(201,149,46,0.16),transparent_24%),linear-gradient(135deg,rgba(255,255,255,0.06),rgba(255,255,255,0.03))] p-6 backdrop-blur-sm">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <div className="text-xs font-medium uppercase tracking-[0.22em] text-amber-200/80">
-              {text.eyebrow}
-            </div>
-            <h1 className="mt-3 text-3xl font-semibold tracking-tight text-white">
-              {text.title}
-            </h1>
-            <p className="mt-2 text-sm text-white/68">{text.intro}</p>
+        <div>
+          <div className="text-xs font-medium uppercase tracking-[0.22em] text-amber-200/80">
+            {text.eyebrow}
           </div>
-
-          <div className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-white/72">
-            {scopeLabel}
-          </div>
+          <h1 className="mt-3 text-3xl font-semibold tracking-tight text-white">
+            {text.title}
+          </h1>
+          <p className="mt-2 text-sm text-white/68">{text.intro}</p>
         </div>
       </section>
 
@@ -516,6 +582,7 @@ export default async function CamerasIngestPage(props: {
               <th className="px-3 py-2">{text.channel}</th>
               <th className="px-3 py-2">{text.result}</th>
               <th className="px-3 py-2">{text.truth}</th>
+              <th className="px-3 py-2">{text.assets}</th>
               <th className="px-3 py-2">{text.status}</th>
               <th className="px-3 py-2">{text.details}</th>
             </tr>
@@ -523,7 +590,7 @@ export default async function CamerasIngestPage(props: {
           <tbody>
             {items.length === 0 ? (
               <tr>
-                <td className="px-3 py-6 text-white/45" colSpan={7}>
+                <td className="px-3 py-6 text-white/45" colSpan={8}>
                   {text.noEntries}
                 </td>
               </tr>
@@ -548,7 +615,7 @@ export default async function CamerasIngestPage(props: {
 
                 return (
                   <tr
-                    key={`${row.batchId}:${row.eventId}`}
+                    key={row.eventId}
                     className="border-b border-white/8 last:border-b-0"
                   >
                     <td className="px-3 py-3 text-white/72 whitespace-nowrap">
@@ -587,7 +654,11 @@ export default async function CamerasIngestPage(props: {
                     </td>
 
                     <td className="px-3 py-3 text-white/72 whitespace-nowrap">
-                      {formatProbability(row.relevanceScore)}
+                      {formatProbability(row.probabilityScore)}
+                    </td>
+
+                    <td className="px-3 py-3 text-white/72 whitespace-nowrap">
+                      {row.assetCount}
                     </td>
 
                     <td className="px-3 py-3">

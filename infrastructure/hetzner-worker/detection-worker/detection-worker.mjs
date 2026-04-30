@@ -520,10 +520,14 @@ async function processAsset(assetFromBatch) {
   await markProcessed(core.id, patch);
 
   // 5) event layer
-  await supabase.rpc("upsert_event_for_asset", {
-    p_asset_id: core.id,
-    p_window_minutes: 10,
-  });
+  // Only non-empty assets are event-eligible.
+  // Empty/noisy assets must not create or extend events.
+  if (!emptyInfo.empty) {
+    await supabase.rpc("upsert_event_for_asset", {
+      p_asset_id: core.id,
+      p_window_minutes: 10,
+    });
+  }
 
   return {
     cameraName: cam.name,
