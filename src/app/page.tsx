@@ -759,7 +759,7 @@ export default async function HomePage() {
   const setupCards = [
     showOrga
       ? {
-          href: "/orga/reviers/new",
+          href: "/orga/reviere/new",
           title: text.setupGroundTitle,
           text: text.setupGroundText,
         }
