@@ -22,6 +22,7 @@ function t(language: AppLanguage) {
       loadSubscriptionFailed: "Failed to load subscription camera policy:",
       noSubscriptionFound: "No subscription found for active organization",
       loadCameraUsageFailed: "Failed to load camera usage:",
+      loadCameraVendorsFailed: "Failed to load camera vendors:",
       eyebrow: "Create camera",
       title: "Create camera",
       intro: "Add a new camera and generate its provisioning data.",
@@ -35,6 +36,7 @@ function t(language: AppLanguage) {
     loadSubscriptionFailed: "Fehler beim Laden der Abo-Kameraregeln:",
     noSubscriptionFound: "Kein Abo für die aktive Organisation gefunden",
     loadCameraUsageFailed: "Fehler beim Laden der Kamera-Nutzung:",
+    loadCameraVendorsFailed: "Fehler beim Laden der Kamera-Hersteller:",
     eyebrow: "Kamera anlegen",
     title: "Kamera anlegen",
     intro: "Lege eine neue Kamera an und generiere direkt ihre Provisioning-Daten.",
@@ -53,6 +55,11 @@ type Revier = {
   organization_id: string | null;
   status: "active" | "paused" | "archived";
   is_default: boolean;
+};
+
+type CameraVendor = {
+  key: string;
+  label: string;
 };
 
 type SubscriptionPolicyRow = {
@@ -98,7 +105,7 @@ if (!ctx.user) {
     throw new Error(text.activeOrganizationNotFound);
   }
 
-  const [reviersResult, subscriptionResult, cameraCountResult] = await Promise.all([
+  const [reviersResult, subscriptionResult, cameraCountResult, vendorsResult] = await Promise.all([
     supabase
       .from("reviers")
       .select("id, name, organization_id, status, is_default")
@@ -117,6 +124,12 @@ if (!ctx.user) {
       .select("id", { count: "exact", head: true })
       .eq("organization_id", activeOrganization.id)
       .eq("is_active", true),
+
+    supabase
+      .from("camera_vendors")
+      .select("key, label")
+      .eq("active", true)
+      .order("sort_order", { ascending: true }),
   ]);
 
   if (reviersResult.error) {
@@ -135,7 +148,12 @@ if (!ctx.user) {
     throw new Error(`${text.loadCameraUsageFailed} ${cameraCountResult.error.message}`);
   }
 
+  if (vendorsResult.error) {
+    throw new Error(`${text.loadCameraVendorsFailed} ${vendorsResult.error.message}`);
+  }
+
   const reviers = (reviersResult.data ?? []) as Revier[];
+  const vendors = (vendorsResult.data ?? []) as CameraVendor[];
 
   const policyInput = {
     status: subscriptionResult.data.status,
@@ -169,6 +187,7 @@ if (!ctx.user) {
       <CreateCameraForm
         organization={activeOrganization as Organization}
         reviers={reviers}
+        vendors={vendors}
         currentCameraCount={policyInput.currentCameraCount}
         maxCameras={subscriptionResult.data.max_cameras}
         cameraPolicy={cameraPolicy}

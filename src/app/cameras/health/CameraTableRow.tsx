@@ -290,10 +290,6 @@ export default function CameraTableRow({
           {formatMethod(row.import_method, language)}
         </td>
 
-        <td className="px-6 py-4 whitespace-nowrap">
-          <HealthBadge status={row.health_status} language={language} />
-        </td>
-
         <CameraRowFields
           cameraId={row.id}
           initialStatus={row.is_active ? "active" : "disabled"}
@@ -304,6 +300,9 @@ export default function CameraTableRow({
           language={language}
         />
 
+        <td className="px-6 py-4 whitespace-nowrap">
+          <HealthBadge status={row.health_status} language={language} />
+        </td>
         <td className="px-6 py-4 text-white/68 whitespace-nowrap">
           {formatAgo(row.last_seen_at, language)}
         </td>

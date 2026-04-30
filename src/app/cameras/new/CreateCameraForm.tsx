@@ -25,6 +25,7 @@ type Revier = {
 type Props = {
   organization: Organization;
   reviers: Revier[];
+  vendors: CameraVendorOption[];
   currentCameraCount: number;
   maxCameras: number;
   cameraPolicy: SubscriptionActionPolicy;
@@ -58,23 +59,11 @@ type CreateResponse = {
   };
 };
 
-const VENDORS = [
-  "berger&schröter",
-  "blazevideo",
-  "braun",
-  "bushnell",
-  "gardepro",
-  "hikmicro",
-  "maginon",
-  "minox",
-  "reconyx",
-  "reolink",
-  "seissiger",
-  "spypoint",
-  "xview",
-  "zeiss",
-  "other",
-] as const;
+
+type CameraVendorOption = {
+  key: string;
+  label: string;
+};
 
 function t(language: AppLanguage) {
   if (language === "en") {
@@ -319,6 +308,7 @@ function formatRevierLabel(revier: Revier, language: AppLanguage) {
 export default function CreateCameraForm({
   organization,
   reviers,
+  vendors,
   currentCameraCount,
   maxCameras,
   cameraPolicy,
@@ -342,7 +332,7 @@ export default function CreateCameraForm({
   const [revierId, setRevierId] = useState(defaultRevierId);
   const [cameraName, setCameraName] = useState("");
   const [method, setMethod] = useState<"smtp" | "ftp" | "manual">("smtp");
-  const [vendor, setVendor] = useState<(typeof VENDORS)[number]>("reolink");
+  const [vendor, setVendor] = useState<string>(vendors[0]?.key ?? "");
   const [locationName, setLocationName] = useState("");
   const [latitude, setLatitude] = useState("");
   const [longitude, setLongitude] = useState("");
@@ -491,7 +481,7 @@ export default function CreateCameraForm({
             </div>
           </div>
 
-          <div className="md:col-span-2">
+          <div>
             <label className="mb-1 block text-sm font-medium text-white">{text.cameraName}</label>
             <input
               value={cameraName}
@@ -502,6 +492,28 @@ export default function CreateCameraForm({
               disabled={formDisabled}
               title={isDemo ? text.demoReadOnly : ""}
             />
+          </div>
+
+          <div>
+            <label className="mb-1 block text-sm font-medium text-white">{text.vendor}</label>
+            <select
+              value={vendor}
+              onChange={(e) => setVendor(e.target.value)}
+              className="w-full rounded-[14px] border border-white/10 bg-white/5 px-3 py-2 text-white outline-none disabled:bg-white/5 disabled:text-white/35"
+              required
+              disabled={formDisabled}
+              title={isDemo ? text.demoReadOnly : ""}
+            >
+              {vendors.map((vendorOption) => (
+                <option
+                  key={vendorOption.key}
+                  value={vendorOption.key}
+                  className="bg-[#102018] text-white"
+                >
+                  {vendorOption.label}
+                </option>
+              ))}
+            </select>
           </div>
 
           <div>
@@ -527,24 +539,6 @@ export default function CreateCameraForm({
           </div>
 
           <div>
-            <label className="mb-1 block text-sm font-medium text-white">{text.vendor}</label>
-            <select
-              value={vendor}
-              onChange={(e) => setVendor(e.target.value as (typeof VENDORS)[number])}
-              className="w-full rounded-[14px] border border-white/10 bg-white/5 px-3 py-2 text-white outline-none disabled:bg-white/5 disabled:text-white/35"
-              required
-              disabled={formDisabled}
-              title={isDemo ? text.demoReadOnly : ""}
-            >
-              {VENDORS.map((vendorOption) => (
-                <option key={vendorOption} value={vendorOption} className="bg-[#102018] text-white">
-                  {vendorOption}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div className="md:col-span-2">
             <label className="mb-1 block text-sm font-medium text-white">{text.ground}</label>
             <select
               value={revierId}
@@ -562,7 +556,7 @@ export default function CreateCameraForm({
             </select>
           </div>
 
-          <div className="md:col-span-2">
+          <div>
             <label className="mb-1 block text-sm font-medium text-white">
               {text.locationName}
             </label>

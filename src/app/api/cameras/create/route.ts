@@ -6,29 +6,12 @@ import { assertNotDemoWrite, requireOrganizationRole } from "@/lib/auth";
 import { canCreateCamera } from "@/lib/billing/subscriptionPolicy";
 import { getLanguageFromRequest, type AppLanguage } from "@/lib/i18n";
 
-type Vendor =
-  | "berger&schröter"
-  | "blazevideo"
-  | "braun"
-  | "bushnell"
-  | "gardepro"
-  | "hikmicro"
-  | "maginon"
-  | "minox"
-  | "reconyx"
-  | "reolink"
-  | "seissiger"
-  | "spypoint"
-  | "xview"
-  | "zeiss"
-  | "other";
-
 type Method = "smtp" | "ftp" | "manual";
 
 type Payload = {
   cameraName: string;
   method: Method;
-  vendor: Vendor;
+  vendor: string;
   revierId?: string | null;
   locationName?: string | null;
   latitude?: number | null;
@@ -56,24 +39,6 @@ type SubscriptionPolicyRow = {
 };
 
 const METHODS = new Set<Method>(["smtp", "ftp", "manual"]);
-const VENDORS = new Set<Vendor>([
-  "berger&schröter",
-  "blazevideo",
-  "braun",
-  "bushnell",
-  "gardepro",
-  "hikmicro",
-  "maginon",
-  "minox",
-  "reconyx",
-  "reolink",
-  "seissiger",
-  "spypoint",
-  "xview",
-  "zeiss",
-  "other",
-]);
-
 const FTP_PUBLIC_HOST = process.env.FTP_PUBLIC_HOST || "159.69.109.128";
 const FTP_PUBLIC_PORT = Number(process.env.FTP_PUBLIC_PORT || "21");
 
@@ -238,7 +203,25 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    if (!body.vendor || !VENDORS.has(body.vendor)) {
+    const vendor = typeof body.vendor === "string" ? body.vendor.trim() : "";
+
+    if (!vendor) {
+      return NextResponse.json(
+        { error: text.invalidVendor },
+        { status: 400 }
+      );
+    }
+
+    const supabase = supabaseServer();
+
+    const { data: vendorRow, error: vendorError } = await supabase
+      .from("camera_vendors")
+      .select("key")
+      .eq("key", vendor)
+      .eq("active", true)
+      .maybeSingle();
+
+    if (vendorError || !vendorRow) {
       return NextResponse.json(
         { error: text.invalidVendor },
         { status: 400 }
@@ -256,8 +239,6 @@ export async function POST(req: NextRequest) {
         { status: 400 }
       );
     }
-
-    const supabase = supabaseServer();
 
     const [subscriptionResult, cameraCountResult] = await Promise.all([
       supabase
@@ -327,7 +308,7 @@ export async function POST(req: NextRequest) {
       p_organization_id: activeOrganization.id,
       p_camera_name: body.cameraName.trim(),
       p_method: body.method,
-      p_vendor: body.vendor,
+      p_vendor: vendor,
       p_revier_id: body.revierId ?? null,
       p_location_name: body.locationName ?? null,
       p_latitude: body.latitude ?? null,

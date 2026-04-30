@@ -40,6 +40,7 @@ export const ROUTE_ACCESS_RULES: RouteAccessRule[] = [
   { path: "/cameras/events", match: "startsWith", allowedRoles: ["owner", "admin", "member"] },
   { path: "/cameras/import", allowedRoles: ["owner", "admin", "member"] },
   { path: "/cameras/ingest", allowedRoles: ["owner", "admin", "member"] },
+  { path: "/cameras/", match: "startsWith", allowedRoles: ["owner", "admin"] },
 
   { path: "/orga", allowedRoles: ["owner", "admin"] },
   { path: "/orga/account", allowedRoles: ["owner", "admin"] },

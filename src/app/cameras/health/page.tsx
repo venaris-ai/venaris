@@ -147,7 +147,7 @@ function t(language: AppLanguage) {
       allActiveGrounds: "All active grounds",
       oneGround: "One ground",
       demoReadOnly: "Demo mode: changes are disabled.",
-      statusSaved: "Camera status was saved.",
+      statusSaved: "Camera was saved.",
       cameraRemoved: "Camera was permanently removed.",
       cameraListTitle: "Camera list",
       cameraListText:
@@ -213,7 +213,7 @@ function t(language: AppLanguage) {
     allActiveGrounds: "Alle aktiven Reviere",
     oneGround: "Ein Revier",
     demoReadOnly: "Demo-Modus: Änderungen sind deaktiviert.",
-    statusSaved: "Kamera-Status wurde gespeichert.",
+    statusSaved: "Kamera wurde gespeichert.",
     cameraRemoved: "Kamera wurde dauerhaft entfernt.",
     cameraListTitle: "Kameraliste",
     cameraListText:
@@ -1006,8 +1006,8 @@ export default async function CamerasHealthPage(props: {
                 <th className="px-6 py-3 font-medium whitespace-nowrap">{text.cameraCol}</th>
                 <th className="px-6 py-3 font-medium whitespace-nowrap">{text.groundCol}</th>
                 <th className="px-6 py-3 font-medium whitespace-nowrap">{text.methodCol}</th>
-                <th className="px-6 py-3 font-medium whitespace-nowrap">{text.healthCol}</th>
                 <th className="px-6 py-3 font-medium whitespace-nowrap">{text.statusCol}</th>
+                <th className="px-6 py-3 font-medium whitespace-nowrap">{text.healthCol}</th>
                 <th className="px-6 py-3 font-medium whitespace-nowrap">{text.lastFeedCol}</th>
                 <th className="px-6 py-3 font-medium whitespace-nowrap">{text.configCol}</th>
                 <th className="px-6 py-3 font-medium whitespace-nowrap">{text.locationCol}</th>
