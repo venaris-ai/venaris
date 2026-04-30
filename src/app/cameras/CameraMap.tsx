@@ -1,0 +1,485 @@
+// src/app/cameras/CameraMap.tsx #3
+"use client";
+
+import { useEffect, useMemo, useRef } from "react";
+import maplibregl, {
+  type GeoJSONSource,
+  type LngLatLike,
+  type Map as MapLibreMap,
+  type Marker,
+} from "maplibre-gl";
+import type { AppLanguage } from "@/lib/i18n";
+
+export type CameraMapItem = {
+  id: string;
+  name: string;
+  location_name: string | null;
+  import_method: string | null;
+  health_status: "online" | "stale" | "offline" | "unknown" | string;
+  latitude: number | null;
+  longitude: number | null;
+  direction_deg: number | null;
+};
+
+type LocatedCamera = CameraMapItem & {
+  latitude: number;
+  longitude: number;
+};
+
+const DEFAULT_STYLE_URL =
+  process.env.NEXT_PUBLIC_OPENFREEMAP_STYLE_URL ||
+  "https://tiles.openfreemap.org/styles/liberty";
+
+const DIRECTION_SOURCE_ID = "camera-directions";
+const DIRECTION_LAYER_ID = "camera-directions-layer";
+
+function t(language: AppLanguage) {
+  if (language === "en") {
+    return {
+      title: "Camera map",
+      text: "Camera positions and viewing directions in the current scope.",
+      noLocatedCameras: "No cameras with location data in the current scope.",
+      noCoordinatesTitle: "Enter map coordinates to use the camera map.",
+      noCoordinatesCta: "Open camera status",
+      partialCoordinates:
+        "Only cameras with coordinates are shown on the map.",
+      location: "Location",
+      direction: "Direction",
+      status: "Status",
+      coordinates: "Coordinates",
+      unknown: "unknown",
+      online: "Online",
+      stale: "Stale",
+      offline: "Offline",
+      noDirection: "not set",
+    };
+  }
+
+  return {
+    title: "Kamerakarte",
+    text: "Kamerapositionen und Blickrichtungen im aktuellen Scope.",
+    noLocatedCameras: "Keine Kameras mit Standortdaten im aktuellen Scope.",
+    noCoordinatesTitle:
+      "Bitte Kartenkoordinaten eingeben, um die Kartenansicht zu genießen.",
+    noCoordinatesCta: "Zum Kamerastatus",
+    partialCoordinates:
+      "Es werden nur die Kameras mit Koordinaten gezeigt.",
+    location: "Standort",
+    direction: "Richtung",
+    status: "Status",
+    coordinates: "Koordinaten",
+    unknown: "unbekannt",
+    online: "Online",
+    stale: "Veraltet",
+    offline: "Offline",
+    noDirection: "nicht gesetzt",
+  };
+}
+
+function isValidCoordinate(latitude: number | null, longitude: number | null) {
+  return (
+    typeof latitude === "number" &&
+    Number.isFinite(latitude) &&
+    latitude >= -90 &&
+    latitude <= 90 &&
+    typeof longitude === "number" &&
+    Number.isFinite(longitude) &&
+    longitude >= -180 &&
+    longitude <= 180
+  );
+}
+
+function statusLabel(status: string | null | undefined, language: AppLanguage) {
+  const text = t(language);
+  const normalized = (status ?? "").toLowerCase();
+
+  if (normalized === "online") return text.online;
+  if (normalized === "stale") return text.stale;
+  if (normalized === "offline") return text.offline;
+  return status || text.unknown;
+}
+
+function statusMarkerColors(status: string | null | undefined) {
+  const normalized = (status ?? "").toLowerCase();
+
+  if (normalized === "online") {
+    return {
+      background: "rgba(52, 211, 153, 0.96)",
+      border: "rgba(167, 243, 208, 0.95)",
+      shadow: "rgba(52, 211, 153, 0.35)",
+    };
+  }
+
+  if (normalized === "stale") {
+    return {
+      background: "rgba(251, 191, 36, 0.96)",
+      border: "rgba(253, 230, 138, 0.95)",
+      shadow: "rgba(251, 191, 36, 0.35)",
+    };
+  }
+
+  if (normalized === "offline") {
+    return {
+      background: "rgba(251, 113, 133, 0.96)",
+      border: "rgba(254, 205, 211, 0.95)",
+      shadow: "rgba(251, 113, 133, 0.35)",
+    };
+  }
+
+  return {
+    background: "rgba(148, 163, 184, 0.96)",
+    border: "rgba(226, 232, 240, 0.95)",
+    shadow: "rgba(148, 163, 184, 0.35)",
+  };
+}
+
+function escapeHtml(value: string) {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
+function formatCoordinate(value: number) {
+  return value.toFixed(6);
+}
+
+function normalizeDirection(value: number | null) {
+  if (typeof value !== "number" || !Number.isFinite(value)) return null;
+
+  const rounded = Math.round(value) % 360;
+  return rounded < 0 ? rounded + 360 : rounded;
+}
+
+function destinationPoint(
+  longitude: number,
+  latitude: number,
+  bearingDeg: number,
+  distanceMeters: number
+): [number, number] {
+  const radiusMeters = 6378137;
+  const bearing = (bearingDeg * Math.PI) / 180;
+  const lat1 = (latitude * Math.PI) / 180;
+  const lon1 = (longitude * Math.PI) / 180;
+  const angularDistance = distanceMeters / radiusMeters;
+
+  const lat2 = Math.asin(
+    Math.sin(lat1) * Math.cos(angularDistance) +
+      Math.cos(lat1) * Math.sin(angularDistance) * Math.cos(bearing)
+  );
+
+  const lon2 =
+    lon1 +
+    Math.atan2(
+      Math.sin(bearing) * Math.sin(angularDistance) * Math.cos(lat1),
+      Math.cos(angularDistance) - Math.sin(lat1) * Math.sin(lat2)
+    );
+
+  return [(lon2 * 180) / Math.PI, (lat2 * 180) / Math.PI];
+}
+
+function buildDirectionGeoJson(cameras: LocatedCamera[]) {
+  return {
+    type: "FeatureCollection" as const,
+    features: cameras
+      .map((camera) => {
+        const direction = normalizeDirection(camera.direction_deg);
+
+        if (direction === null) return null;
+
+        const start: [number, number] = [camera.longitude, camera.latitude];
+        const end = destinationPoint(
+          camera.longitude,
+          camera.latitude,
+          direction,
+          85
+        );
+
+        return {
+          type: "Feature" as const,
+          properties: {
+            id: camera.id,
+            name: camera.name,
+            direction,
+          },
+          geometry: {
+            type: "LineString" as const,
+            coordinates: [start, end],
+          },
+        };
+      })
+      .filter((feature) => feature !== null),
+  };
+}
+
+function ensureDirectionLayer(map: MapLibreMap) {
+  if (!map.getSource(DIRECTION_SOURCE_ID)) {
+    map.addSource(DIRECTION_SOURCE_ID, {
+      type: "geojson",
+      data: {
+        type: "FeatureCollection",
+        features: [],
+      },
+    });
+  }
+
+  if (!map.getLayer(DIRECTION_LAYER_ID)) {
+    map.addLayer({
+      id: DIRECTION_LAYER_ID,
+      type: "line",
+      source: DIRECTION_SOURCE_ID,
+      paint: {
+        "line-color": "#fbbf24",
+        "line-width": 3,
+        "line-opacity": 0.9,
+      },
+      layout: {
+        "line-cap": "round",
+        "line-join": "round",
+      },
+    });
+  }
+}
+
+function updateDirectionLayer(map: MapLibreMap, cameras: LocatedCamera[]) {
+  ensureDirectionLayer(map);
+
+  const source = map.getSource(DIRECTION_SOURCE_ID) as GeoJSONSource | undefined;
+  source?.setData(buildDirectionGeoJson(cameras));
+}
+
+function createMarkerElement(camera: LocatedCamera) {
+  const direction = normalizeDirection(camera.direction_deg);
+  const colors = statusMarkerColors(camera.health_status);
+
+  const el = document.createElement("div");
+  el.setAttribute("aria-label", camera.name);
+  el.style.width = "32px";
+  el.style.height = "32px";
+  el.style.borderRadius = "999px";
+  el.style.border = `2px solid ${colors.border}`;
+  el.style.background = colors.background;
+  el.style.boxShadow = `0 12px 30px ${colors.shadow}`;
+  el.style.display = "flex";
+  el.style.alignItems = "center";
+  el.style.justifyContent = "center";
+
+  const arrow = document.createElement("div");
+  arrow.style.width = "0";
+  arrow.style.height = "0";
+  arrow.style.borderLeft = "5px solid transparent";
+  arrow.style.borderRight = "5px solid transparent";
+  arrow.style.borderBottom = "13px solid rgba(12, 16, 22, 0.92)";
+  arrow.style.transform =
+    direction === null ? "rotate(0deg)" : `rotate(${direction}deg)`;
+  arrow.style.transformOrigin = "50% 65%";
+  arrow.style.opacity = direction === null ? "0.35" : "1";
+
+  el.appendChild(arrow);
+
+  return el;
+}
+
+function createPopupHtml(camera: LocatedCamera, language: AppLanguage) {
+  const text = t(language);
+  const direction = normalizeDirection(camera.direction_deg);
+
+  return `
+    <div style="min-width: 240px; color: #0f172a; font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;">
+      <div style="font-weight: 800; font-size: 14px; margin-bottom: 4px; color: #0f172a;">
+        ${escapeHtml(camera.name)}
+      </div>
+
+      <div style="font-size: 12px; line-height: 1.6; color: #334155;">
+        <div>
+          <strong style="color: #0f172a;">${escapeHtml(text.location)}:</strong>
+          ${escapeHtml(camera.location_name || text.unknown)}
+        </div>
+
+        <div>
+          <strong style="color: #0f172a;">${escapeHtml(text.coordinates)}:</strong>
+          ${formatCoordinate(camera.latitude)}, ${formatCoordinate(camera.longitude)}
+        </div>
+
+        <div>
+          <strong style="color: #0f172a;">${escapeHtml(text.direction)}:</strong>
+          ${direction === null ? escapeHtml(text.noDirection) : `${direction}°`}
+        </div>
+
+        <div>
+          <strong style="color: #0f172a;">${escapeHtml(text.status)}:</strong>
+          ${escapeHtml(statusLabel(camera.health_status, language))}
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+export default function CameraMap({
+  cameras,
+  language,
+}: {
+  cameras: CameraMapItem[];
+  language: AppLanguage;
+}) {
+  const text = t(language);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const mapRef = useRef<MapLibreMap | null>(null);
+  const markersRef = useRef<Marker[]>([]);
+
+  const locatedCameras = useMemo<LocatedCamera[]>(() => {
+    return cameras.filter((camera): camera is LocatedCamera =>
+      isValidCoordinate(camera.latitude, camera.longitude)
+    );
+  }, [cameras]);
+
+  const missingLocationCameras = useMemo(() => {
+    return cameras.filter(
+      (camera) => !isValidCoordinate(camera.latitude, camera.longitude)
+    );
+  }, [cameras]);
+
+  const hasNoCameraCoordinates =
+    cameras.length > 0 && locatedCameras.length === 0;
+  const hasPartialCameraCoordinates =
+    locatedCameras.length > 0 && missingLocationCameras.length > 0;
+
+  useEffect(() => {
+    if (!containerRef.current || mapRef.current) return;
+
+    const initialCenter: LngLatLike =
+      locatedCameras.length > 0
+        ? [locatedCameras[0].longitude, locatedCameras[0].latitude]
+        : [10.4515, 51.1657];
+
+    const map = new maplibregl.Map({
+      container: containerRef.current,
+      style: DEFAULT_STYLE_URL,
+      center: initialCenter,
+      zoom: locatedCameras.length > 0 ? 12 : 5,
+      attributionControl: false,
+    });
+
+    map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }));
+
+
+map.addControl(
+  new maplibregl.AttributionControl({
+    compact: true,
+  })
+);
+
+
+
+    mapRef.current = map;
+
+    return () => {
+      markersRef.current.forEach((marker) => marker.remove());
+      markersRef.current = [];
+      map.remove();
+      mapRef.current = null;
+    };
+  }, [locatedCameras.length]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    markersRef.current.forEach((marker) => marker.remove());
+    markersRef.current = [];
+
+    for (const camera of locatedCameras) {
+      const marker = new maplibregl.Marker({
+        element: createMarkerElement(camera),
+        anchor: "center",
+      })
+        .setLngLat([camera.longitude, camera.latitude])
+        .setPopup(
+          new maplibregl.Popup({ offset: 22 }).setHTML(
+            createPopupHtml(camera, language)
+          )
+        )
+        .addTo(map);
+
+      markersRef.current.push(marker);
+    }
+
+    const syncDirections = () => updateDirectionLayer(map, locatedCameras);
+
+    if (map.loaded()) {
+      syncDirections();
+    } else {
+      map.once("load", syncDirections);
+    }
+
+    if (locatedCameras.length === 1) {
+      map.easeTo({
+        center: [locatedCameras[0].longitude, locatedCameras[0].latitude],
+        zoom: 14,
+        duration: 600,
+      });
+    }
+
+    if (locatedCameras.length > 1) {
+      const bounds = new maplibregl.LngLatBounds();
+
+      for (const camera of locatedCameras) {
+        bounds.extend([camera.longitude, camera.latitude]);
+      }
+
+      map.fitBounds(bounds, {
+        padding: 72,
+        maxZoom: 15,
+        duration: 600,
+      });
+    }
+  }, [language, locatedCameras]);
+
+  return (
+    <section className="rounded-[28px] border border-white/10 bg-white/5 p-6 backdrop-blur-sm">
+      <div className="mb-4 flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
+        <div>
+          <h2 className="text-lg font-medium text-white">{text.title}</h2>
+          <p className="text-sm text-white/65">{text.text}</p>
+        </div>
+
+        <div className="text-xs text-white/45">
+          {locatedCameras.length} / {cameras.length}
+        </div>
+      </div>
+
+      {locatedCameras.length > 0 ? (
+        <div
+          ref={containerRef}
+          className="h-[520px] overflow-hidden rounded-[24px] border border-white/10 bg-[#10141c]"
+        />
+      ) : (
+        <div className="rounded-[24px] border border-dashed border-white/12 bg-white/[0.03] px-4 py-10 text-center text-sm text-white/68">
+          {hasNoCameraCoordinates ? (
+            <>
+              <div className="text-base font-medium text-white">
+                {text.noCoordinatesTitle}
+              </div>
+              <a
+                href="/cameras/health"
+                className="mt-3 inline-flex rounded-full border border-amber-300/30 bg-amber-300/10 px-4 py-2 text-sm font-medium text-amber-100 transition hover:bg-amber-300/15"
+              >
+                {text.noCoordinatesCta}
+              </a>
+            </>
+          ) : (
+            text.noLocatedCameras
+          )}
+        </div>
+      )}
+
+      {hasPartialCameraCoordinates ? (
+        <div className="mt-4 rounded-[22px] border border-amber-300/20 bg-amber-300/10 px-4 py-3 text-sm text-amber-50/90">
+          {text.partialCoordinates}
+        </div>
+      ) : null}
+    </section>
+  );
+}

@@ -1,4 +1,4 @@
-// src/app/cameras/health/page.tsx #13
+// src/app/cameras/health/page.tsx #14
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
@@ -144,8 +144,6 @@ function t(language: AppLanguage) {
       loadHealthFailed: "Failed to load camera status:",
       noActiveGrounds:
         "There are currently no active grounds for the active organization.",
-      allActiveGrounds: "All active grounds",
-      oneGround: "One ground",
       demoReadOnly: "Demo mode: changes are disabled.",
       statusSaved: "Camera was saved.",
       cameraRemoved: "Camera was permanently removed.",
@@ -210,8 +208,6 @@ function t(language: AppLanguage) {
     loadHealthFailed: "Fehler beim Laden des Kamerastatus:",
     noActiveGrounds:
       "Für die aktive Organisation sind derzeit keine aktiven Reviere vorhanden.",
-    allActiveGrounds: "Alle aktiven Reviere",
-    oneGround: "Ein Revier",
     demoReadOnly: "Demo-Modus: Änderungen sind deaktiviert.",
     statusSaved: "Kamera wurde gespeichert.",
     cameraRemoved: "Kamera wurde dauerhaft entfernt.",
@@ -263,10 +259,8 @@ function t(language: AppLanguage) {
     loadTargetCameraFailed: "Fehler beim Laden der Ziel-Kamera:",
     saveCameraStatusFailed: "Fehler beim Speichern des Kamera-Status:",
     removeCameraFailed: "Fehler beim Entfernen der Kamera:",
-    noSubscriptionFound:
-      "Kein Abo für die aktive Organisation gefunden",
-    loadSubscriptionPolicyFailed:
-      "Fehler beim Laden der Abo-Kameraregeln:",
+    noSubscriptionFound: "Kein Abo für die aktive Organisation gefunden",
+    loadSubscriptionPolicyFailed: "Fehler beim Laden der Abo-Kameraregeln:",
     loadActiveCameraUsageFailed:
       "Fehler beim Laden der aktiven Kamera-Nutzung:",
   };
@@ -574,6 +568,24 @@ async function removeCamera(formData: FormData) {
   );
 }
 
+function PageHeader({
+  text,
+}: {
+  text: ReturnType<typeof t>;
+}) {
+  return (
+    <section className="rounded-[32px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(201,149,46,0.16),transparent_24%),linear-gradient(135deg,rgba(255,255,255,0.06),rgba(255,255,255,0.03))] p-6 backdrop-blur-sm">
+      <div className="text-xs font-medium uppercase tracking-[0.22em] text-amber-200/80">
+        {text.eyebrow}
+      </div>
+      <h1 className="mt-3 text-3xl font-semibold tracking-tight text-white">
+        {text.title}
+      </h1>
+      <p className="mt-2 max-w-3xl text-sm text-white/68">{text.intro}</p>
+    </section>
+  );
+}
+
 function StatCard({
   title,
   value,
@@ -638,15 +650,7 @@ export default async function CamerasHealthPage(props: {
   if (!activeOrganization) {
     return (
       <main className="space-y-8">
-        <section className="rounded-[32px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(201,149,46,0.16),transparent_24%),linear-gradient(135deg,rgba(255,255,255,0.06),rgba(255,255,255,0.03))] p-6 backdrop-blur-sm">
-          <div className="text-xs font-medium uppercase tracking-[0.22em] text-amber-200/80">
-            {text.eyebrow}
-          </div>
-          <h1 className="mt-3 text-3xl font-semibold tracking-tight text-white">
-            {text.title}
-          </h1>
-          <p className="mt-2 max-w-3xl text-sm text-white/68">{text.intro}</p>
-        </section>
+        <PageHeader text={text} />
         <div className="rounded-[24px] border border-rose-300/20 bg-rose-300/10 p-4 text-sm text-rose-100">
           {text.activeOrganizationNotFound}
         </div>
@@ -664,15 +668,7 @@ export default async function CamerasHealthPage(props: {
   if (reviersError) {
     return (
       <main className="space-y-8">
-        <section className="rounded-[32px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(201,149,46,0.16),transparent_24%),linear-gradient(135deg,rgba(255,255,255,0.06),rgba(255,255,255,0.03))] p-6 backdrop-blur-sm">
-          <div className="text-xs font-medium uppercase tracking-[0.22em] text-amber-200/80">
-            {text.eyebrow}
-          </div>
-          <h1 className="mt-3 text-3xl font-semibold tracking-tight text-white">
-            {text.title}
-          </h1>
-          <p className="mt-2 max-w-3xl text-sm text-white/68">{text.intro}</p>
-        </section>
+        <PageHeader text={text} />
         <div className="rounded-[24px] border border-rose-300/20 bg-rose-300/10 p-4 text-sm text-rose-100">
           {text.loadGroundsFailed} {reviersError.message}
         </div>
@@ -688,31 +684,11 @@ export default async function CamerasHealthPage(props: {
   const revierScope = resolveRevierScope(rawRevier, allowedReviers);
   const allowedRevierIds = allowedReviers.map((revier) => revier.id);
 
-  const scopeLabel =
-    revierScope.type === "single"
-      ? reviers.find((revier) => revier.id === revierScope.revierId)?.name ??
-        text.oneGround
-      : text.allActiveGrounds;
-
   if (allowedRevierIds.length === 0) {
     return (
       <main className="space-y-8">
-        <section className="rounded-[32px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(201,149,46,0.16),transparent_24%),linear-gradient(135deg,rgba(255,255,255,0.06),rgba(255,255,255,0.03))] p-6 backdrop-blur-sm">
-          <div className="flex flex-wrap items-start justify-between gap-4">
-            <div>
-              <div className="text-xs font-medium uppercase tracking-[0.22em] text-amber-200/80">
-                {text.eyebrow}
-              </div>
-              <h1 className="mt-3 text-3xl font-semibold tracking-tight text-white">
-                {text.title}
-              </h1>
-              <p className="mt-2 max-w-3xl text-sm text-white/68">{text.intro}</p>
-            </div>
-            <div className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-white/72">
-              {scopeLabel}
-            </div>
-          </div>
-        </section>
+        <PageHeader text={text} />
+
         <div className="rounded-[24px] border border-white/10 bg-white/5 p-4 text-sm text-white/68">
           {text.noActiveGrounds}
         </div>
@@ -768,15 +744,7 @@ export default async function CamerasHealthPage(props: {
   if (camerasError) {
     return (
       <main className="space-y-8">
-        <section className="rounded-[32px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(201,149,46,0.16),transparent_24%),linear-gradient(135deg,rgba(255,255,255,0.06),rgba(255,255,255,0.03))] p-6 backdrop-blur-sm">
-          <div className="text-xs font-medium uppercase tracking-[0.22em] text-amber-200/80">
-            {text.eyebrow}
-          </div>
-          <h1 className="mt-3 text-3xl font-semibold tracking-tight text-white">
-            {text.title}
-          </h1>
-          <p className="mt-2 max-w-3xl text-sm text-white/68">{text.intro}</p>
-        </section>
+        <PageHeader text={text} />
         <div className="rounded-[24px] border border-rose-300/20 bg-rose-300/10 p-4 text-sm text-rose-100">
           {text.loadCamerasFailed} {camerasError.message}
         </div>
@@ -790,22 +758,7 @@ export default async function CamerasHealthPage(props: {
   if (cameraIds.length === 0) {
     return (
       <main className="space-y-8">
-        <section className="rounded-[32px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(201,149,46,0.16),transparent_24%),linear-gradient(135deg,rgba(255,255,255,0.06),rgba(255,255,255,0.03))] p-6 backdrop-blur-sm">
-          <div className="flex flex-wrap items-start justify-between gap-4">
-            <div>
-              <div className="text-xs font-medium uppercase tracking-[0.22em] text-amber-200/80">
-                {text.eyebrow}
-              </div>
-              <h1 className="mt-3 text-3xl font-semibold tracking-tight text-white">
-                {text.title}
-              </h1>
-              <p className="mt-2 max-w-3xl text-sm text-white/68">{text.intro}</p>
-            </div>
-            <div className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-white/72">
-              {scopeLabel}
-            </div>
-          </div>
-        </section>
+        <PageHeader text={text} />
 
         {demoReadOnly ? (
           <section className="rounded-[24px] border border-amber-300/20 bg-amber-300/10 p-4">
@@ -828,8 +781,12 @@ export default async function CamerasHealthPage(props: {
         <section className="rounded-[28px] border border-white/10 bg-white/5 backdrop-blur-sm">
           <div className="flex items-center justify-between border-b border-white/8 px-6 py-4">
             <div>
-              <h2 className="text-lg font-medium text-white">{text.cameraListTitle}</h2>
-              <p className="mt-1 text-sm text-white/65">{text.cameraListText}</p>
+              <h2 className="text-lg font-medium text-white">
+                {text.cameraListTitle}
+              </h2>
+              <p className="mt-1 text-sm text-white/65">
+                {text.cameraListText}
+              </p>
             </div>
             <Link
               href="/cameras/new"
@@ -864,15 +821,7 @@ export default async function CamerasHealthPage(props: {
   if (healthError) {
     return (
       <main className="space-y-8">
-        <section className="rounded-[32px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(201,149,46,0.16),transparent_24%),linear-gradient(135deg,rgba(255,255,255,0.06),rgba(255,255,255,0.03))] p-6 backdrop-blur-sm">
-          <div className="text-xs font-medium uppercase tracking-[0.22em] text-amber-200/80">
-            {text.eyebrow}
-          </div>
-          <h1 className="mt-3 text-3xl font-semibold tracking-tight text-white">
-            {text.title}
-          </h1>
-          <p className="mt-2 max-w-3xl text-sm text-white/68">{text.intro}</p>
-        </section>
+        <PageHeader text={text} />
         <div className="rounded-[24px] border border-rose-300/20 bg-rose-300/10 p-4 text-sm text-rose-100">
           {text.loadHealthFailed} {healthError.message}
         </div>
@@ -942,22 +891,7 @@ export default async function CamerasHealthPage(props: {
 
   return (
     <main className="space-y-8">
-      <section className="rounded-[32px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(201,149,46,0.16),transparent_24%),linear-gradient(135deg,rgba(255,255,255,0.06),rgba(255,255,255,0.03))] p-6 backdrop-blur-sm">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div>
-            <div className="text-xs font-medium uppercase tracking-[0.22em] text-amber-200/80">
-              {text.eyebrow}
-            </div>
-            <h1 className="mt-3 text-3xl font-semibold tracking-tight text-white">
-              {text.title}
-            </h1>
-            <p className="mt-2 max-w-3xl text-sm text-white/68">{text.intro}</p>
-          </div>
-          <div className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-white/72">
-            {scopeLabel}
-          </div>
-        </div>
-      </section>
+      <PageHeader text={text} />
 
       {demoReadOnly ? (
         <section className="rounded-[24px] border border-amber-300/20 bg-amber-300/10 p-4">
@@ -987,7 +921,9 @@ export default async function CamerasHealthPage(props: {
       <section className="rounded-[28px] border border-white/10 bg-white/5 backdrop-blur-sm">
         <div className="flex items-center justify-between border-b border-white/8 px-6 py-4">
           <div>
-            <h2 className="text-lg font-medium text-white">{text.cameraListTitle}</h2>
+            <h2 className="text-lg font-medium text-white">
+              {text.cameraListTitle}
+            </h2>
             <p className="mt-1 text-sm text-white/65">{text.cameraListText}</p>
           </div>
 
@@ -1003,14 +939,30 @@ export default async function CamerasHealthPage(props: {
           <table className="min-w-full text-sm">
             <thead className="bg-white/5 text-left text-white/55">
               <tr>
-                <th className="px-6 py-3 font-medium whitespace-nowrap">{text.cameraCol}</th>
-                <th className="px-6 py-3 font-medium whitespace-nowrap">{text.groundCol}</th>
-                <th className="px-6 py-3 font-medium whitespace-nowrap">{text.methodCol}</th>
-                <th className="px-6 py-3 font-medium whitespace-nowrap">{text.statusCol}</th>
-                <th className="px-6 py-3 font-medium whitespace-nowrap">{text.healthCol}</th>
-                <th className="px-6 py-3 font-medium whitespace-nowrap">{text.lastFeedCol}</th>
-                <th className="px-6 py-3 font-medium whitespace-nowrap">{text.configCol}</th>
-                <th className="px-6 py-3 font-medium whitespace-nowrap">{text.locationCol}</th>
+                <th className="px-6 py-3 font-medium whitespace-nowrap">
+                  {text.cameraCol}
+                </th>
+                <th className="px-6 py-3 font-medium whitespace-nowrap">
+                  {text.groundCol}
+                </th>
+                <th className="px-6 py-3 font-medium whitespace-nowrap">
+                  {text.methodCol}
+                </th>
+                <th className="px-6 py-3 font-medium whitespace-nowrap">
+                  {text.statusCol}
+                </th>
+                <th className="px-6 py-3 font-medium whitespace-nowrap">
+                  {text.healthCol}
+                </th>
+                <th className="px-6 py-3 font-medium whitespace-nowrap">
+                  {text.lastFeedCol}
+                </th>
+                <th className="px-6 py-3 font-medium whitespace-nowrap">
+                  {text.configCol}
+                </th>
+                <th className="px-6 py-3 font-medium whitespace-nowrap">
+                  {text.locationCol}
+                </th>
                 <th className="px-6 py-3 font-medium whitespace-nowrap text-right">
                   {text.actionsCol}
                 </th>

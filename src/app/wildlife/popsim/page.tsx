@@ -1,7 +1,8 @@
-// src/app/wildlife/popsim/page.tsx #7
+// src/app/wildlife/popsim/page.tsx #8
 export const runtime = "nodejs";
 
 import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
 import { supabaseServer } from "@/lib/supabaseServer";
 import { requirePathAccess } from "@/lib/authz";
 import {
@@ -34,6 +35,7 @@ type RevierRow = {
   organization_id: string | null;
   status: string;
   timezone: string | null;
+  is_default: boolean | null;
 };
 
 type PopulationEstimateRow = {
@@ -277,7 +279,7 @@ export default async function PopSimPage({
 
   const { data: reviersData, error: reviersError } = await supabase
     .from("reviers")
-    .select("id,name,area_ha,organization_id,status,timezone")
+    .select("id,name,area_ha,organization_id,status,timezone,is_default")
     .eq("organization_id", activeOrganization.id)
     .eq("status", "active")
     .order("name", { ascending: true });
@@ -312,42 +314,23 @@ export default async function PopSimPage({
     );
   }
 
-  const revierScope = resolveRevierScope(
-    resolvedSearchParams.revier,
-    allowedReviers
-  );
+const defaultRevier =
+  reviers.find((revier) => revier.is_default) ?? reviers[0];
 
-  if (revierScope.type === "all") {
-    return (
-      <main className="space-y-8">
-        <PageHeader language={language} />
+if (!resolvedSearchParams.revier || resolvedSearchParams.revier === "all") {
+  redirect(`/wildlife/popsim?revier=${defaultRevier.id}`);
+}
 
-        <section className="rounded-[28px] border border-white/10 bg-white/5 p-5 backdrop-blur-sm">
-          <h2 className="text-lg font-medium text-white">{text.singleGroundRequired}</h2>
-          <p className="mt-2 text-sm text-white/65">{text.singleGroundRequiredText}</p>
-        </section>
+const revierScope = resolveRevierScope(
+  resolvedSearchParams.revier,
+  allowedReviers
+);
 
-        <section className="rounded-[28px] border border-white/10 bg-white/5 p-5 backdrop-blur-sm">
-          <h2 className="text-lg font-medium text-white">{text.availableActiveGrounds}</h2>
-          <div className="mt-3 space-y-2 text-sm text-white/78">
-            {reviers.map((revier) => (
-              <div
-                key={revier.id}
-                className="rounded-[20px] border border-white/10 bg-white/5 p-3"
-              >
-                <div className="font-medium text-white">{revier.name}</div>
-                <div className="mt-1 text-xs text-white/45">
-                  {revier.area_ha
-                    ? `${fmtInt(revier.area_ha, language)} ha`
-                    : text.areaOpen}
-                </div>
-              </div>
-            ))}
-          </div>
-        </section>
-      </main>
-    );
-  }
+if (revierScope.type === "all") {
+  redirect(`/wildlife/popsim?revier=${defaultRevier.id}`);
+}
+
+
 
   const selectedRevier = reviers.find((r) => r.id === revierScope.revierId);
 

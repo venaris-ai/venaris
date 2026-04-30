@@ -1,4 +1,4 @@
-// src/app/api/asset-species/route.ts #2
+// src/app/api/asset-species/route.ts #3
 export const runtime = "nodejs";
 
 import { NextRequest, NextResponse } from "next/server";
@@ -145,30 +145,27 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: updateError.message }, { status: 500 });
     }
 
-    const { data: eventRows, error: eventRowsError } = await supabase
-      .from("event_assets")
-      .select("event_id")
-      .eq("asset_id", assetId);
 
-    if (eventRowsError) {
-      return NextResponse.json({ error: eventRowsError.message }, { status: 500 });
-    }
+const { data: reclusterEventId, error: reclusterError } = await supabase.rpc(
+  "recluster_asset_event",
+  {
+    p_asset_id: assetId,
+  }
+);
 
-    const eventIds = Array.from(
-      new Set((eventRows ?? []).map((row) => row.event_id).filter(Boolean))
-    );
+if (reclusterError) {
+  return NextResponse.json(
+    { error: reclusterError.message },
+    { status: 500 }
+  );
+}
 
-    for (const eventId of eventIds) {
-      const { error: rpcError } = await supabase.rpc("update_event_aggregation", {
-        p_event_id: eventId,
-      });
+return NextResponse.json({
+  ok: true,
+  eventId: reclusterEventId ?? null,
+});
 
-      if (rpcError) {
-        return NextResponse.json({ error: rpcError.message }, { status: 500 });
-      }
-    }
 
-    return NextResponse.json({ ok: true });
   } catch (e: any) {
     return NextResponse.json(
       { error: "asset_species_api_crashed", details: e?.message ?? String(e) },

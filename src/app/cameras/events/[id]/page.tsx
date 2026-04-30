@@ -1,4 +1,4 @@
-// src/app/cameras/events/[id]/page.tsx #15
+// src/app/cameras/events/[id]/page.tsx #16
 export const runtime = "nodejs";
 
 import Link from "next/link";
@@ -379,23 +379,6 @@ export default async function CameraEventDetailPage(props: {
     }
   }
 
-  const initialAssets: AssetViewItem[] = assets.map((asset) => ({
-    id: asset.id,
-    previewUrl: signedUrlsByAssetId[asset.id],
-    timestampLabel: formatAppDateTime(
-      asset.captured_at ?? asset.created_at,
-      language,
-      eventTimeZone
-    ),
-    storagePath: asset.storage_path ?? undefined,
-    relevant: asset.relevant,
-    relevantUser: asset.relevant_user ?? null,
-    empty: asset.empty ?? null,
-    emptyConfidence: asset.empty_confidence ?? null,
-  }));
-
-  const initialSelectedAssetId = initialAssets[0]?.id ?? null;
-
   const detectionsByAssetId: Record<string, DetectionTopRow> = {};
   if (assetIds.length > 0) {
     const { data: detectionData } = await supabase
@@ -413,6 +396,35 @@ export default async function CameraEventDetailPage(props: {
     }
   }
 
+  const initialAssets: AssetViewItem[] = assets
+    .map((asset) => ({
+      id: asset.id,
+      previewUrl: signedUrlsByAssetId[asset.id],
+      timestampLabel: formatAppDateTime(
+        asset.captured_at ?? asset.created_at,
+        language,
+        eventTimeZone
+      ),
+      storagePath: asset.storage_path ?? undefined,
+      relevant: asset.relevant,
+      relevantUser: asset.relevant_user ?? null,
+      empty: asset.empty ?? null,
+      emptyConfidence: asset.empty_confidence ?? null,
+    }))
+    .sort((a, b) => {
+      const scoreA = detectionsByAssetId[a.id]?.score ?? -1;
+      const scoreB = detectionsByAssetId[b.id]?.score ?? -1;
+      const scoreDiff = scoreB - scoreA;
+
+      if (scoreDiff !== 0) return scoreDiff;
+
+      const originalIndexA = assets.findIndex((asset) => asset.id === a.id);
+      const originalIndexB = assets.findIndex((asset) => asset.id === b.id);
+
+      return originalIndexA - originalIndexB;
+    });
+
+  const initialSelectedAssetId = initialAssets[0]?.id ?? null;
   const cameraLabel = camera.name
     ? `${camera.name}${camera.location_name ? ` (${camera.location_name})` : ""}`
     : text.unnamedCamera;

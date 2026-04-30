@@ -1,4 +1,4 @@
-// src/app/api/camera-health/route.ts #2b
+// src/app/api/camera-health/route.ts #2c
 export const runtime = "nodejs";
 
 import { NextResponse } from "next/server";
@@ -9,9 +9,21 @@ import {
   type RevierOption,
 } from "@/lib/intelligence/revierScope";
 
+type CameraGeoRow = {
+  id: string;
+  location_name: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  direction_deg: number | null;
+};
+
 export async function GET(req: Request) {
   try {
-    const { activeMembership } = await requireOrganizationRole(["owner", "admin", "member"]);
+    const { activeMembership } = await requireOrganizationRole([
+      "owner",
+      "admin",
+      "member",
+    ]);
     const activeOrganization = activeMembership.organizations;
 
     if (!activeOrganization) {
@@ -21,53 +33,48 @@ export async function GET(req: Request) {
       );
     }
 
+    const supabase = supabaseServer();
+    const { searchParams } = new URL(req.url);
+    const rawRevier = searchParams.get("revier") ?? undefined;
 
-const supabase = supabaseServer();
-const { searchParams } = new URL(req.url);
-const rawRevier = searchParams.get("revier") ?? undefined;
+    const { data: reviersData, error: reviersError } = await supabase
+      .from("reviers")
+      .select("id,name")
+      .eq("organization_id", activeOrganization.id)
+      .eq("status", "active")
+      .order("name", { ascending: true });
 
-const { data: reviersData, error: reviersError } = await supabase
-  .from("reviers")
-  .select("id,name")
-  .eq("organization_id", activeOrganization.id)
-  .eq("status", "active")
-  .order("name", { ascending: true });
+    if (reviersError) {
+      return NextResponse.json(
+        { error: reviersError.message },
+        { status: 500 }
+      );
+    }
 
-if (reviersError) {
-  return NextResponse.json(
-    { error: reviersError.message },
-    { status: 500 }
-  );
-}
+    const allowedReviers: RevierOption[] = (reviersData ?? []).map(
+      (revier) => ({
+        id: revier.id,
+        name: revier.name,
+      })
+    );
+    const revierScope = resolveRevierScope(rawRevier, allowedReviers);
+    const allowedRevierIds = allowedReviers.map((revier) => revier.id);
 
-const allowedReviers: RevierOption[] = (reviersData ?? []).map((revier) => ({
-  id: revier.id,
-  name: revier.name,
-}));
-const revierScope = resolveRevierScope(rawRevier, allowedReviers);
-const allowedRevierIds = allowedReviers.map((revier) => revier.id);
+    if (allowedRevierIds.length === 0) {
+      return NextResponse.json({ items: [] });
+    }
 
-if (allowedRevierIds.length === 0) {
-  return NextResponse.json({ items: [] });
-}
+    let camerasQuery = supabase
+      .from("cameras")
+      .select("id,location_name,latitude,longitude,direction_deg")
+      .eq("organization_id", activeOrganization.id);
 
-let camerasQuery = supabase
-  .from("cameras")
-  .select("id")
-  .eq("organization_id", activeOrganization.id);
+    camerasQuery =
+      revierScope.type === "single"
+        ? camerasQuery.eq("revier_id", revierScope.revierId)
+        : camerasQuery.in("revier_id", allowedRevierIds);
 
-camerasQuery =
-  revierScope.type === "single"
-    ? camerasQuery.eq("revier_id", revierScope.revierId)
-    : camerasQuery.in("revier_id", allowedRevierIds);
-
-const { data: cameras, error: camerasError } = await camerasQuery;
-
-
-
-
-
-
+    const { data: cameras, error: camerasError } = await camerasQuery;
 
     if (camerasError) {
       return NextResponse.json(
@@ -76,11 +83,16 @@ const { data: cameras, error: camerasError } = await camerasQuery;
       );
     }
 
-    const allowedCameraIds = (cameras ?? []).map((c) => c.id);
+    const cameraRows = (cameras ?? []) as CameraGeoRow[];
+    const allowedCameraIds = cameraRows.map((camera) => camera.id);
 
     if (allowedCameraIds.length === 0) {
       return NextResponse.json({ items: [] });
     }
+
+    const cameraGeoById = new Map(
+      cameraRows.map((camera) => [camera.id, camera])
+    );
 
     const { data, error } = await supabase
       .from("camera_health")
@@ -95,7 +107,22 @@ const { data: cameras, error: camerasError } = await camerasQuery;
       );
     }
 
-    return NextResponse.json({ items: data ?? [] });
+    const items = (data ?? []).map((row: any) => {
+      const geo = cameraGeoById.get(row.id);
+
+return {
+  ...row,
+  location_name: geo?.location_name ?? null,
+  latitude: geo?.latitude ?? null,
+  longitude: geo?.longitude ?? null,
+  direction_deg: geo?.direction_deg ?? null,
+};
+
+
+
+    });
+
+    return NextResponse.json({ items });
   } catch (err: any) {
     return NextResponse.json(
       { error: err?.message ?? "camera health failed" },

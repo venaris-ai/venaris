@@ -1,11 +1,11 @@
-// src/app/cameras/events/[id]/EventDetailControls.tsx #9
+// src/app/cameras/events/[id]/EventDetailControls.tsx #10
 "use client";
 
 import { useState } from "react";
 import { type AppLanguage } from "@/lib/i18n";
 import type { SpeciesOption } from "@/lib/speciesMeta";
 
-type RelevantSelectValue = "auto" | "yes" | "no";
+type RelevantSelectValue = "yes" | "no";
 type SpeciesSelectValue = "auto" | string;
 
 function SaveIcon() {
@@ -33,16 +33,16 @@ function getSpeciesLabel(
   return speciesLabelByCode[value] ?? value.replaceAll("_", " ");
 }
 
-function relevantUserToSelect(value: boolean | null): RelevantSelectValue {
-  if (value === true) return "yes";
-  if (value === false) return "no";
-  return "auto";
+function relevantToSelect(
+  relevantAuto: boolean | null,
+  relevantUser: boolean | null
+): RelevantSelectValue {
+  const effective = relevantUser ?? relevantAuto;
+  return effective === false ? "no" : "yes";
 }
 
-function selectToRelevantUser(value: RelevantSelectValue): boolean | null {
-  if (value === "yes") return true;
-  if (value === "no") return false;
-  return null;
+function selectToRelevantUser(value: RelevantSelectValue): boolean {
+  return value === "yes";
 }
 
 function formatInteger(
@@ -98,6 +98,7 @@ function t(language: AppLanguage) {
       yes: "Yes",
       no: "No",
       auto: "Auto",
+      manual: "Manual",
       couldNotSave: "Could not save changes:",
       demoTitle: "Demo mode",
       demoText:
@@ -120,6 +121,7 @@ function t(language: AppLanguage) {
     yes: "Ja",
     no: "Nein",
     auto: "Auto",
+    manual: "Manuell",
     couldNotSave: "Konnte Änderungen nicht speichern:",
     demoTitle: "Demo-Modus",
     demoText:
@@ -163,18 +165,30 @@ export default function EventDetailControls({
 }) {
   const text = t(language);
 
-  const [relevantValue, setRelevantValue] = useState<RelevantSelectValue>(
-    relevantUserToSelect(initialRelevantUser)
+  const initialRelevantValue = relevantToSelect(
+    initialRelevantAuto,
+    initialRelevantUser
   );
-  const [speciesValue, setSpeciesValue] = useState<SpeciesSelectValue>(
-    speciesUserToSelect(initialSpeciesUser)
-  );
+  const initialSpeciesValue = speciesUserToSelect(initialSpeciesUser);
+
+  const [relevantValue, setRelevantValue] =
+    useState<RelevantSelectValue>(initialRelevantValue);
+  const [speciesValue, setSpeciesValue] =
+    useState<SpeciesSelectValue>(initialSpeciesValue);
   const [busy, setBusy] = useState(false);
   const [isReadOnlyModalOpen, setIsReadOnlyModalOpen] = useState(false);
 
-  const dirty =
-    relevantValue !== relevantUserToSelect(initialRelevantUser) ||
-    speciesValue !== speciesUserToSelect(initialSpeciesUser);
+
+const isManuallyNotRelevant = relevantValue === "no";
+const hasManualSpeciesOverride =
+  !isManuallyNotRelevant && speciesValue !== "auto";
+
+const dirty =
+  relevantValue !== initialRelevantValue ||
+  (!isManuallyNotRelevant && speciesValue !== initialSpeciesValue);
+
+
+
 
   async function saveChanges() {
     if (!assetId || !dirty || busy || isDemo) return;
@@ -183,38 +197,68 @@ export default function EventDetailControls({
 
     try {
       const nextRelevant = selectToRelevantUser(relevantValue);
-      const nextSpecies = speciesValue === "auto" ? null : speciesValue;
 
-      const [relevantRes, speciesRes] = await Promise.all([
-        fetch("/api/asset-relevant", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            assetId,
-            relevant: nextRelevant,
-          }),
-        }),
-        fetch("/api/asset-species", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            assetId,
-            species: nextSpecies,
-          }),
-        }),
-      ]);
 
-      if (!relevantRes.ok) {
-        const rawText = await relevantRes.text();
-        throw new Error(rawText || `Relevant HTTP ${relevantRes.status}`);
-      }
+const relevantRes = await fetch("/api/asset-relevant", {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({
+    assetId,
+    relevant: nextRelevant,
+  }),
+});
 
-      if (!speciesRes.ok) {
-        const rawText = await speciesRes.text();
-        throw new Error(rawText || `Species HTTP ${speciesRes.status}`);
-      }
+if (!relevantRes.ok) {
+  const rawText = await relevantRes.text();
+  throw new Error(rawText || `Relevant HTTP ${relevantRes.status}`);
+}
 
-      window.location.reload();
+const relevantPayload = await relevantRes.json().catch(() => null);
+let nextEventId =
+  typeof relevantPayload?.eventId === "string" ? relevantPayload.eventId : null;
+
+if (nextRelevant) {
+  const nextSpecies = speciesValue === "auto" ? null : speciesValue;
+
+  const speciesRes = await fetch("/api/asset-species", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      assetId,
+      species: nextSpecies,
+    }),
+  });
+
+  if (!speciesRes.ok) {
+    const rawText = await speciesRes.text();
+    throw new Error(rawText || `Species HTTP ${speciesRes.status}`);
+  }
+
+  const speciesPayload = await speciesRes.json().catch(() => null);
+  nextEventId =
+    typeof speciesPayload?.eventId === "string"
+      ? speciesPayload.eventId
+      : nextEventId;
+}
+
+if (nextEventId) {
+  window.location.href = `/cameras/events/${nextEventId}`;
+  return;
+}
+
+if (!nextRelevant) {
+  window.location.href = "/cameras/ingest";
+  return;
+}
+
+window.location.reload();
+
+
+
+
+
+
+
     } catch (error) {
       const message = String((error as { message?: string })?.message ?? error);
       alert(`${text.couldNotSave} ${message}`);
@@ -287,18 +331,18 @@ export default function EventDetailControls({
             <div className="text-xs text-white/45">{text.relevant}</div>
             <select
               value={relevantValue}
-              onChange={(e) => setRelevantValue(e.target.value as RelevantSelectValue)}
+              onChange={(e) => {
+                const nextValue = e.target.value as RelevantSelectValue;
+                setRelevantValue(nextValue);
+
+                if (nextValue === "no") {
+                  setSpeciesValue("auto");
+                }
+              }}
               disabled={!assetId || busy || isDemo}
               className="mt-2 w-full rounded-[10px] border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none disabled:bg-white/5 disabled:text-white/35"
               title={isDemo ? text.demoTitle : ""}
             >
-              <option value="auto" className="bg-[#102018] text-white">
-                {initialRelevantAuto === true
-                  ? text.yes
-                  : initialRelevantAuto === false
-                    ? text.no
-                    : text.auto}
-              </option>
               <option value="yes" className="bg-[#102018] text-white">
                 {text.yes}
               </option>
@@ -307,38 +351,52 @@ export default function EventDetailControls({
               </option>
             </select>
           </div>
-  
+
           <div className="rounded-[20px] border border-white/10 bg-white/5 p-4">
             <div className="text-xs text-white/45">{text.species}</div>
-            <select
-              value={speciesValue}
-              onChange={(e) => setSpeciesValue(e.target.value as SpeciesSelectValue)}
-              disabled={!assetId || busy || isDemo}
-              className="mt-2 w-full rounded-[10px] border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none disabled:bg-white/5 disabled:text-white/35"
-              title={isDemo ? text.demoTitle : ""}
-            >
-              <option value="auto" className="bg-[#102018] text-white">
-                {getSpeciesLabel(initialSpeciesAuto, speciesLabelByCode)}
-              </option>
-              {speciesOptions.map((species) => (
-                <option
-                  key={species.value}
-                  value={species.value}
-                  className="bg-[#102018] text-white"
-                >
-                  {species.label}
+            {isManuallyNotRelevant ? (
+              <div className="mt-2 w-full rounded-[10px] border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/35">
+                —
+              </div>
+            ) : (
+              <select
+                value={speciesValue}
+                onChange={(e) =>
+                  setSpeciesValue(e.target.value as SpeciesSelectValue)
+                }
+                disabled={!assetId || busy || isDemo}
+                className="mt-2 w-full rounded-[10px] border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none disabled:bg-white/5 disabled:text-white/35"
+                title={isDemo ? text.demoTitle : ""}
+              >
+                <option value="auto" className="bg-[#102018] text-white">
+                  {getSpeciesLabel(initialSpeciesAuto, speciesLabelByCode)}
                 </option>
-              ))}
-            </select>
+                {speciesOptions.map((species) => (
+                  <option
+                    key={species.value}
+                    value={species.value}
+                    className="bg-[#102018] text-white"
+                  >
+                    {species.label}
+                  </option>
+                ))}
+              </select>
+            )}
           </div>
         </div>
 
-        <div className="rounded-[20px] border border-white/10 bg-white/5 p-4">
-          <div className="text-xs text-white/45">{text.probability}</div>
-          <div className="mt-1 text-sm font-medium text-white">
-            {formatProbability(probabilityScore, language)}
-          </div>
-        </div>
+
+<div className="rounded-[20px] border border-white/10 bg-white/5 p-4">
+  <div className="text-xs text-white/45">{text.probability}</div>
+  <div className="mt-1 text-sm font-medium text-white">
+    {isManuallyNotRelevant || hasManualSpeciesOverride
+      ? text.manual
+      : formatProbability(probabilityScore, language)}
+  </div>
+</div>
+
+
+
 
         <div className="rounded-[20px] border border-white/10 bg-white/5 p-4">
           <div className="text-xs text-white/45">{text.camera}</div>

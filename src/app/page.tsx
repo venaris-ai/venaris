@@ -1,4 +1,4 @@
-// src/app/page.tsx #12
+// src/app/page.tsx #13
 import Link from "next/link";
 import { cookies } from "next/headers";
 import { requirePathAccess, canAccessPath } from "@/lib/authz";
@@ -65,6 +65,11 @@ type AssetPreviewRow = {
 type EventAssetRow = {
   event_id: string;
   asset_id: string;
+};
+
+type AssetDetectionScoreRow = {
+  asset_id: string | null;
+  score: number | null;
 };
 
 type EventPreviewItem = {
@@ -613,21 +618,50 @@ export default async function HomePage() {
     );
 
     let assetsById = new Map<string, AssetPreviewRow>();
+    let bestAnimalScoreByAssetId = new Map<string, number>();
 
     if (assetIds.length > 0) {
-      const { data: assetsData, error: assetsDataError } = await supabase
-        .from("assets")
-        .select("id,camera_id,storage_path,created_at,captured_at")
-        .in("id", assetIds)
-        .returns<AssetPreviewRow[]>();
+      const [assetsDataResult, detectionsDataResult] = await Promise.all([
+        supabase
+          .from("assets")
+          .select("id,camera_id,storage_path,created_at,captured_at")
+          .in("id", assetIds)
+          .returns<AssetPreviewRow[]>(),
 
-      if (assetsDataError) {
+        supabase
+          .from("detections")
+          .select("asset_id,score")
+          .in("asset_id", assetIds)
+          .eq("label", "animal")
+          .returns<AssetDetectionScoreRow[]>(),
+      ]);
+
+      if (assetsDataResult.error) {
         throw new Error(
-          `Failed to load latest event preview assets: ${assetsDataError.message}`,
+          `Failed to load latest event preview assets: ${assetsDataResult.error.message}`,
         );
       }
 
-      assetsById = new Map((assetsData ?? []).map((asset) => [asset.id, asset]));
+      if (detectionsDataResult.error) {
+        throw new Error(
+          `Failed to load latest event preview detection scores: ${detectionsDataResult.error.message}`,
+        );
+      }
+
+      assetsById = new Map(
+        (assetsDataResult.data ?? []).map((asset) => [asset.id, asset]),
+      );
+
+      for (const detection of detectionsDataResult.data ?? []) {
+        if (!detection.asset_id) continue;
+        if (typeof detection.score !== "number") continue;
+
+        const current = bestAnimalScoreByAssetId.get(detection.asset_id);
+
+        if (current === undefined || detection.score > current) {
+          bestAnimalScoreByAssetId.set(detection.asset_id, detection.score);
+        }
+      }
     }
 
     const assetsByEventId = new Map<string, AssetPreviewRow[]>();
@@ -646,6 +680,12 @@ export default async function HomePage() {
       latestEvents.map(async (event) => {
         const assetsForEvent = [...(assetsByEventId.get(event.id) ?? [])].sort(
           (a, b) => {
+            const scoreA = bestAnimalScoreByAssetId.get(a.id) ?? -1;
+            const scoreB = bestAnimalScoreByAssetId.get(b.id) ?? -1;
+            const scoreDiff = scoreB - scoreA;
+
+            if (scoreDiff !== 0) return scoreDiff;
+
             const capturedDiff = getAssetSortTime(a) - getAssetSortTime(b);
 
             if (capturedDiff !== 0) return capturedDiff;

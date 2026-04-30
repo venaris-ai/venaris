@@ -1,5 +1,6 @@
-// src/app/layout.tsx #14
+// src/app/layout.tsx #15
 import "./globals.css";
+import "maplibre-gl/dist/maplibre-gl.css";
 import { cookies } from "next/headers";
 import MainNav from "@/components/MainNav";
 import SectionNav from "@/components/SectionNav";
