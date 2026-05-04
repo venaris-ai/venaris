@@ -1,4 +1,4 @@
-// src/app/cameras/events/[id]/page.tsx #16
+// src/app/cameras/events/[id]/page.tsx #17
 export const runtime = "nodejs";
 
 import Link from "next/link";
@@ -58,13 +58,27 @@ function buildBackHref(revier?: string) {
   return `/cameras/ingest?${params.toString()}`;
 }
 
+function buildEventHref(eventId: string, revier?: string) {
+  if (!revier) return `/cameras/events/${eventId}`;
+  const params = new URLSearchParams({ revier });
+  return `/cameras/events/${eventId}?${params.toString()}`;
+}
+
+function buildEventQuerySuffix(revier?: string) {
+  if (!revier) return "";
+  const params = new URLSearchParams({ revier });
+  return `?${params.toString()}`;
+}
+
 function t(language: AppLanguage) {
   if (language === "en") {
     return {
       eyebrow: "Event",
       title: "Event",
       intro: "Details & assets",
-      back: "← Back",
+      overview: "Overview",
+      olderEvent: "← Older event",
+      newerEvent: "Newer event →",
       missingId: "Event ID is missing (params.id is undefined). Please reload the page.",
       notFound: "Event not found",
       notFoundOrForbidden: "Event not found or not allowed.",
@@ -77,13 +91,56 @@ function t(language: AppLanguage) {
     eyebrow: "Event",
     title: "Event",
     intro: "Details & Assets",
-    back: "← Zurück",
+    overview: "Übersicht",
+    olderEvent: "← Älteres Event",
+    newerEvent: "Neueres Event →",
     missingId: "Event-ID fehlt (params.id ist undefined). Bitte Seite neu laden.",
     notFound: "Event nicht gefunden",
     notFoundOrForbidden: "Event nicht gefunden oder nicht erlaubt.",
     errorPrefix: "Fehler:",
     unnamedCamera: "Unbenannte Kamera",
   };
+}
+
+function EventNavigation({
+  olderEventHref,
+  overviewHref,
+  newerEventHref,
+  text,
+}: {
+  olderEventHref: string | null;
+  overviewHref: string;
+  newerEventHref: string | null;
+  text: ReturnType<typeof t>;
+}) {
+  const linkClass =
+    "rounded-full border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/78 hover:border-amber-300/20 hover:bg-white/8 hover:text-white";
+  const disabledClass =
+    "rounded-full border border-white/8 bg-white/[0.03] px-3 py-2 text-sm text-white/28";
+
+  return (
+    <div className="flex flex-wrap items-center justify-end gap-2">
+      {olderEventHref ? (
+        <Link href={olderEventHref} className={linkClass}>
+          {text.olderEvent}
+        </Link>
+      ) : (
+        <span className={disabledClass}>{text.olderEvent}</span>
+      )}
+
+      <Link href={overviewHref} className={linkClass}>
+        {text.overview}
+      </Link>
+
+      {newerEventHref ? (
+        <Link href={newerEventHref} className={linkClass}>
+          {text.newerEvent}
+        </Link>
+      ) : (
+        <span className={disabledClass}>{text.newerEvent}</span>
+      )}
+    </div>
+  );
 }
 
 export default async function CameraEventDetailPage(props: {
@@ -98,6 +155,7 @@ export default async function CameraEventDetailPage(props: {
   const eventId: string | undefined = params?.id;
   const rawRevier = searchParams?.revier;
   const backHref = buildBackHref(rawRevier);
+  const eventQuerySuffix = buildEventQuerySuffix(rawRevier);
   const cookieStore = await cookies();
 
   if (!eventId) {
@@ -119,12 +177,13 @@ export default async function CameraEventDetailPage(props: {
               </h1>
               <p className="mt-2 text-sm text-white/68">{text.intro}</p>
             </div>
-            <Link
-              href={backHref}
-              className="rounded-full border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/78 hover:border-amber-300/20 hover:bg-white/8 hover:text-white"
-            >
-              {text.back}
-            </Link>
+
+            <EventNavigation
+              olderEventHref={null}
+              overviewHref={backHref}
+              newerEventHref={null}
+              text={text}
+            />
           </div>
         </section>
 
@@ -190,12 +249,13 @@ export default async function CameraEventDetailPage(props: {
               </h1>
               <p className="mt-2 text-sm text-white/68">{text.intro}</p>
             </div>
-            <Link
-              href={backHref}
-              className="rounded-full border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/78 hover:border-amber-300/20 hover:bg-white/8 hover:text-white"
-            >
-              {text.back}
-            </Link>
+
+            <EventNavigation
+              olderEventHref={null}
+              overviewHref={backHref}
+              newerEventHref={null}
+              text={text}
+            />
           </div>
         </section>
 
@@ -226,12 +286,13 @@ export default async function CameraEventDetailPage(props: {
               </h1>
               <p className="mt-2 text-sm text-white/68">{text.intro}</p>
             </div>
-            <Link
-              href={backHref}
-              className="rounded-full border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/78 hover:border-amber-300/20 hover:bg-white/8 hover:text-white"
-            >
-              {text.back}
-            </Link>
+
+            <EventNavigation
+              olderEventHref={null}
+              overviewHref={backHref}
+              newerEventHref={null}
+              text={text}
+            />
           </div>
         </section>
 
@@ -263,12 +324,13 @@ export default async function CameraEventDetailPage(props: {
               </h1>
               <p className="mt-2 text-sm text-white/68">{text.intro}</p>
             </div>
-            <Link
-              href={backHref}
-              className="rounded-full border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/78 hover:border-amber-300/20 hover:bg-white/8 hover:text-white"
-            >
-              {text.back}
-            </Link>
+
+            <EventNavigation
+              olderEventHref={null}
+              overviewHref={backHref}
+              newerEventHref={null}
+              text={text}
+            />
           </div>
         </section>
 
@@ -307,12 +369,13 @@ export default async function CameraEventDetailPage(props: {
               </h1>
               <p className="mt-2 text-sm text-white/68">{text.intro}</p>
             </div>
-            <Link
-              href={backHref}
-              className="rounded-full border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/78 hover:border-amber-300/20 hover:bg-white/8 hover:text-white"
-            >
-              {text.back}
-            </Link>
+
+            <EventNavigation
+              olderEventHref={null}
+              overviewHref={backHref}
+              newerEventHref={null}
+              text={text}
+            />
           </div>
         </section>
 
@@ -325,6 +388,72 @@ export default async function CameraEventDetailPage(props: {
 
   const eventTimeZone =
     reviers.find((revier) => revier.id === camera.revier_id)?.timezone ?? null;
+
+  let scopeCameraIds: string[] = [camera.id];
+
+  if (allowedRevierIds.length > 0) {
+    let scopeCameraQuery = supabase
+      .from("cameras")
+      .select("id")
+      .eq("organization_id", activeOrganization.id);
+
+    if (revierScope.type === "single") {
+      scopeCameraQuery = scopeCameraQuery.eq("revier_id", revierScope.revierId);
+    } else {
+      scopeCameraQuery = scopeCameraQuery.in("revier_id", allowedRevierIds);
+    }
+
+    const { data: scopeCameras } = await scopeCameraQuery;
+
+    const nextScopeCameraIds = (scopeCameras ?? [])
+      .map((row: { id: string | null }) => row.id)
+      .filter(Boolean) as string[];
+
+    if (nextScopeCameraIds.length > 0) {
+      scopeCameraIds = nextScopeCameraIds;
+    }
+  }
+
+  let olderEventHref: string | null = null;
+  let newerEventHref: string | null = null;
+
+  if (scopeCameraIds.length > 0) {
+    const { data: olderEvent } = await supabase
+      .from("event_feed")
+      .select("id,start_at")
+      .in("camera_id", scopeCameraIds)
+      .neq("id", eventId)
+      .lt("start_at", event.start_at)
+      .gt("asset_count", 0)
+      .gt("relevance_score", 0)
+      .not("top_species", "is", null)
+      .order("start_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    const { data: newerEvent } = await supabase
+      .from("event_feed")
+      .select("id,start_at")
+      .in("camera_id", scopeCameraIds)
+      .neq("id", eventId)
+      .gt("start_at", event.start_at)
+      .gt("asset_count", 0)
+      .gt("relevance_score", 0)
+      .not("top_species", "is", null)
+      .order("start_at", { ascending: true })
+      .limit(1)
+      .maybeSingle();
+
+    if (olderEvent?.id) {
+      olderEventHref = buildEventHref(olderEvent.id, rawRevier);
+    }
+
+    if (newerEvent?.id) {
+      newerEventHref = buildEventHref(newerEvent.id, rawRevier);
+    }
+  }
+
+  const afterRemoveHref = olderEventHref ?? newerEventHref ?? backHref;
 
   const { data: eventAssets, error: assetsErr } = await supabase
     .from("event_assets")
@@ -438,7 +567,7 @@ export default async function CameraEventDetailPage(props: {
   return (
     <main className="space-y-8">
       <section className="rounded-[32px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(201,149,46,0.16),transparent_24%),linear-gradient(135deg,rgba(255,255,255,0.06),rgba(255,255,255,0.03))] p-6 backdrop-blur-sm">
-        <div className="flex items-start justify-between gap-4">
+        <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
           <div>
             <div className="text-xs font-medium uppercase tracking-[0.22em] text-amber-200/80">
               {text.eyebrow}
@@ -452,12 +581,12 @@ export default async function CameraEventDetailPage(props: {
             </p>
           </div>
 
-          <Link
-            href={backHref}
-            className="rounded-full border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/78 hover:border-amber-300/20 hover:bg-white/8 hover:text-white"
-          >
-            {text.back}
-          </Link>
+          <EventNavigation
+            olderEventHref={olderEventHref}
+            overviewHref={backHref}
+            newerEventHref={newerEventHref}
+            text={text}
+          />
         </div>
       </section>
 
@@ -472,8 +601,10 @@ export default async function CameraEventDetailPage(props: {
         topSpeciesLabel={topSpeciesLabel}
         eventCount={event.top_count}
         cameraLabel={cameraLabel}
+        currentEventId={eventId}
+        afterRemoveHref={afterRemoveHref}
+        eventQuerySuffix={eventQuerySuffix}
       />
-
     </main>
   );
 }

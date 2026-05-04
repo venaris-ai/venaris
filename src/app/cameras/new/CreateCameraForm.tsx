@@ -1,7 +1,8 @@
-// src/app/cameras/new/CreateCameraForm.tsx #12
+// src/app/cameras/new/CreateCameraForm.tsx #14
 "use client";
 
 import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import type { AppLanguage } from "@/lib/i18n";
 import type {
   SubscriptionActionPolicy,
@@ -59,7 +60,6 @@ type CreateResponse = {
   };
 };
 
-
 type CameraVendorOption = {
   key: string;
   label: string;
@@ -88,12 +88,22 @@ function t(language: AppLanguage) {
       ground: "Ground",
       locationName: "Location name (optional)",
       locationPlaceholder: "e.g. Forest edge west",
-      latitude: "Latitude (optional)",
-      longitude: "Longitude (optional)",
+      latitude: "Latitude (N/S, optional)",
+      longitude: "Longitude (E/W, optional)",
       direction: "Direction (0–359, optional)",
+      latitudePlaceholder: "e.g. N 51.82752",
+      longitudePlaceholder: "e.g. E 7.12735",
+      north: "N",
+      south: "S",
+      east: "E",
+      west: "W",
+      status: "Status",
+      active: "Active",
       notes: "Notes (optional)",
       notesPlaceholder: "Optional setup notes",
       selectGround: "Please select a ground.",
+      invalidDirection: "Direction must be between 0 and 359.",
+      invalidCoordinates: "Latitude and longitude must be valid numbers.",
       createFailed: "Failed to create camera",
       unexpectedError: "Unexpected error",
       copied: "copied.",
@@ -167,12 +177,22 @@ function t(language: AppLanguage) {
     ground: "Revier",
     locationName: "Standortname (optional)",
     locationPlaceholder: "z. B. Waldrand West",
-    latitude: "Breitengrad (optional)",
-    longitude: "Längengrad (optional)",
+    latitude: "Breitengrad (N/S, optional)",
+    longitude: "Längengrad (O/W, optional)",
     direction: "Richtung (0–359, optional)",
+    latitudePlaceholder: "z. B. N 51,82752",
+    longitudePlaceholder: "z. B. O 7,12735",
+    north: "N",
+    south: "S",
+    east: "O",
+    west: "W",
+    status: "Status",
+    active: "Aktiv",
     notes: "Notizen (optional)",
     notesPlaceholder: "Optionale Setup-Notizen",
     selectGround: "Bitte ein Revier auswählen.",
+    invalidDirection: "Richtung muss zwischen 0 und 359 liegen.",
+    invalidCoordinates: "Breitengrad und Längengrad müssen gültige Zahlen sein.",
     createFailed: "Kamera konnte nicht angelegt werden",
     unexpectedError: "Unerwarteter Fehler",
     copied: "kopiert.",
@@ -252,7 +272,7 @@ function badgeTone(allowed: boolean) {
 
 function buildCoreProvisioningCopy(
   camera: CreateResponse["camera"],
-  language: AppLanguage
+  language: AppLanguage,
 ) {
   const text = t(language);
 
@@ -266,7 +286,7 @@ function buildCoreProvisioningCopy(
 
 function buildFtpProvisioningCopy(
   ftpProvisioning: NonNullable<CreateResponse["ftpProvisioning"]>,
-  language: AppLanguage
+  language: AppLanguage,
 ) {
   const text = t(language);
 
@@ -288,12 +308,48 @@ function buildSmtpProvisioningCopy(smtpAlias: string, language: AppLanguage) {
 
 function buildManualProvisioningCopy(
   manualLabel: string,
-  language: AppLanguage
+  language: AppLanguage,
 ) {
   const text = t(language);
   return [text.manualSetupLabel, `${text.manualLabel}: ${manualLabel}`].join(
-    "\n"
+    "\n",
   );
+}
+
+function parseOptionalNumber(value: string) {
+  const normalized = value.trim().replace(",", ".");
+  if (!normalized) return null;
+
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? parsed : Number.NaN;
+}
+
+function parseLatitude(value: string) {
+  const normalized = value.trim().replace(",", ".");
+  if (!normalized) return null;
+
+  const prefixedMatch = normalized.match(/^([NS])\s*(.+)$/i);
+  if (!prefixedMatch) return parseOptionalNumber(normalized);
+
+  const hemisphere = prefixedMatch[1].toUpperCase();
+  const parsed = parseOptionalNumber(prefixedMatch[2]);
+
+  if (parsed === null || Number.isNaN(parsed)) return parsed;
+  return hemisphere === "S" ? -Math.abs(parsed) : Math.abs(parsed);
+}
+
+function parseLongitude(value: string) {
+  const normalized = value.trim().replace(",", ".");
+  if (!normalized) return null;
+
+  const prefixedMatch = normalized.match(/^([EOW])\s*(.+)$/i);
+  if (!prefixedMatch) return parseOptionalNumber(normalized);
+
+  const hemisphere = prefixedMatch[1].toUpperCase();
+  const parsed = parseOptionalNumber(prefixedMatch[2]);
+
+  if (parsed === null || Number.isNaN(parsed)) return parsed;
+  return hemisphere === "W" ? -Math.abs(parsed) : Math.abs(parsed);
 }
 
 function formatRevierLabel(revier: Revier, language: AppLanguage) {
@@ -318,10 +374,13 @@ export default function CreateCameraForm({
   language,
 }: Props) {
   const text = t(language);
+  const router = useRouter();
   const organizationId = organization.id;
 
   const filteredReviers = useMemo(() => {
-    return reviers.filter((revier) => revier.organization_id === organizationId);
+    return reviers.filter(
+      (revier) => revier.organization_id === organizationId,
+    );
   }, [reviers, organizationId]);
 
   const defaultRevierId = useMemo(() => {
@@ -367,6 +426,29 @@ export default function CreateCameraForm({
       return;
     }
 
+    const parsedLatitude = parseLatitude(latitude);
+    const parsedLongitude = parseLongitude(longitude);
+    const parsedDirection = parseOptionalNumber(directionDeg);
+
+    if (
+      Number.isNaN(parsedLatitude) ||
+      Number.isNaN(parsedLongitude) ||
+      Number.isNaN(parsedDirection)
+    ) {
+      setError(text.invalidCoordinates);
+      return;
+    }
+
+    if (
+      parsedDirection !== null &&
+      (!Number.isInteger(parsedDirection) ||
+        parsedDirection < 0 ||
+        parsedDirection >= 360)
+    ) {
+      setError(text.invalidDirection);
+      return;
+    }
+
     setLoading(true);
     setError("");
     setResult(null);
@@ -385,9 +467,9 @@ export default function CreateCameraForm({
           method,
           vendor,
           locationName: locationName || null,
-          latitude: latitude ? Number(latitude) : null,
-          longitude: longitude ? Number(longitude) : null,
-          directionDeg: directionDeg ? Number(directionDeg) : null,
+          latitude: parsedLatitude,
+          longitude: parsedLongitude,
+          directionDeg: parsedDirection,
           notes: notes || null,
         }),
       });
@@ -400,6 +482,7 @@ export default function CreateCameraForm({
       }
 
       setResult(json as CreateResponse);
+      router.refresh();
 
       setCameraName("");
       setLocationName("");
@@ -434,19 +517,26 @@ export default function CreateCameraForm({
 
   return (
     <div className="space-y-6">
-      <section className={`rounded-[28px] border p-5 backdrop-blur-sm ${tone.wrap}`}>
+      <section
+        className={`rounded-[28px] border p-5 backdrop-blur-sm ${tone.wrap}`}
+      >
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
-            <h2 className={`text-base font-semibold ${tone.title}`}>{text.usageTitle}</h2>
+            <h2 className={`text-base font-semibold ${tone.title}`}>
+              {text.usageTitle}
+            </h2>
             <p className={`mt-1 text-sm leading-6 ${tone.text}`}>
               {cameraPolicy.message}
             </p>
             <p className={`mt-1 text-xs ${tone.hint}`}>
-              {text.usageNow} {currentCameraCount} {text.usageOf} {maxCameras} {text.cameras}.
+              {text.usageNow} {currentCameraCount} {text.usageOf} {maxCameras}{" "}
+              {text.cameras}.
             </p>
           </div>
 
-          <div className={`rounded-[14px] border px-3 py-2 text-sm font-medium ${tone.pill}`}>
+          <div
+            className={`rounded-[14px] border px-3 py-2 text-sm font-medium ${tone.pill}`}
+          >
             {currentCameraCount} / {maxCameras}
           </div>
         </div>
@@ -473,16 +563,20 @@ export default function CreateCameraForm({
         onSubmit={onSubmit}
         className="rounded-[28px] border border-white/10 bg-white/5 p-6 backdrop-blur-sm"
       >
-        <div className="grid gap-5 md:grid-cols-2">
-          <div className="md:col-span-2">
-            <label className="mb-1 block text-sm font-medium text-white">{text.organization}</label>
-            <div className="w-full rounded-[14px] border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/72">
-              {organization.name}
-            </div>
+        <div className="mb-5">
+          <label className="mb-1 block text-sm font-medium text-white">
+            {text.organization}
+          </label>
+          <div className="w-full rounded-[14px] border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/72">
+            {organization.name}
           </div>
+        </div>
 
+        <div className="grid gap-5 md:grid-cols-2">
           <div>
-            <label className="mb-1 block text-sm font-medium text-white">{text.cameraName}</label>
+            <label className="mb-1 block text-sm font-medium text-white">
+              {text.cameraName}
+            </label>
             <input
               value={cameraName}
               onChange={(e) => setCameraName(e.target.value)}
@@ -495,7 +589,9 @@ export default function CreateCameraForm({
           </div>
 
           <div>
-            <label className="mb-1 block text-sm font-medium text-white">{text.vendor}</label>
+            <label className="mb-1 block text-sm font-medium text-white">
+              {text.vendor}
+            </label>
             <select
               value={vendor}
               onChange={(e) => setVendor(e.target.value)}
@@ -517,29 +613,9 @@ export default function CreateCameraForm({
           </div>
 
           <div>
-            <label className="mb-1 block text-sm font-medium text-white">{text.method}</label>
-            <select
-              value={method}
-              onChange={(e) => setMethod(e.target.value as "smtp" | "ftp" | "manual")}
-              className="w-full rounded-[14px] border border-white/10 bg-white/5 px-3 py-2 text-white outline-none disabled:bg-white/5 disabled:text-white/35"
-              required
-              disabled={formDisabled}
-              title={isDemo ? text.demoReadOnly : ""}
-            >
-              {text.methods.map((methodOption) => (
-                <option
-                  key={methodOption.value}
-                  value={methodOption.value}
-                  className="bg-[#102018] text-white"
-                >
-                  {methodOption.label}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <label className="mb-1 block text-sm font-medium text-white">{text.ground}</label>
+            <label className="mb-1 block text-sm font-medium text-white">
+              {text.ground}
+            </label>
             <select
               value={revierId}
               onChange={(e) => setRevierId(e.target.value)}
@@ -549,7 +625,11 @@ export default function CreateCameraForm({
               title={isDemo ? text.demoReadOnly : ""}
             >
               {filteredReviers.map((revier) => (
-                <option key={revier.id} value={revier.id} className="bg-[#102018] text-white">
+                <option
+                  key={revier.id}
+                  value={revier.id}
+                  className="bg-[#102018] text-white"
+                >
                   {formatRevierLabel(revier, language)}
                 </option>
               ))}
@@ -570,58 +650,99 @@ export default function CreateCameraForm({
             />
           </div>
 
-          <div>
-            <label className="mb-1 block text-sm font-medium text-white">
-              {text.latitude}
-            </label>
-            <input
-              type="number"
-              step="any"
-              value={latitude}
-              onChange={(e) => setLatitude(e.target.value)}
-              className="w-full rounded-[14px] border border-white/10 bg-white/5 px-3 py-2 text-white outline-none placeholder:text-white/35 disabled:bg-white/5 disabled:text-white/35"
-              placeholder="52.123456"
-              disabled={formDisabled}
-              title={isDemo ? text.demoReadOnly : ""}
-            />
+          <div className="md:col-span-2">
+            <div className="grid gap-5 md:grid-cols-3">
+              <div>
+                <label className="mb-1 block text-sm font-medium text-white">
+                  {text.latitude}
+                </label>
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  value={latitude}
+                  onChange={(e) => setLatitude(e.target.value)}
+                  className="w-full rounded-[14px] border border-white/10 bg-white/5 px-3 py-2 text-white outline-none placeholder:text-white/35 disabled:bg-white/5 disabled:text-white/35"
+                  placeholder={text.latitudePlaceholder}
+                  disabled={formDisabled}
+                  title={isDemo ? text.demoReadOnly : ""}
+                />
+              </div>
+
+              <div>
+                <label className="mb-1 block text-sm font-medium text-white">
+                  {text.longitude}
+                </label>
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  value={longitude}
+                  onChange={(e) => setLongitude(e.target.value)}
+                  className="w-full rounded-[14px] border border-white/10 bg-white/5 px-3 py-2 text-white outline-none placeholder:text-white/35 disabled:bg-white/5 disabled:text-white/35"
+                  placeholder={text.longitudePlaceholder}
+                  disabled={formDisabled}
+                  title={isDemo ? text.demoReadOnly : ""}
+                />
+              </div>
+
+              <div>
+                <label className="mb-1 block text-sm font-medium text-white">
+                  {text.direction}
+                </label>
+                <input
+                  type="number"
+                  min={0}
+                  max={359}
+                  step={1}
+                  value={directionDeg}
+                  onChange={(e) => setDirectionDeg(e.target.value)}
+                  className="w-full rounded-[14px] border border-white/10 bg-white/5 px-3 py-2 text-white outline-none placeholder:text-white/35 disabled:bg-white/5 disabled:text-white/35"
+                  placeholder="180"
+                  disabled={formDisabled}
+                  title={isDemo ? text.demoReadOnly : ""}
+                />
+              </div>
+            </div>
           </div>
 
           <div>
             <label className="mb-1 block text-sm font-medium text-white">
-              {text.longitude}
+              {text.method}
             </label>
-            <input
-              type="number"
-              step="any"
-              value={longitude}
-              onChange={(e) => setLongitude(e.target.value)}
-              className="w-full rounded-[14px] border border-white/10 bg-white/5 px-3 py-2 text-white outline-none placeholder:text-white/35 disabled:bg-white/5 disabled:text-white/35"
-              placeholder="8.123456"
+            <select
+              value={method}
+              onChange={(e) =>
+                setMethod(e.target.value as "smtp" | "ftp" | "manual")
+              }
+              className="w-full rounded-[14px] border border-white/10 bg-white/5 px-3 py-2 text-white outline-none disabled:bg-white/5 disabled:text-white/35"
+              required
               disabled={formDisabled}
               title={isDemo ? text.demoReadOnly : ""}
-            />
+            >
+              {text.methods.map((methodOption) => (
+                <option
+                  key={methodOption.value}
+                  value={methodOption.value}
+                  className="bg-[#102018] text-white"
+                >
+                  {methodOption.label}
+                </option>
+              ))}
+            </select>
           </div>
 
           <div>
             <label className="mb-1 block text-sm font-medium text-white">
-              {text.direction}
+              {text.status}
             </label>
-            <input
-              type="number"
-              min={0}
-              max={359}
-              step={1}
-              value={directionDeg}
-              onChange={(e) => setDirectionDeg(e.target.value)}
-              className="w-full rounded-[14px] border border-white/10 bg-white/5 px-3 py-2 text-white outline-none placeholder:text-white/35 disabled:bg-white/5 disabled:text-white/35"
-              placeholder="180"
-              disabled={formDisabled}
-              title={isDemo ? text.demoReadOnly : ""}
-            />
+            <div className="w-full rounded-[14px] border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/72">
+              {text.active}
+            </div>
           </div>
 
           <div className="md:col-span-2">
-            <label className="mb-1 block text-sm font-medium text-white">{text.notes}</label>
+            <label className="mb-1 block text-sm font-medium text-white">
+              {text.notes}
+            </label>
             <textarea
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
@@ -642,7 +763,9 @@ export default function CreateCameraForm({
         <div className="mt-6 flex items-center gap-3">
           <button
             type="submit"
-            disabled={loading || !cameraPolicy.allowed || filteredReviers.length === 0}
+            disabled={
+              loading || !cameraPolicy.allowed || filteredReviers.length === 0
+            }
             className="rounded-[14px] bg-[#c9952e] px-4 py-2 text-sm font-medium text-[#102018] disabled:opacity-50"
           >
             {isDemo
@@ -659,7 +782,9 @@ export default function CreateCameraForm({
       {showDemoModal ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="w-full max-w-md rounded-[20px] border border-white/10 bg-[#102018] p-6 shadow-2xl">
-            <h3 className="text-lg font-semibold text-white">{text.demoTitle}</h3>
+            <h3 className="text-lg font-semibold text-white">
+              {text.demoTitle}
+            </h3>
             <p className="mt-2 text-sm text-white/70">{text.demoText}</p>
 
             <div className="mt-5 flex items-center justify-end gap-3">
@@ -678,8 +803,12 @@ export default function CreateCameraForm({
       {camera ? (
         <div className="space-y-5 rounded-[28px] border border-white/10 bg-white/5 p-6 backdrop-blur-sm">
           <div>
-            <h2 className="text-lg font-semibold text-white">{text.provisioningTitle}</h2>
-            <p className="mt-1 text-sm text-white/68">{text.provisioningText}</p>
+            <h2 className="text-lg font-semibold text-white">
+              {text.provisioningTitle}
+            </h2>
+            <p className="mt-1 text-sm text-white/68">
+              {text.provisioningText}
+            </p>
           </div>
 
           {copyMsg ? (
@@ -691,13 +820,20 @@ export default function CreateCameraForm({
           <div className="space-y-3 rounded-[24px] border border-white/10 bg-white/5 p-5">
             <div className="flex items-start justify-between gap-3">
               <div>
-                <h3 className="text-base font-semibold text-white">{text.coreProvisioning}</h3>
-                <p className="mt-1 text-sm text-white/68">{text.coreProvisioningText}</p>
+                <h3 className="text-base font-semibold text-white">
+                  {text.coreProvisioning}
+                </h3>
+                <p className="mt-1 text-sm text-white/68">
+                  {text.coreProvisioningText}
+                </p>
               </div>
               <button
                 type="button"
                 onClick={() =>
-                  handleCopy(text.coreProvisioning, buildCoreProvisioningCopy(camera, language))
+                  handleCopy(
+                    text.coreProvisioning,
+                    buildCoreProvisioningCopy(camera, language),
+                  )
                 }
                 className="rounded-[10px] border border-white/10 bg-white/5 px-3 py-2 text-xs text-white/78 hover:border-amber-300/20 hover:bg-white/8 hover:text-white"
               >
@@ -707,13 +843,20 @@ export default function CreateCameraForm({
 
             <div className="grid gap-2 text-sm text-white/78">
               <div>
-                <span className="font-medium text-white">{text.cameraId}:</span> {camera.id}
+                <span className="font-medium text-white">{text.cameraId}:</span>{" "}
+                {camera.id}
               </div>
               <div>
-                <span className="font-medium text-white">{text.technicalName}:</span> {camera.technicalName}
+                <span className="font-medium text-white">
+                  {text.technicalName}:
+                </span>{" "}
+                {camera.technicalName}
               </div>
               <div className="break-all">
-                <span className="font-medium text-white">{text.ingestToken}:</span> {camera.ingestToken}
+                <span className="font-medium text-white">
+                  {text.ingestToken}:
+                </span>{" "}
+                {camera.ingestToken}
               </div>
             </div>
           </div>
@@ -722,13 +865,20 @@ export default function CreateCameraForm({
             <div className="space-y-4 rounded-[24px] border border-white/10 bg-white/5 p-5">
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <h3 className="text-base font-semibold text-white">{text.ftpSetup}</h3>
-                  <p className="mt-1 text-sm text-white/68">{text.ftpSetupText}</p>
+                  <h3 className="text-base font-semibold text-white">
+                    {text.ftpSetup}
+                  </h3>
+                  <p className="mt-1 text-sm text-white/68">
+                    {text.ftpSetupText}
+                  </p>
                 </div>
                 <button
                   type="button"
                   onClick={() =>
-                    handleCopy(text.ftpSetup, buildFtpProvisioningCopy(ftpProvisioning, language))
+                    handleCopy(
+                      text.ftpSetup,
+                      buildFtpProvisioningCopy(ftpProvisioning, language),
+                    )
                   }
                   className="rounded-[10px] border border-white/10 bg-white/5 px-3 py-2 text-xs text-white/78 hover:border-amber-300/20 hover:bg-white/8 hover:text-white"
                 >
@@ -742,22 +892,36 @@ export default function CreateCameraForm({
 
               <div className="grid gap-2 text-sm text-white/78">
                 <div>
-                  <span className="font-medium text-white">{text.ftpServer}:</span> {ftpProvisioning.host}
+                  <span className="font-medium text-white">
+                    {text.ftpServer}:
+                  </span>{" "}
+                  {ftpProvisioning.host}
                 </div>
                 <div>
-                  <span className="font-medium text-white">{text.ftpPort}:</span> {ftpProvisioning.port}
+                  <span className="font-medium text-white">
+                    {text.ftpPort}:
+                  </span>{" "}
+                  {ftpProvisioning.port}
                 </div>
                 <div>
-                  <span className="font-medium text-white">{text.ftpUsername}:</span> {ftpProvisioning.username}
+                  <span className="font-medium text-white">
+                    {text.ftpUsername}:
+                  </span>{" "}
+                  {ftpProvisioning.username}
                 </div>
                 <div className="rounded-[14px] border border-white/10 bg-white/5 px-3 py-3 text-white">
-                  <span className="font-medium">{text.ftpPassword}:</span> {ftpProvisioning.password}
+                  <span className="font-medium">{text.ftpPassword}:</span>{" "}
+                  {ftpProvisioning.password}
                 </div>
                 <div>
-                  <span className="font-medium text-white">{text.path}:</span> {text.ftpInboxPathValue}
+                  <span className="font-medium text-white">{text.path}:</span>{" "}
+                  {text.ftpInboxPathValue}
                 </div>
                 <div>
-                  <span className="font-medium text-white">{text.passiveMode}:</span> {text.ftpModeValue}
+                  <span className="font-medium text-white">
+                    {text.passiveMode}:
+                  </span>{" "}
+                  {text.ftpModeValue}
                 </div>
               </div>
             </div>
@@ -767,8 +931,12 @@ export default function CreateCameraForm({
             <div className="space-y-4 rounded-[24px] border border-white/10 bg-white/5 p-5">
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <h3 className="text-base font-semibold text-white">{text.smtpSetup}</h3>
-                  <p className="mt-1 text-sm text-white/68">{text.smtpSetupText}</p>
+                  <h3 className="text-base font-semibold text-white">
+                    {text.smtpSetup}
+                  </h3>
+                  <p className="mt-1 text-sm text-white/68">
+                    {text.smtpSetupText}
+                  </p>
                 </div>
                 <button
                   type="button"
@@ -776,7 +944,10 @@ export default function CreateCameraForm({
                     camera.routing.smtpAlias
                       ? handleCopy(
                           text.smtpSetup,
-                          buildSmtpProvisioningCopy(camera.routing.smtpAlias, language)
+                          buildSmtpProvisioningCopy(
+                            camera.routing.smtpAlias,
+                            language,
+                          ),
                         )
                       : undefined
                   }
@@ -788,7 +959,10 @@ export default function CreateCameraForm({
 
               <div className="grid gap-2 text-sm text-white/78">
                 <div>
-                  <span className="font-medium text-white">{text.smtpAlias}:</span> {camera.routing.smtpAlias}
+                  <span className="font-medium text-white">
+                    {text.smtpAlias}:
+                  </span>{" "}
+                  {camera.routing.smtpAlias}
                 </div>
               </div>
             </div>
@@ -798,8 +972,12 @@ export default function CreateCameraForm({
             <div className="space-y-4 rounded-[24px] border border-white/10 bg-white/5 p-5">
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <h3 className="text-base font-semibold text-white">{text.manualSetup}</h3>
-                  <p className="mt-1 text-sm text-white/68">{text.manualSetupText}</p>
+                  <h3 className="text-base font-semibold text-white">
+                    {text.manualSetup}
+                  </h3>
+                  <p className="mt-1 text-sm text-white/68">
+                    {text.manualSetupText}
+                  </p>
                 </div>
                 <button
                   type="button"
@@ -807,7 +985,10 @@ export default function CreateCameraForm({
                     camera.routing.manualLabel
                       ? handleCopy(
                           text.manualSetup,
-                          buildManualProvisioningCopy(camera.routing.manualLabel, language)
+                          buildManualProvisioningCopy(
+                            camera.routing.manualLabel,
+                            language,
+                          ),
                         )
                       : undefined
                   }
@@ -819,7 +1000,10 @@ export default function CreateCameraForm({
 
               <div className="grid gap-2 text-sm text-white/78">
                 <div>
-                  <span className="font-medium text-white">{text.manualLabel}:</span> {camera.routing.manualLabel}
+                  <span className="font-medium text-white">
+                    {text.manualLabel}:
+                  </span>{" "}
+                  {camera.routing.manualLabel}
                 </div>
               </div>
             </div>

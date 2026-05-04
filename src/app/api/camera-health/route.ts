@@ -1,4 +1,4 @@
-// src/app/api/camera-health/route.ts #2c
+// src/app/api/camera-health/route.ts #3
 export const runtime = "nodejs";
 
 import { NextResponse } from "next/server";
@@ -16,6 +16,24 @@ type CameraGeoRow = {
   longitude: number | null;
   direction_deg: number | null;
 };
+
+type CameraHealthStatus = "online" | "stale" | "offline" | "unknown";
+
+const HEALTH_STALE_AFTER_MINUTES = 12 * 60;
+const HEALTH_OFFLINE_AFTER_MINUTES = 24 * 60;
+
+function deriveHealthStatus(lastSeenAt: string | null): CameraHealthStatus {
+  if (!lastSeenAt) return "unknown";
+
+  const lastSeenTime = new Date(lastSeenAt).getTime();
+  if (!Number.isFinite(lastSeenTime)) return "unknown";
+
+  const diffMinutes = Math.floor((Date.now() - lastSeenTime) / 60000);
+
+  if (diffMinutes >= HEALTH_OFFLINE_AFTER_MINUTES) return "offline";
+  if (diffMinutes >= HEALTH_STALE_AFTER_MINUTES) return "stale";
+  return "online";
+}
 
 export async function GET(req: Request) {
   try {
@@ -110,16 +128,16 @@ export async function GET(req: Request) {
     const items = (data ?? []).map((row: any) => {
       const geo = cameraGeoById.get(row.id);
 
-return {
-  ...row,
-  location_name: geo?.location_name ?? null,
-  latitude: geo?.latitude ?? null,
-  longitude: geo?.longitude ?? null,
-  direction_deg: geo?.direction_deg ?? null,
-};
-
-
-
+      return {
+        ...row,
+        location_name: geo?.location_name ?? null,
+        latitude: geo?.latitude ?? null,
+        longitude: geo?.longitude ?? null,
+        direction_deg: geo?.direction_deg ?? null,
+        stale_after_minutes: HEALTH_STALE_AFTER_MINUTES,
+        offline_after_minutes: HEALTH_OFFLINE_AFTER_MINUTES,
+        health_status: deriveHealthStatus(row.last_seen_at ?? null),
+      };
     });
 
     return NextResponse.json({ items });

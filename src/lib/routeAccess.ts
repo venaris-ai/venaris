@@ -63,10 +63,9 @@ export const MAIN_NAV_ITEMS: NavItem[] = [
 
 export const SECTION_NAV_ITEMS = {
   wildlife: [
-    { href: "/wildlife", label: "Overview", match: "exact" },
+    { href: "/wildlife/activity", label: "Activity", match: "exact" },
     { href: "/wildlife/species", label: "Species", match: "exact" },
     { href: "/wildlife/wherewhen", label: "Where & When", match: "exact" },
-    { href: "/wildlife/activity", label: "Activity", match: "exact" },
     { href: "/wildlife/popsim", label: "PopSim", match: "exact" },
   ] satisfies NavItem[],
 
@@ -221,10 +220,9 @@ export function getSectionNavItems(language: AppLanguage) {
   return language === "en"
     ? {
         wildlife: [
-          { href: "/wildlife", label: "Overview", match: "exact" },
+          { href: "/wildlife/activity", label: "Activity", match: "exact" },
           { href: "/wildlife/species", label: "Species", match: "exact" },
           { href: "/wildlife/wherewhen", label: "Where & When", match: "exact" },
-          { href: "/wildlife/activity", label: "Activity", match: "exact" },
           { href: "/wildlife/popsim", label: "PopSim", match: "exact" },
         ] satisfies NavItem[],
 
@@ -246,10 +244,9 @@ export function getSectionNavItems(language: AppLanguage) {
       }
     : {
         wildlife: [
-          { href: "/wildlife", label: "Übersicht", match: "exact" },
+          { href: "/wildlife/activity", label: "Aktivität", match: "exact" },
           { href: "/wildlife/species", label: "Arten", match: "exact" },
           { href: "/wildlife/wherewhen", label: "Wo & Wann", match: "exact" },
-          { href: "/wildlife/activity", label: "Aktivität", match: "exact" },
           { href: "/wildlife/popsim", label: "PopSim", match: "exact" },
         ] satisfies NavItem[],
 

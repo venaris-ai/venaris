@@ -1,4 +1,4 @@
-// src/app/wildlife/wherewhen/page.tsx #5
+// src/app/wildlife/wherewhen/page.tsx #6
 export const runtime = "nodejs";
 
 import Link from "next/link";
@@ -37,7 +37,6 @@ type EventFeedRow = {
   camera_id: string;
   start_at: string | null;
   top_species: string | null;
-  relevance_score: number | null;
 };
 
 type EventSpeciesSummaryRow = {
@@ -60,6 +59,47 @@ type RevierRow = {
   timezone: string | null;
 };
 
+type SpeciesOption = {
+  species: string;
+  count: number;
+};
+
+function isOtherSpeciesLabel(value: string) {
+  const normalized = value.trim().toLowerCase();
+  return (
+    normalized === "other" ||
+    normalized === "others" ||
+    normalized === "sonstiges" ||
+    normalized === "sonstige"
+  );
+}
+
+function isOtherSpecies(
+  species: string,
+  language: AppLanguage,
+  speciesMetaMap: ReturnType<typeof buildSpeciesMetaMap>
+) {
+  return (
+    isOtherSpeciesLabel(species) ||
+    isOtherSpeciesLabel(getSpeciesLabel(species, language, speciesMetaMap))
+  );
+}
+
+function sortSpeciesOptions(
+  a: SpeciesOption,
+  b: SpeciesOption,
+  language: AppLanguage,
+  speciesMetaMap: ReturnType<typeof buildSpeciesMetaMap>
+) {
+  const aIsOther = isOtherSpecies(a.species, language, speciesMetaMap);
+  const bIsOther = isOtherSpecies(b.species, language, speciesMetaMap);
+
+  if (aIsOther && !bIsOther) return 1;
+  if (!aIsOther && bIsOther) return -1;
+
+  return b.count - a.count;
+}
+
 function resolvePeriodRange(period: PeriodKey) {
   const end = new Date();
   const start = new Date(end);
@@ -72,10 +112,6 @@ function resolvePeriodRange(period: PeriodKey) {
     startAt: start.toISOString(),
     endAt: end.toISOString(),
   };
-}
-
-function fmtPct(value: number) {
-  return `${Math.round(value)}%`;
 }
 
 function fmtWindow(startHour: number, spanHours = 2) {
@@ -132,8 +168,7 @@ function t(language: AppLanguage) {
     return {
       eyebrow: "Where & When",
       title: "Where & When",
-      intro:
-        "Where and when selected species become visible in the current ground scope.",
+      intro: "Where and when a selected species occurs in the current ground scope.",
       activeOrganizationNotFound: "Active organization not found.",
       reviersLoadFailed: "Failed to load grounds:",
       noActiveGrounds:
@@ -144,88 +179,59 @@ function t(language: AppLanguage) {
       eventsLoadFailed: "Failed to load events:",
       speciesSummaryLoadFailed: "Failed to load species summary:",
       unknownError: "unknown error",
-      speciesSelection: "Species Selection",
+      speciesSelection: "Species Filter",
       speciesSelectionText:
-        "Analysis of camera and time windows for a selected species.",
+        "Select one species for the camera-by-time matrix.",
       species: "Species",
       update: "Update",
       noWhereWhenData:
-        "No robust where-and-when data available for the selected period.",
+        "No where-and-when data available for the selected period.",
       currentSelection: "current selection",
-      speciesEvents: "Species Events",
+      events: "Events",
       inPeriod: "in period",
-      topCamera: "Top Camera",
-      topTimeWindow: "Top Time Window",
-      primaryHint: "Primary Hint",
-      primaryHintText:
-        "Condensed hint from camera and 2h time window.",
-      strongestHint: "Strongest hint",
-      near: "Near",
-      timeWindow: "Time window",
-      probability: "Probability",
-      basis: "Basis",
-      events: "events",
-      topCamerasFor: (species: string) => `Top Cameras for ${species}`,
-      topCamerasText:
-        "Probability-oriented distribution by camera.",
-      noCameraHints: "No camera hints available.",
-      topTimeWindowsFor: (species: string) =>
-        `Top Time Windows for ${species}`,
-      topTimeWindowsText: "Condensed by 2h windows.",
-      noTimeWindowHints: "No time-window hints available.",
-      matrix: "Camera × Time Window Matrix",
-      matrixText: "The strongest combinations of place and time.",
-      noCombinations: "No robust combinations available.",
+      focalCamera: "Focal Camera",
+      activeTime: "Most Active Time",
+      noEvents: "No events",
+      matrix: "Where & When Matrix",
+      matrixText:
+        "Bright cells show the strongest combinations of camera and time window.",
+      camera: "Camera",
+      timeWindow: "Time Window",
     };
   }
 
   return {
-eyebrow: "Wo & Wann",
-title: "Wo & Wann",
-intro:
-  "Wo und wann ausgewählte Arten im aktuellen Revier-Scope sichtbar werden.",
-activeOrganizationNotFound: "Aktive Organisation nicht gefunden.",
-reviersLoadFailed: "Fehler beim Laden der Reviere:",
-noActiveGrounds:
-  "Für die aktive Organisation sind derzeit keine aktiven Reviere vorhanden.",
-camerasLoadFailed: "Fehler beim Laden der Kameras:",
-noCamerasInScope:
-  "Für den aktuellen Revier-Scope sind keine Kameras vorhanden.",
-eventsLoadFailed: "Fehler beim Laden der Ereignisse:",
-speciesSummaryLoadFailed: "Fehler beim Laden der Artenzusammenfassung:",
-unknownError: "Unbekannter Fehler",
-speciesSelection: "Artauswahl",
-speciesSelectionText:
-  "Analyse von Kameras und Zeitfenstern für eine ausgewählte Art.",
-species: "Art",
-update: "Aktualisieren",
-noWhereWhenData:
-  "Keine belastbaren Wo-und-Wann-Daten für den gewählten Zeitraum verfügbar.",
-currentSelection: "Aktuelle Auswahl",
-speciesEvents: "Arten-Ereignisse",
-inPeriod: "im Zeitraum",
-topCamera: "Top-Kamera",
-topTimeWindow: "Top-Zeitfenster",
-primaryHint: "Primärer Hinweis",
-primaryHintText:
-  "Verdichteter Hinweis aus Kamera und 2h-Zeitfenster.",
-strongestHint: "Stärkster Hinweis",
-near: "Nähe",
-timeWindow: "Zeitfenster",
-probability: "Wahrscheinlichkeit",
-basis: "Basis",
-events: "Ereignisse",
-topCamerasFor: (species: string) => `Top-Kameras für ${species}`,
-topCamerasText:
-  "Wahrscheinlichkeitsorientierte Verteilung nach Kamera.",
-noCameraHints: "Keine Kamera-Hinweise verfügbar.",
-topTimeWindowsFor: (species: string) =>
-  `Top-Zeitfenster für ${species}`,
-topTimeWindowsText: "Verdichtung nach 2h-Zeitfenstern.",
-noTimeWindowHints: "Keine Zeitfenster-Hinweise verfügbar.",
-matrix: "Kamera- × Zeitfenster-Matrix",
-matrixText: "Die stärksten Kombinationen aus Ort und Zeit.",
-noCombinations: "Keine belastbaren Kombinationen verfügbar.",
+    eyebrow: "Wo & Wann",
+    title: "Wo & Wann",
+    intro: "Wo und wann eine ausgewählte Art im aktuellen Revier-Scope auftritt.",
+    activeOrganizationNotFound: "Aktive Organisation nicht gefunden.",
+    reviersLoadFailed: "Fehler beim Laden der Reviere:",
+    noActiveGrounds:
+      "Für die aktive Organisation sind derzeit keine aktiven Reviere vorhanden.",
+    camerasLoadFailed: "Fehler beim Laden der Kameras:",
+    noCamerasInScope:
+      "Für den aktuellen Revier-Scope sind keine Kameras vorhanden.",
+    eventsLoadFailed: "Fehler beim Laden der Ereignisse:",
+    speciesSummaryLoadFailed: "Fehler beim Laden der Artenzusammenfassung:",
+    unknownError: "Unbekannter Fehler",
+    speciesSelection: "Art-Filter",
+    speciesSelectionText:
+      "Eine Art für die Kamera-Zeit-Matrix auswählen.",
+    species: "Art",
+    update: "Aktualisieren",
+    noWhereWhenData:
+      "Keine Wo-und-Wann-Daten für den gewählten Zeitraum verfügbar.",
+    currentSelection: "aktuelle Auswahl",
+    events: "Ereignisse",
+    inPeriod: "im Zeitraum",
+    focalCamera: "Schwerpunkt",
+    activeTime: "Aktivste Zeit",
+    noEvents: "Keine Ereignisse",
+    matrix: "Wo-&-Wann-Matrix",
+    matrixText:
+      "Helle Felder zeigen die stärksten Kombinationen aus Kamera und Zeitfenster.",
+    camera: "Kamera",
+    timeWindow: "Zeitfenster",
   };
 }
 
@@ -383,7 +389,6 @@ export default async function WildlifeWhereWhenPage(props: {
   const revierScope = resolveRevierScope(rawRevier, allowedReviers);
   const currentRevierValue =
     revierScope.type === "single" ? revierScope.revierId : "all";
-
   const allowedRevierIds = allowedReviers.map((r) => r.id);
 
   if (allowedRevierIds.length === 0) {
@@ -458,7 +463,7 @@ export default async function WildlifeWhereWhenPage(props: {
 
   const { data: eventsData, error: eventsError } = await supabase
     .from("event_feed")
-    .select("id,camera_id,start_at,top_species,relevance_score")
+    .select("id,camera_id,start_at,top_species")
     .in("camera_id", cameraIds)
     .gte("start_at", startAt)
     .lt("start_at", endAt)
@@ -495,7 +500,7 @@ export default async function WildlifeWhereWhenPage(props: {
             language={language}
           />
           <div className="rounded-[24px] border border-rose-300/20 bg-rose-300/10 p-4 text-sm text-rose-100">
-            {text.speciesSummaryLoadFailed}{" "}
+            {text.speciesSummaryLoadFailed} {" "}
             {err instanceof Error ? err.message : text.unknownError}
           </div>
         </main>
@@ -504,15 +509,15 @@ export default async function WildlifeWhereWhenPage(props: {
   }
 
   const eventById = new Map(events.map((e) => [e.id, e]));
-
   const speciesCounts = new Map<string, number>();
+
   for (const row of summaryRows) {
     speciesCounts.set(row.species, (speciesCounts.get(row.species) ?? 0) + 1);
   }
 
-  const speciesOptions = Array.from(speciesCounts.entries())
+  const speciesOptions: SpeciesOption[] = Array.from(speciesCounts.entries())
     .map(([species, count]) => ({ species, count }))
-    .sort((a, b) => b.count - a.count);
+    .sort((a, b) => sortSpeciesOptions(a, b, language, speciesMetaMap));
 
   const selectedSpecies =
     typeof searchParams?.species === "string" && speciesCounts.has(searchParams.species)
@@ -520,95 +525,60 @@ export default async function WildlifeWhereWhenPage(props: {
       : speciesOptions[0]?.species ?? null;
 
   const selectedSpeciesRows = selectedSpecies
-    ? summaryRows.filter((r) => r.species === selectedSpecies)
+    ? summaryRows.filter((row) => row.species === selectedSpecies)
     : [];
 
-  const selectedSpeciesEvents = selectedSpeciesRows
-    .map((r) => {
-      const evt = eventById.get(r.event_id);
-      if (!evt || !evt.start_at) return null;
+  const selectedEvents = selectedSpeciesRows
+    .map((row) => eventById.get(row.event_id) ?? null)
+    .filter((row): row is EventFeedRow => Boolean(row));
 
-      const cameraRevierId = cameraRevierIdById[evt.camera_id] ?? null;
-      const eventTimeZone = cameraRevierId
-        ? revierTimeZoneById[cameraRevierId] ?? DEFAULT_APP_TIME_ZONE
-        : DEFAULT_APP_TIME_ZONE;
-
-      const hour = getAppHour(evt.start_at, eventTimeZone);
-
-      if (hour === null) return null;
-
-      return {
-        eventId: r.event_id,
-        cameraId: evt.camera_id,
-        hour,
-        window2h: bucket2h(hour),
-        count: r.event_species_count,
-        relevance: evt.relevance_score ?? 0,
-      };
-    })
-    .filter(Boolean) as Array<{
-    eventId: string;
-    cameraId: string;
-    hour: number;
-    window2h: number;
-    count: number;
-    relevance: number;
-  }>;
-
-  const totalSelectedSpeciesEvents = selectedSpeciesEvents.length;
-
-  const cameraSpeciesCounts = new Map<string, number>();
-  const windowSpeciesCounts = new Map<number, number>();
+  const cameraCounts = new Map<string, number>();
+  const windowCounts = new Map<number, number>();
   const comboCounts = new Map<string, number>();
 
-  for (const row of selectedSpeciesEvents) {
-    cameraSpeciesCounts.set(row.cameraId, (cameraSpeciesCounts.get(row.cameraId) ?? 0) + 1);
-    windowSpeciesCounts.set(row.window2h, (windowSpeciesCounts.get(row.window2h) ?? 0) + 1);
+  for (const evt of selectedEvents) {
+    const revierId = cameraRevierIdById[evt.camera_id];
+    const timeZone = revierId
+      ? revierTimeZoneById[revierId] ?? DEFAULT_APP_TIME_ZONE
+      : DEFAULT_APP_TIME_ZONE;
+    const hour = getAppHour(evt.start_at, timeZone);
+    if (hour === null) continue;
 
-    const comboKey = `${row.cameraId}__${row.window2h}`;
-    comboCounts.set(comboKey, (comboCounts.get(comboKey) ?? 0) + 1);
+    const window2h = bucket2h(hour);
+    cameraCounts.set(evt.camera_id, (cameraCounts.get(evt.camera_id) ?? 0) + 1);
+    windowCounts.set(window2h, (windowCounts.get(window2h) ?? 0) + 1);
+    comboCounts.set(
+      `${evt.camera_id}__${window2h}`,
+      (comboCounts.get(`${evt.camera_id}__${window2h}`) ?? 0) + 1
+    );
   }
 
-  const topCameraEntries = Array.from(cameraSpeciesCounts.entries())
-    .map(([cameraId, count]) => ({
-      cameraId,
-      count,
-      probability:
-        totalSelectedSpeciesEvents > 0 ? (count / totalSelectedSpeciesEvents) * 100 : 0,
-    }))
-    .sort((a, b) => b.count - a.count)
-    .slice(0, 5);
+  const totalSelectedSpeciesEvents = selectedEvents.length;
+  const topCamera = Array.from(cameraCounts.entries())
+    .map(([cameraId, count]) => ({ cameraId, count }))
+    .sort((a, b) => b.count - a.count)[0] ?? null;
+  const topWindow = Array.from(windowCounts.entries())
+    .map(([window2h, count]) => ({ window2h, count }))
+    .sort((a, b) => b.count - a.count)[0] ?? null;
 
-  const topWindowEntries = Array.from(windowSpeciesCounts.entries())
-    .map(([window2h, count]) => ({
-      window2h,
-      count,
-      probability:
-        totalSelectedSpeciesEvents > 0 ? (count / totalSelectedSpeciesEvents) * 100 : 0,
-    }))
-    .sort((a, b) => b.count - a.count)
-    .slice(0, 5);
-
-  const topComboEntries = Array.from(comboCounts.entries())
-    .map(([key, count]) => {
-      const [cameraId, windowRaw] = key.split("__");
+  const timeWindows = Array.from({ length: 12 }, (_, index) => index * 2);
+  const heatmapRows = timeWindows.map((window2h) => ({
+    window2h,
+    cells: cameraList.map((camera) => {
+      const count = comboCounts.get(`${camera.id}__${window2h}`) ?? 0;
       return {
-        cameraId,
-        window2h: Number(windowRaw),
+        cameraId: camera.id,
         count,
-        probability:
-          totalSelectedSpeciesEvents > 0 ? (count / totalSelectedSpeciesEvents) * 100 : 0,
       };
-    })
-    .sort((a, b) => b.count - a.count)
-    .slice(0, 8);
-
-  const primaryHint = topComboEntries[0] ?? null;
-  const selectedSpeciesLabel = getSpeciesLabel(
-    selectedSpecies,
-    language,
-    speciesMetaMap
+    }),
+  }));
+  const maxCellCount = Math.max(
+    1,
+    ...heatmapRows.flatMap((row) => row.cells.map((cell) => cell.count))
   );
+  const selectedSpeciesLabel = selectedSpecies
+    ? getSpeciesLabel(selectedSpecies, language, speciesMetaMap)
+    : "—";
 
   return (
     <main className="space-y-8">
@@ -645,11 +615,7 @@ export default async function WildlifeWhereWhenPage(props: {
                 className="rounded-[10px] border border-white/10 bg-white/5 px-3 py-2 text-sm text-white"
               >
                 {speciesOptions.map((row) => (
-                  <option
-                    key={row.species}
-                    value={row.species}
-                    className="bg-[#102018] text-white"
-                  >
+                  <option key={row.species} value={row.species} className="bg-[#102018] text-white">
                     {getSpeciesLabel(row.species, language, speciesMetaMap)} ({row.count})
                   </option>
                 ))}
@@ -676,163 +642,68 @@ export default async function WildlifeWhereWhenPage(props: {
               subline={text.currentSelection}
             />
             <StatCard
-              title={text.speciesEvents}
+              title={text.events}
               value={totalSelectedSpeciesEvents}
               subline={text.inPeriod}
             />
             <StatCard
-              title={text.topCamera}
-              value={
-                topCameraEntries[0]
-                  ? cameraLabelById[topCameraEntries[0].cameraId] ?? topCameraEntries[0].cameraId
-                  : "—"
-              }
-              subline={
-                topCameraEntries[0] ? fmtPct(topCameraEntries[0].probability) : "—"
-              }
+              title={text.focalCamera}
+              value={topCamera ? cameraLabelById[topCamera.cameraId] ?? topCamera.cameraId : "—"}
+              subline={topCamera ? `${topCamera.count} ${text.events}` : text.noEvents}
             />
             <StatCard
-              title={text.topTimeWindow}
-              value={topWindowEntries[0] ? fmtWindow(topWindowEntries[0].window2h) : "—"}
-              subline={
-                topWindowEntries[0] ? fmtPct(topWindowEntries[0].probability) : "—"
-              }
+              title={text.activeTime}
+              value={topWindow ? fmtWindow(topWindow.window2h) : "—"}
+              subline={topWindow ? `${topWindow.count} ${text.events}` : text.noEvents}
             />
           </section>
 
           <section className="rounded-[28px] border border-white/10 bg-white/5 p-5 backdrop-blur-sm">
-            <div className="mb-4">
-              <h2 className="text-lg font-medium text-white">{text.primaryHint}</h2>
-              <p className="text-sm text-white/65">{text.primaryHintText}</p>
-            </div>
-
-            <div className="rounded-[20px] border border-white/10 bg-white/5 p-4">
-              <div className="text-sm text-white/55">{text.strongestHint}</div>
-              <div className="mt-2 text-xl font-semibold text-white">
-                {text.near}{" "}
-                {primaryHint
-                  ? cameraLabelById[primaryHint.cameraId] ?? primaryHint.cameraId
-                  : "—"}
-              </div>
-              <div className="mt-2 text-sm text-white/72">
-                {text.species}:{" "}
-                <span className="font-medium text-white">{selectedSpeciesLabel}</span>
-              </div>
-              <div className="text-sm text-white/72">
-                {text.timeWindow}:{" "}
-                <span className="font-medium text-white">
-                  {primaryHint ? fmtWindow(primaryHint.window2h) : "—"}
-                </span>
-              </div>
-              <div className="text-sm text-white/72">
-                {text.probability}:{" "}
-                <span className="font-medium text-white">
-                  {primaryHint ? fmtPct(primaryHint.probability) : "—"}
-                </span>
-              </div>
-              <div className="text-sm text-white/72">
-                {text.basis}:{" "}
-                <span className="font-medium text-white">
-                  {primaryHint ? primaryHint.count : "—"}
-                </span>{" "}
-                {text.events}
-              </div>
-            </div>
-          </section>
-
-          <section className="grid gap-4 lg:grid-cols-2">
-            <div className="rounded-[28px] border border-white/10 bg-white/5 p-5 backdrop-blur-sm">
-              <div className="mb-4">
-                <h2 className="text-lg font-medium text-white">
-                  {text.topCamerasFor(selectedSpeciesLabel)}
-                </h2>
-                <p className="text-sm text-white/65">{text.topCamerasText}</p>
-              </div>
-
-              <div className="space-y-3">
-                {topCameraEntries.map((row) => (
-                  <div
-                    key={row.cameraId}
-                    className="flex items-center justify-between rounded-[20px] border border-white/10 bg-white/5 p-3 text-sm"
-                  >
-                    <span className="text-white/78">
-                      {cameraLabelById[row.cameraId] ?? row.cameraId}
-                    </span>
-                    <span className="text-white/78">
-                      {row.count} {text.events} · {fmtPct(row.probability)}
-                    </span>
-                  </div>
-                ))}
-
-                {topCameraEntries.length === 0 && (
-                  <div className="text-sm text-white/68">{text.noCameraHints}</div>
-                )}
-              </div>
-            </div>
-
-            <div className="rounded-[28px] border border-white/10 bg-white/5 p-5 backdrop-blur-sm">
-              <div className="mb-4">
-                <h2 className="text-lg font-medium text-white">
-                  {text.topTimeWindowsFor(selectedSpeciesLabel)}
-                </h2>
-                <p className="text-sm text-white/65">{text.topTimeWindowsText}</p>
-              </div>
-
-              <div className="space-y-3">
-                {topWindowEntries.map((row) => (
-                  <div
-                    key={row.window2h}
-                    className="flex items-center justify-between rounded-[20px] border border-white/10 bg-white/5 p-3 text-sm"
-                  >
-                    <span className="text-white/78">{fmtWindow(row.window2h)}</span>
-                    <span className="text-white/78">
-                      {row.count} {text.events} · {fmtPct(row.probability)}
-                    </span>
-                  </div>
-                ))}
-
-                {topWindowEntries.length === 0 && (
-                  <div className="text-sm text-white/68">{text.noTimeWindowHints}</div>
-                )}
-              </div>
-            </div>
-          </section>
-
-          <section className="rounded-[28px] border border-white/10 bg-white/5 p-5 backdrop-blur-sm">
-            <div className="mb-4">
+            <div className="mb-5">
               <h2 className="text-lg font-medium text-white">{text.matrix}</h2>
               <p className="text-sm text-white/65">{text.matrixText}</p>
             </div>
 
-            <div className="space-y-3">
-              {topComboEntries.map((row, idx) => (
-                <div
-                  key={`${row.cameraId}-${row.window2h}`}
-                  className="rounded-[20px] border border-white/10 bg-white/5 p-3 text-sm"
-                >
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div>
-                      <div className="font-medium text-white">
-                        #{idx + 1} · {cameraLabelById[row.cameraId] ?? row.cameraId}
-                      </div>
-                      <div className="mt-1 text-xs text-white/45">
-                        {text.timeWindow} {fmtWindow(row.window2h)}
-                      </div>
-                    </div>
-
-                    <div className="text-right">
-                      <div className="font-medium text-white">{fmtPct(row.probability)}</div>
-                      <div className="text-xs text-white/45">
-                        {row.count} {text.events}
-                      </div>
-                    </div>
-                  </div>
+            <div className="overflow-x-auto">
+              <div
+                className="grid min-w-[760px] gap-2"
+                style={{ gridTemplateColumns: `96px repeat(${cameraList.length}, minmax(88px, 1fr))` }}
+              >
+                <div className="text-xs uppercase tracking-wide text-white/45">
+                  {text.timeWindow}
                 </div>
-              ))}
+                {cameraList.map((camera) => (
+                  <div key={camera.id} className="truncate text-xs uppercase tracking-wide text-white/45">
+                    {camera.location_name ? `${camera.name} (${camera.location_name})` : camera.name}
+                  </div>
+                ))}
 
-              {topComboEntries.length === 0 && (
-                <div className="text-sm text-white/68">{text.noCombinations}</div>
-              )}
+                {heatmapRows.map((row) => (
+                  <div key={row.window2h} className="contents">
+                    <div className="flex h-11 items-center text-sm tabular-nums text-white/60">
+                      {fmtWindow(row.window2h)}
+                    </div>
+                    {row.cells.map((cell) => {
+                      const intensity = cell.count / maxCellCount;
+                      return (
+                        <div
+                          key={`${row.window2h}-${cell.cameraId}`}
+                          className="flex h-11 items-center justify-center rounded-[14px] border border-white/10 text-sm tabular-nums text-white"
+                          style={{
+                            backgroundColor:
+                              cell.count > 0
+                                ? `rgba(201, 149, 46, ${0.16 + intensity * 0.54})`
+                                : "rgba(255, 255, 255, 0.04)",
+                          }}
+                          title={`${cameraLabelById[cell.cameraId] ?? cell.cameraId} · ${fmtWindow(row.window2h)} · ${cell.count}`}
+                        >
+                          {cell.count > 0 ? cell.count : ""}
+                        </div>
+                      );
+                    })}
+                  </div>
+                ))}
+              </div>
             </div>
           </section>
         </>

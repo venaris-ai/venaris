@@ -1,4 +1,4 @@
-// src/app/cameras/health/page.tsx #14
+// src/app/cameras/health/page.tsx #15
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
@@ -182,6 +182,7 @@ function t(language: AppLanguage) {
       active: "Active",
       disabled: "Disabled",
       manual: "Manual",
+      allMethods: "All methods",
       targetCameraMissing: "Missing target camera.",
       invalidTargetStatus: "Invalid target status.",
       targetCameraNotFound: "Target camera not found.",
@@ -250,6 +251,7 @@ function t(language: AppLanguage) {
     active: "Aktiv",
     disabled: "Deaktiviert",
     manual: "Manuell",
+    allMethods: "Alle Methoden",
     targetCameraMissing: "Fehlende Ziel-Kamera.",
     invalidTargetStatus: "Ungültiger Ziel-Status.",
     targetCameraNotFound: "Ziel-Kamera nicht gefunden.",
@@ -264,6 +266,29 @@ function t(language: AppLanguage) {
     loadActiveCameraUsageFailed:
       "Fehler beim Laden der aktiven Kamera-Nutzung:",
   };
+}
+
+const HEALTH_STALE_AFTER_MINUTES = 12 * 60;
+const HEALTH_OFFLINE_AFTER_MINUTES = 24 * 60;
+
+function deriveHealthStatus(lastSeenAt: string | null): CameraHealthRow["health_status"] {
+  if (!lastSeenAt) return "unknown";
+
+  const lastSeenTime = new Date(lastSeenAt).getTime();
+  if (!Number.isFinite(lastSeenTime)) return "unknown";
+
+  const diffMinutes = Math.floor((Date.now() - lastSeenTime) / 60000);
+
+  if (diffMinutes >= HEALTH_OFFLINE_AFTER_MINUTES) return "offline";
+  if (diffMinutes >= HEALTH_STALE_AFTER_MINUTES) return "stale";
+  return "online";
+}
+
+function formatRuleDuration(minutes: number, language: AppLanguage) {
+  const text = t(language);
+
+  if (minutes % 60 === 0) return `${minutes / 60} h`;
+  return `${minutes} ${text.min}`;
 }
 
 function formatMethod(value: string | null, language: AppLanguage) {
@@ -295,30 +320,20 @@ function buildHealthRules(
   rows: CameraHealthListRow[],
   language: AppLanguage
 ): HealthRuleRow[] {
-  const seen = new Map<string, HealthRuleRow>();
+  if (rows.length === 0) return [];
 
-  for (const row of rows) {
-    const methodKey = row.import_method ?? "unknown";
-    const ruleKey = [
-      methodKey,
-      row.stale_after_minutes,
-      row.offline_after_minutes,
-    ].join("|");
+  const text = t(language);
 
-    if (seen.has(ruleKey)) continue;
-
-    seen.set(ruleKey, {
-      methodKey,
-      methodLabel: formatMethod(row.import_method, language),
-      staleAfterMinutes: row.stale_after_minutes,
-      offlineAfterMinutes: row.offline_after_minutes,
-    });
-  }
-
-  return Array.from(seen.values()).sort((a, b) =>
-    a.methodLabel.localeCompare(b.methodLabel, language === "en" ? "en" : "de")
-  );
+  return [
+    {
+      methodKey: "all",
+      methodLabel: text.allMethods,
+      staleAfterMinutes: HEALTH_STALE_AFTER_MINUTES,
+      offlineAfterMinutes: HEALTH_OFFLINE_AFTER_MINUTES,
+    },
+  ];
 }
+
 
 function buildReturnUrl(params: {
   revier?: string | null;
@@ -850,9 +865,9 @@ export default async function CamerasHealthPage(props: {
       direction_deg: camera.direction_deg ?? null,
       notes: camera.notes ?? null,
       last_seen_at: health?.last_seen_at ?? null,
-      stale_after_minutes: health?.stale_after_minutes ?? 0,
-      offline_after_minutes: health?.offline_after_minutes ?? 0,
-      health_status: health?.health_status ?? "unknown",
+      stale_after_minutes: HEALTH_STALE_AFTER_MINUTES,
+      offline_after_minutes: HEALTH_OFFLINE_AFTER_MINUTES,
+      health_status: deriveHealthStatus(health?.last_seen_at ?? null),
       config_method: config?.method ?? null,
       config_is_active: config?.is_active ?? null,
       config_smtp_alias: config?.smtp_alias ?? null,
@@ -884,7 +899,7 @@ export default async function CamerasHealthPage(props: {
       ? healthRules
           .map(
             (rule) =>
-              `${rule.methodLabel}: ${text.staleFrom} ${rule.staleAfterMinutes} ${text.min}, ${text.offlineFrom} ${rule.offlineAfterMinutes} ${text.min}`
+              `${rule.methodLabel}: ${text.staleFrom} ${formatRuleDuration(rule.staleAfterMinutes, language)}, ${text.offlineFrom} ${formatRuleDuration(rule.offlineAfterMinutes, language)}`
           )
           .join(" · ")
       : null;

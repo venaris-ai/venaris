@@ -1,4 +1,4 @@
-// src/app/wildlife/species/page.tsx #4
+// src/app/wildlife/species/page.tsx #5
 export const runtime = "nodejs";
 
 import Link from "next/link";
@@ -31,7 +31,6 @@ type EventFeedRow = {
   id: string;
   camera_id: string;
   start_at: string | null;
-  relevance_score: number | null;
   top_species: string | null;
 };
 
@@ -53,6 +52,49 @@ type RevierRow = {
   id: string;
   name: string;
 };
+
+type SpeciesOverviewRow = {
+  species: string;
+  eventCount: number;
+  wildCount: number;
+  share: number;
+};
+
+function isOtherSpeciesLabel(value: string) {
+  const normalized = value.trim().toLowerCase();
+  return (
+    normalized === "other" ||
+    normalized === "others" ||
+    normalized === "sonstiges" ||
+    normalized === "sonstige"
+  );
+}
+
+function isOtherSpecies(
+  species: string,
+  language: AppLanguage,
+  speciesMetaMap: ReturnType<typeof buildSpeciesMetaMap>
+) {
+  return (
+    isOtherSpeciesLabel(species) ||
+    isOtherSpeciesLabel(getSpeciesLabel(species, language, speciesMetaMap))
+  );
+}
+
+function sortSpeciesOverview(
+  a: SpeciesOverviewRow,
+  b: SpeciesOverviewRow,
+  language: AppLanguage,
+  speciesMetaMap: ReturnType<typeof buildSpeciesMetaMap>
+) {
+  const aIsOther = isOtherSpecies(a.species, language, speciesMetaMap);
+  const bIsOther = isOtherSpecies(b.species, language, speciesMetaMap);
+
+  if (aIsOther && !bIsOther) return 1;
+  if (!aIsOther && bIsOther) return -1;
+
+  return b.eventCount - a.eventCount;
+}
 
 function resolvePeriodRange(period: PeriodKey) {
   const end = new Date();
@@ -105,8 +147,7 @@ function t(language: AppLanguage) {
     return {
       eyebrow: "Species",
       title: "Species",
-      intro:
-        "Species overview, frequencies and focal points for the current ground scope.",
+      intro: "Which species were recorded in the current ground scope.",
       activeOrganizationNotFound: "Active organization not found.",
       reviersLoadFailed: "Failed to load grounds:",
       noActiveGrounds:
@@ -117,78 +158,41 @@ function t(language: AppLanguage) {
       eventsLoadFailed: "Failed to load events:",
       speciesSummaryLoadFailed: "Failed to load species summary:",
       unknownError: "unknown error",
-      observedSpecies: "Observed Species",
-      inPeriod: "in period",
-      speciesEvents: "Species Events",
-      withSpeciesSummary: "with species summary",
-      observedAnimals: "Observed Animals",
-      aggregated: "aggregated",
-      camerasInScope: "Cameras In Scope",
-      currentGroundScope: "current ground scope",
-      topSpecies: "Top Species",
-      topSpeciesText:
-        "Quick look at the most frequent species in the selected period.",
-      topCamera: "Top camera",
-      animals: "animals",
-      noSpeciesData:
-        "No species data in the selected period yet.",
-      speciesOverview: "Species Overview",
-      speciesOverviewText:
-        "Detailed species overview for the current ground scope.",
-      noSpeciesObservations:
-        "No species observations found in the selected period.",
       species: "Species",
       events: "Events",
-      observedAnimalsCol: "Observed Animals",
-      avgPerEvent: "Avg / Event",
-      max: "Max",
-      topCameraCol: "Top Camera",
-      avgRelevance: "Avg Relevance",
+      inPeriod: "in period",
+      withSpeciesAssignment: "with species assignment",
+      mostFrequentSpecies: "Most Frequent Species",
+      recordedWildlife: "Recorded Wildlife",
+      fromEvents: "from events",
+      eventsBySpecies: "Events by Species",
+      noSpeciesData: "No species data in the selected period yet.",
     };
   }
 
   return {
-eyebrow: "Arten",
-title: "Arten",
-intro:
-  "Artenübersicht, Häufigkeiten und Schwerpunkte für den aktuellen Revier-Scope.",
-activeOrganizationNotFound: "Aktive Organisation nicht gefunden.",
-reviersLoadFailed: "Fehler beim Laden der Reviere:",
-noActiveGrounds:
-  "Für die aktive Organisation sind derzeit keine aktiven Reviere vorhanden.",
-camerasLoadFailed: "Fehler beim Laden der Kameras:",
-noCamerasInScope:
-  "Für den aktuellen Revier-Scope sind keine Kameras vorhanden.",
-eventsLoadFailed: "Fehler beim Laden der Ereignisse:",
-speciesSummaryLoadFailed: "Fehler beim Laden der Artenzusammenfassung:",
-unknownError: "Unbekannter Fehler",
-observedSpecies: "Beobachtete Arten",
-inPeriod: "im Zeitraum",
-speciesEvents: "Arten-Ereignisse",
-withSpeciesSummary: "mit Artenzusammenfassung",
-observedAnimals: "Beobachtete Tiere",
-aggregated: "aggregiert",
-camerasInScope: "Kameras im Scope",
-currentGroundScope: "Aktueller Revier-Scope",
-topSpecies: "Top-Arten",
-topSpeciesText:
-  "Schnellblick auf die häufigsten Arten im gewählten Zeitraum.",
-topCamera: "Top-Kamera",
-animals: "Tiere",
-noSpeciesData:
-  "Noch keine Artdaten im gewählten Zeitraum.",
-speciesOverview: "Artenübersicht",
-speciesOverviewText:
-  "Detaillierte Artenübersicht für den aktuellen Revier-Scope.",
-noSpeciesObservations:
-  "Keine Artenbeobachtungen im gewählten Zeitraum gefunden.",
-species: "Art",
-events: "Ereignisse",
-observedAnimalsCol: "Beobachtete Tiere",
-avgPerEvent: "Ø / Ereignis",
-max: "Max.",
-topCameraCol: "Top-Kamera",
-avgRelevance: "Ø Relevanz",
+    eyebrow: "Arten",
+    title: "Arten",
+    intro: "Welche Arten im aktuellen Revier-Scope erfasst wurden.",
+    activeOrganizationNotFound: "Aktive Organisation nicht gefunden.",
+    reviersLoadFailed: "Fehler beim Laden der Reviere:",
+    noActiveGrounds:
+      "Für die aktive Organisation sind derzeit keine aktiven Reviere vorhanden.",
+    camerasLoadFailed: "Fehler beim Laden der Kameras:",
+    noCamerasInScope:
+      "Für den aktuellen Revier-Scope sind keine Kameras vorhanden.",
+    eventsLoadFailed: "Fehler beim Laden der Ereignisse:",
+    speciesSummaryLoadFailed: "Fehler beim Laden der Artenzusammenfassung:",
+    unknownError: "Unbekannter Fehler",
+    species: "Arten",
+    events: "Ereignisse",
+    inPeriod: "im Zeitraum",
+    withSpeciesAssignment: "mit Artzuordnung",
+    mostFrequentSpecies: "Häufigste Art",
+    recordedWildlife: "Erfasstes Wild",
+    fromEvents: "aus Ereignissen",
+    eventsBySpecies: "Ereignisse nach Art",
+    noSpeciesData: "Noch keine Artdaten im gewählten Zeitraum.",
   };
 }
 
@@ -333,7 +337,6 @@ export default async function WildlifeSpeciesPage(props: {
   const revierScope = resolveRevierScope(rawRevier, allowedReviers);
   const currentRevierValue =
     revierScope.type === "single" ? revierScope.revierId : "all";
-
   const allowedRevierIds = allowedReviers.map((r) => r.id);
 
   if (allowedRevierIds.length === 0) {
@@ -377,12 +380,6 @@ export default async function WildlifeSpeciesPage(props: {
 
   const cameraList = (cameras ?? []) as CameraRow[];
   const cameraIds = cameraList.map((c) => c.id);
-  const cameraLabelById = Object.fromEntries(
-    cameraList.map((c) => [
-      c.id,
-      c.location_name ? `${c.name} (${c.location_name})` : c.name,
-    ])
-  );
 
   if (cameraIds.length === 0) {
     return (
@@ -401,7 +398,7 @@ export default async function WildlifeSpeciesPage(props: {
 
   const { data: eventsData, error: eventsError } = await supabase
     .from("event_feed")
-    .select("id,camera_id,start_at,relevance_score,top_species")
+    .select("id,camera_id,start_at,top_species")
     .in("camera_id", cameraIds)
     .gte("start_at", startAt)
     .lt("start_at", endAt)
@@ -438,7 +435,7 @@ export default async function WildlifeSpeciesPage(props: {
             language={language}
           />
           <div className="rounded-[24px] border border-rose-300/20 bg-rose-300/10 p-4 text-sm text-rose-100">
-            {text.speciesSummaryLoadFailed}{" "}
+            {text.speciesSummaryLoadFailed} {" "}
             {err instanceof Error ? err.message : text.unknownError}
           </div>
         </main>
@@ -446,71 +443,37 @@ export default async function WildlifeSpeciesPage(props: {
     }
   }
 
-  const eventById = new Map(events.map((e) => [e.id, e]));
-
-  const speciesStats = new Map<
-    string,
-    {
-      species: string;
-      eventCount: number;
-      observedAnimals: number;
-      avgAnimals: number;
-      maxAnimals: number;
-      topCameraId: string | null;
-      topCameraCount: number;
-      sumRelevance: number;
-      bestScore: number;
-      cameraCounts: Map<string, number>;
-    }
-  >();
+  const speciesStats = new Map<string, { species: string; eventCount: number; wildCount: number }>();
 
   for (const row of summaryRows) {
-    const evt = eventById.get(row.event_id);
-    if (!evt) continue;
-
     const existing =
       speciesStats.get(row.species) ?? {
         species: row.species,
         eventCount: 0,
-        observedAnimals: 0,
-        avgAnimals: 0,
-        maxAnimals: 0,
-        topCameraId: null,
-        topCameraCount: 0,
-        sumRelevance: 0,
-        bestScore: 0,
-        cameraCounts: new Map<string, number>(),
+        wildCount: 0,
       };
 
     existing.eventCount += 1;
-    existing.observedAnimals += row.event_species_count;
-    existing.maxAnimals = Math.max(existing.maxAnimals, row.event_species_count);
-    existing.sumRelevance += evt.relevance_score ?? 0;
-    existing.bestScore = Math.max(existing.bestScore, row.best_score ?? 0);
-
-    const prevCam = existing.cameraCounts.get(evt.camera_id) ?? 0;
-    existing.cameraCounts.set(evt.camera_id, prevCam + 1);
-
-    if (prevCam + 1 > existing.topCameraCount) {
-      existing.topCameraCount = prevCam + 1;
-      existing.topCameraId = evt.camera_id;
-    }
-
+    existing.wildCount += row.event_species_count ?? 0;
     speciesStats.set(row.species, existing);
   }
 
-  const speciesOverview = Array.from(speciesStats.values())
-    .map((s) => ({
-      ...s,
-      avgAnimals: s.eventCount > 0 ? s.observedAnimals / s.eventCount : 0,
-      avgRelevance: s.eventCount > 0 ? s.sumRelevance / s.eventCount : 0,
+  const totalSpeciesEvents = Array.from(speciesStats.values()).reduce(
+    (sum, row) => sum + row.eventCount,
+    0
+  );
+  const totalWildCount = Array.from(speciesStats.values()).reduce(
+    (sum, row) => sum + row.wildCount,
+    0
+  );
+  const speciesOverview: SpeciesOverviewRow[] = Array.from(speciesStats.values())
+    .map((row) => ({
+      ...row,
+      share: totalSpeciesEvents > 0 ? (row.eventCount / totalSpeciesEvents) * 100 : 0,
     }))
-    .sort((a, b) => b.eventCount - a.eventCount || b.observedAnimals - a.observedAnimals);
-
-  const totalSpecies = speciesOverview.length;
-  const totalObservedAnimals = speciesOverview.reduce((sum, s) => sum + s.observedAnimals, 0);
-  const totalEvents = speciesOverview.reduce((sum, s) => sum + s.eventCount, 0);
-  const topSpecies = speciesOverview.slice(0, 3);
+    .sort((a, b) => sortSpeciesOverview(a, b, language, speciesMetaMap));
+  const topSpecies = speciesOverview[0] ?? null;
+  const maxSpeciesEvents = Math.max(1, ...speciesOverview.map((row) => row.eventCount));
 
   return (
     <main className="space-y-8">
@@ -521,122 +484,53 @@ export default async function WildlifeSpeciesPage(props: {
       />
 
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <StatCard title={text.species} value={speciesOverview.length} subline={text.inPeriod} />
         <StatCard
-          title={text.observedSpecies}
-          value={totalSpecies}
-          subline={text.inPeriod}
+          title={text.events}
+          value={totalSpeciesEvents}
+          subline={text.withSpeciesAssignment}
         />
         <StatCard
-          title={text.speciesEvents}
-          value={totalEvents}
-          subline={text.withSpeciesSummary}
+          title={text.mostFrequentSpecies}
+          value={topSpecies ? getSpeciesLabel(topSpecies.species, language, speciesMetaMap) : "—"}
+          subline={topSpecies ? `${topSpecies.eventCount} ${text.events}` : text.noSpeciesData}
         />
         <StatCard
-          title={text.observedAnimals}
-          value={totalObservedAnimals}
-          subline={text.aggregated}
-        />
-        <StatCard
-          title={text.camerasInScope}
-          value={cameraList.length}
-          subline={text.currentGroundScope}
+          title={text.recordedWildlife}
+          value={totalWildCount}
+          subline={text.fromEvents}
         />
       </section>
 
-      <section className="grid gap-4 lg:grid-cols-[0.8fr_1.2fr]">
-        <div className="rounded-[28px] border border-white/10 bg-white/5 p-5 backdrop-blur-sm">
-          <div className="mb-4">
-            <h2 className="text-lg font-medium text-white">{text.topSpecies}</h2>
-            <p className="text-sm text-white/65">{text.topSpeciesText}</p>
+      <section className="rounded-[28px] border border-white/10 bg-white/5 p-5 backdrop-blur-sm">
+        <div className="mb-5">
+          <h2 className="text-lg font-medium text-white">{text.eventsBySpecies}</h2>
+        </div>
+
+        {speciesOverview.length === 0 ? (
+          <div className="rounded-[14px] border border-white/10 bg-white/5 p-4 text-sm text-white/68">
+            {text.noSpeciesData}
           </div>
-
+        ) : (
           <div className="space-y-3">
-            {topSpecies.map((row) => (
-              <div
-                key={row.species}
-                className="rounded-[20px] border border-white/10 bg-white/5 p-3 text-sm"
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <div className="font-medium text-white">
-                      {getSpeciesLabel(row.species, language, speciesMetaMap)}
-                    </div>
-                    <div className="mt-1 text-xs text-white/45">
-                      {text.topCamera}:{" "}
-                      {row.topCameraId
-                        ? cameraLabelById[row.topCameraId] ?? row.topCameraId
-                        : "—"}
-                    </div>
-                  </div>
-
-                  <div className="text-right">
-                    <div className="font-medium text-white">{row.eventCount} {text.events}</div>
-                    <div className="text-xs text-white/45">
-                      {row.observedAnimals} {text.animals}
-                    </div>
-                  </div>
+            {speciesOverview.map((row) => (
+              <div key={row.species} className="grid grid-cols-[140px_1fr_64px] items-center gap-3 text-sm md:grid-cols-[220px_1fr_80px]">
+                <div className="truncate font-medium text-white">
+                  {getSpeciesLabel(row.species, language, speciesMetaMap)}
+                </div>
+                <div className="h-3 overflow-hidden rounded-full bg-white/8">
+                  <div
+                    className="h-full rounded-full bg-[#c9952e]"
+                    style={{ width: `${Math.max(2, (row.eventCount / maxSpeciesEvents) * 100)}%` }}
+                  />
+                </div>
+                <div className="text-right tabular-nums text-white/68">
+                  {row.eventCount}
                 </div>
               </div>
             ))}
-
-            {topSpecies.length === 0 && (
-              <div className="text-sm text-white/68">{text.noSpeciesData}</div>
-            )}
           </div>
-        </div>
-
-        <div className="rounded-[28px] border border-white/10 bg-white/5 p-5 backdrop-blur-sm">
-          <div className="mb-4">
-            <h2 className="text-lg font-medium text-white">{text.speciesOverview}</h2>
-            <p className="text-sm text-white/65">{text.speciesOverviewText}</p>
-          </div>
-
-          {speciesOverview.length === 0 ? (
-            <div className="rounded-[14px] border border-white/10 bg-white/5 p-4 text-sm text-white/68">
-              {text.noSpeciesObservations}
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="min-w-full border-collapse text-sm">
-                <thead>
-                  <tr className="border-b border-white/8 text-left text-white/55">
-                    <th className="px-3 py-2 font-medium">{text.species}</th>
-                    <th className="px-3 py-2 font-medium">{text.events}</th>
-                    <th className="px-3 py-2 font-medium">{text.observedAnimalsCol}</th>
-                    <th className="px-3 py-2 font-medium">{text.avgPerEvent}</th>
-                    <th className="px-3 py-2 font-medium">{text.max}</th>
-                    <th className="px-3 py-2 font-medium">{text.topCameraCol}</th>
-                    <th className="px-3 py-2 font-medium">{text.avgRelevance}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {speciesOverview.map((row) => (
-                    <tr
-                      key={row.species}
-                      className="border-b border-white/8 last:border-b-0"
-                    >
-                      <td className="px-3 py-2 font-medium text-white">
-                        {getSpeciesLabel(row.species, language, speciesMetaMap)}
-                      </td>
-                      <td className="px-3 py-2 text-white/72">{row.eventCount}</td>
-                      <td className="px-3 py-2 text-white/72">{row.observedAnimals}</td>
-                      <td className="px-3 py-2 text-white/72">{row.avgAnimals.toFixed(2)}</td>
-                      <td className="px-3 py-2 text-white/72">{row.maxAnimals}</td>
-                      <td className="px-3 py-2 text-white/72">
-                        {row.topCameraId
-                          ? cameraLabelById[row.topCameraId] ?? row.topCameraId
-                          : "—"}
-                      </td>
-                      <td className="px-3 py-2 text-white/72">
-                        {`${Math.round(row.avgRelevance * 100)}%`}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
+        )}
       </section>
     </main>
   );

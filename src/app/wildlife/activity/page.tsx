@@ -1,4 +1,4 @@
-// src/app/wildlife/activity/page.tsx #5
+// src/app/wildlife/activity/page.tsx #6
 export const runtime = "nodejs";
 
 import Link from "next/link";
@@ -15,13 +15,7 @@ import {
   type RevierOption,
 } from "@/lib/intelligence/revierScope";
 import {
-  buildSpeciesMetaMap,
-  getSpeciesLabel,
-  loadSpeciesMeta,
-} from "@/lib/speciesMeta";
-import {
   DEFAULT_APP_TIME_ZONE,
-  formatAppDateTime,
   getAppHour,
 } from "@/lib/dateTime";
 
@@ -30,24 +24,14 @@ type PeriodKey = "30d" | "90d" | "365d";
 type SearchParams = {
   period?: string;
   revier?: string;
+  camera?: string;
 };
 
 type EventFeedRow = {
   id: string;
   camera_id: string;
   start_at: string | null;
-  end_at: string | null;
   top_species: string | null;
-  top_count: number | null;
-  relevance_score: number | null;
-  asset_count: number | null;
-};
-
-type EventSpeciesSummaryRow = {
-  event_id: string;
-  species: string;
-  event_species_count: number;
-  best_score: number | null;
 };
 
 type CameraRow = {
@@ -77,48 +61,20 @@ function resolvePeriodRange(period: PeriodKey) {
   };
 }
 
-function fmtTs(
-  ts: string | null,
-  language: AppLanguage,
-  timeZone: string
-) {
-  return formatAppDateTime(ts, language, timeZone);
-}
-
 function fmtHour(hour: number) {
   return `${String(hour).padStart(2, "0")}:00`;
 }
 
-function buildHref(period: PeriodKey, revierValue: string) {
+function buildHref(
+  period: PeriodKey,
+  revierValue: string,
+  cameraValue?: string | null
+) {
   const params = new URLSearchParams();
   params.set("period", period);
   params.set("revier", revierValue);
+  if (cameraValue && cameraValue !== "all") params.set("camera", cameraValue);
   return `/wildlife/activity?${params.toString()}`;
-}
-
-async function fetchEventSpeciesSummaryChunked(
-  supabase: ReturnType<typeof supabaseServer>,
-  eventIds: string[],
-  chunkSize = 200
-) {
-  const rows: EventSpeciesSummaryRow[] = [];
-
-  for (let i = 0; i < eventIds.length; i += chunkSize) {
-    const chunk = eventIds.slice(i, i + chunkSize);
-
-    const { data, error } = await supabase
-      .from("event_species_summary")
-      .select("event_id,species,event_species_count,best_score")
-      .in("event_id", chunk);
-
-    if (error) {
-      throw new Error(error.message);
-    }
-
-    rows.push(...((data ?? []) as EventSpeciesSummaryRow[]));
-  }
-
-  return rows;
 }
 
 function t(language: AppLanguage) {
@@ -126,7 +82,7 @@ function t(language: AppLanguage) {
     return {
       eyebrow: "Activity",
       title: "Activity",
-      intro: "Activity patterns in the current ground scope by hour and camera.",
+      intro: "When and at which cameras events occur in the current ground scope.",
       activeOrganizationNotFound: "Active organization not found.",
       reviersLoadFailed: "Failed to load grounds:",
       noActiveGrounds:
@@ -135,39 +91,31 @@ function t(language: AppLanguage) {
       noCamerasInScope:
         "There are no cameras for the current ground scope.",
       eventsLoadFailed: "Failed to load events:",
-      speciesSummaryLoadFailed: "Failed to load species summary:",
-      unknownError: "unknown error",
-      wildlifeEvents: "Wildlife Events",
+      events: "Events",
       inPeriod: "in period",
-      camerasInScope: "Cameras In Scope",
-      currentGroundScope: "current ground scope",
+      mostActiveCamera: "Most Active Camera",
+      noEvents: "No events",
       peakActivity: "Peak Activity",
-      events: "events",
-      speciesInActivity: "Species In Activity",
-      withActivitySignal: "with activity signal",
-      overallWildlifeActivityByHour: "Overall Wildlife Activity by Hour",
-      overallWildlifeActivityByHourText:
-        "Hourly distribution of all wildlife events in the selected period.",
-      cameraActivity: "Camera Activity",
-      cameraActivityText:
-        "Activity per camera, including relevance and leading species.",
+      activeCameras: "Active Cameras",
+      ofCameras: (count: number) => `of ${count} cameras`,
+      currentGroundScope: "current ground scope",
+      cameraFilter: "Camera Filter",
+      cameraFilterText:
+        "Limit the activity view to one camera or keep the full ground scope.",
       camera: "Camera",
-      avgRelevance: "Avg Relevance",
-      leadingSpecies: "Leading Species",
-      noCameraActivity: "No camera activity in the selected period.",
-      latestWildlifeEvents: "Latest Wildlife Events",
-      latestWildlifeEventsText:
-        "Most recent wildlife events in the current ground scope.",
-      toIngest: "To ingest",
-      assets: "Assets",
-      noWildlifeEventsYet: "No wildlife events yet.",
+      allCameras: "All cameras",
+      update: "Update",
+      activityByHour: "Activity by Hour",
+      activityByHourText:
+        "Hourly distribution of all events in the selected period.",
+      noActivityData: "No activity data in the selected period.",
     };
   }
 
   return {
     eyebrow: "Aktivität",
     title: "Aktivität",
-    intro: "Aktivitätsmuster im aktuellen Revier-Scope nach Stunde und Kamera.",
+    intro: "Wann und an welchen Kameras Ereignisse im aktuellen Revier-Scope auftreten.",
     activeOrganizationNotFound: "Aktive Organisation nicht gefunden.",
     reviersLoadFailed: "Fehler beim Laden der Reviere:",
     noActiveGrounds:
@@ -176,42 +124,36 @@ function t(language: AppLanguage) {
     noCamerasInScope:
       "Für den aktuellen Revier-Scope sind keine Kameras vorhanden.",
     eventsLoadFailed: "Fehler beim Laden der Ereignisse:",
-    speciesSummaryLoadFailed: "Fehler beim Laden der Artenzusammenfassung:",
-    unknownError: "Unbekannter Fehler",
-    wildlifeEvents: "Wildtier-Ereignisse",
-    inPeriod: "im Zeitraum",
-    camerasInScope: "Kameras im Scope",
-    currentGroundScope: "Aktueller Revier-Scope",
-    peakActivity: "Aktivitätsspitze",
     events: "Ereignisse",
-    speciesInActivity: "Arten in der Aktivität",
-    withActivitySignal: "mit Aktivitätssignal",
-    overallWildlifeActivityByHour: "Gesamte Wildtieraktivität nach Stunde",
-    overallWildlifeActivityByHourText:
-      "Stündliche Verteilung aller Wildtier-Ereignisse im gewählten Zeitraum.",
-    cameraActivity: "Kamera-Aktivität",
-    cameraActivityText:
-      "Aktivität je Kamera, inklusive Relevanz und führender Art.",
+    inPeriod: "im Zeitraum",
+    mostActiveCamera: "Aktivste Kamera",
+    noEvents: "Keine Ereignisse",
+    peakActivity: "Aktivste Zeit",
+    activeCameras: "Aktive Kameras",
+    ofCameras: (count: number) => `von ${count} Kameras`,
+    currentGroundScope: "aktueller Revier-Scope",
+    cameraFilter: "Kamera-Filter",
+    cameraFilterText:
+      "Aktivität auf eine Kamera eingrenzen oder den gesamten Revier-Scope betrachten.",
     camera: "Kamera",
-    avgRelevance: "Ø Relevanz",
-    leadingSpecies: "Führende Art",
-    noCameraActivity: "Keine Kamera-Aktivität im gewählten Zeitraum.",
-    latestWildlifeEvents: "Neueste Wildtier-Ereignisse",
-    latestWildlifeEventsText:
-      "Jüngste Wildtier-Ereignisse im aktuellen Revier-Scope.",
-    toIngest: "Zum Ingest",
-    assets: "Assets",
-    noWildlifeEventsYet: "Noch keine Wildtier-Ereignisse vorhanden.",
+    allCameras: "Alle Kameras",
+    update: "Aktualisieren",
+    activityByHour: "Aktivität nach Uhrzeit",
+    activityByHourText:
+      "Stündliche Verteilung aller Ereignisse im gewählten Zeitraum.",
+    noActivityData: "Keine Aktivitätsdaten im gewählten Zeitraum.",
   };
 }
 
 function ActivityPageHeader({
   period,
   revierValue,
+  cameraValue,
   language,
 }: {
   period: PeriodKey;
   revierValue: string;
+  cameraValue: string;
   language: AppLanguage;
 }) {
   const text = t(language);
@@ -232,7 +174,7 @@ function ActivityPageHeader({
           return (
             <Link
               key={p}
-              href={buildHref(p, revierValue)}
+              href={buildHref(p, revierValue, cameraValue)}
               className={`rounded-full border px-3 py-1.5 text-xs ${
                 active
                   ? "border-amber-300/30 bg-amber-300/15 text-amber-100"
@@ -266,6 +208,67 @@ function StatCard({
   );
 }
 
+function CameraFilter({
+  period,
+  revierValue,
+  selectedCameraId,
+  cameras,
+  language,
+}: {
+  period: PeriodKey;
+  revierValue: string;
+  selectedCameraId: string;
+  cameras: CameraRow[];
+  language: AppLanguage;
+}) {
+  const text = t(language);
+
+  return (
+    <section className="rounded-[28px] border border-white/10 bg-white/5 p-5 backdrop-blur-sm">
+      <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+        <div>
+          <h2 className="text-lg font-medium text-white">{text.cameraFilter}</h2>
+          <p className="text-sm text-white/65">{text.cameraFilterText}</p>
+        </div>
+
+        <form
+          method="get"
+          action="/wildlife/activity"
+          className="flex flex-wrap items-end gap-2"
+        >
+          <input type="hidden" name="period" value={period} />
+          <input type="hidden" name="revier" value={revierValue} />
+
+          <div className="flex flex-col gap-1">
+            <label htmlFor="camera" className="text-sm font-medium text-white">
+              {text.camera}
+            </label>
+            <select
+              id="camera"
+              name="camera"
+              defaultValue={selectedCameraId}
+              className="rounded-[10px] border border-white/10 bg-white/5 px-3 py-2 text-sm text-white"
+            >
+              <option value="all" className="bg-[#102018] text-white">
+                {text.allCameras}
+              </option>
+              {cameras.map((camera) => (
+                <option key={camera.id} value={camera.id} className="bg-[#102018] text-white">
+                  {camera.location_name ? `${camera.name} (${camera.location_name})` : camera.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <button className="rounded-[10px] border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/78 hover:border-amber-300/20 hover:bg-white/8 hover:text-white">
+            {text.update}
+          </button>
+        </form>
+      </div>
+    </section>
+  );
+}
+
 export default async function WildlifeActivityPage(props: {
   searchParams?: Promise<SearchParams> | SearchParams;
 }) {
@@ -291,8 +294,6 @@ export default async function WildlifeActivityPage(props: {
 
   const text = t(language);
   const activeOrganization = ctx.activeMembership?.organizations;
-  const speciesMetaRows = await loadSpeciesMeta();
-  const speciesMetaMap = buildSpeciesMetaMap(speciesMetaRows);
 
   const searchParams = props?.searchParams
     ? await Promise.resolve(props.searchParams)
@@ -300,6 +301,7 @@ export default async function WildlifeActivityPage(props: {
 
   const rawPeriod = searchParams?.period;
   const rawRevier = searchParams?.revier;
+  const rawCamera = searchParams?.camera;
 
   const period: PeriodKey =
     rawPeriod === "30d" || rawPeriod === "90d" || rawPeriod === "365d"
@@ -309,7 +311,12 @@ export default async function WildlifeActivityPage(props: {
   if (!activeOrganization) {
     return (
       <main className="space-y-8">
-        <ActivityPageHeader period={period} revierValue="all" language={language} />
+        <ActivityPageHeader
+          period={period}
+          revierValue="all"
+          cameraValue="all"
+          language={language}
+        />
         <div className="rounded-[24px] border border-rose-300/20 bg-rose-300/10 p-4 text-sm text-rose-100">
           {text.activeOrganizationNotFound}
         </div>
@@ -329,7 +336,12 @@ export default async function WildlifeActivityPage(props: {
   if (reviersError) {
     return (
       <main className="space-y-8">
-        <ActivityPageHeader period={period} revierValue="all" language={language} />
+        <ActivityPageHeader
+          period={period}
+          revierValue="all"
+          cameraValue="all"
+          language={language}
+        />
         <div className="rounded-[24px] border border-rose-300/20 bg-rose-300/10 p-4 text-sm text-rose-100">
           {text.reviersLoadFailed} {reviersError.message}
         </div>
@@ -342,7 +354,6 @@ export default async function WildlifeActivityPage(props: {
     id: r.id,
     name: r.name,
   }));
-
   const timezoneByRevierId = new Map(
     reviers.map((r) => [r.id, r.timezone ?? DEFAULT_APP_TIME_ZONE])
   );
@@ -356,7 +367,12 @@ export default async function WildlifeActivityPage(props: {
   if (allowedRevierIds.length === 0) {
     return (
       <main className="space-y-8">
-        <ActivityPageHeader period={period} revierValue="all" language={language} />
+        <ActivityPageHeader
+          period={period}
+          revierValue="all"
+          cameraValue="all"
+          language={language}
+        />
         <div className="rounded-[24px] border border-white/10 bg-white/5 p-4 text-sm text-white/68">
           {text.noActiveGrounds}
         </div>
@@ -383,6 +399,7 @@ export default async function WildlifeActivityPage(props: {
         <ActivityPageHeader
           period={period}
           revierValue={currentRevierValue}
+          cameraValue="all"
           language={language}
         />
         <div className="rounded-[24px] border border-rose-300/20 bg-rose-300/10 p-4 text-sm text-rose-100">
@@ -394,6 +411,12 @@ export default async function WildlifeActivityPage(props: {
 
   const cameraList = (cameras ?? []) as CameraRow[];
   const cameraIds = cameraList.map((c) => c.id);
+  const selectedCameraId =
+    typeof rawCamera === "string" && cameraIds.includes(rawCamera)
+      ? rawCamera
+      : "all";
+  const eventCameraIds = selectedCameraId === "all" ? cameraIds : [selectedCameraId];
+
   const cameraLabelById = Object.fromEntries(
     cameraList.map((c) => [
       c.id,
@@ -413,6 +436,7 @@ export default async function WildlifeActivityPage(props: {
         <ActivityPageHeader
           period={period}
           revierValue={currentRevierValue}
+          cameraValue="all"
           language={language}
         />
         <div className="rounded-[24px] border border-white/10 bg-white/5 p-4 text-sm text-white/68">
@@ -424,10 +448,8 @@ export default async function WildlifeActivityPage(props: {
 
   const { data: eventsData, error: eventsError } = await supabase
     .from("event_feed")
-    .select(
-      "id,camera_id,start_at,end_at,top_species,top_count,relevance_score,asset_count"
-    )
-    .in("camera_id", cameraIds)
+    .select("id,camera_id,start_at,top_species")
+    .in("camera_id", eventCameraIds)
     .gte("start_at", startAt)
     .lt("start_at", endAt)
     .order("start_at", { ascending: false });
@@ -438,6 +460,14 @@ export default async function WildlifeActivityPage(props: {
         <ActivityPageHeader
           period={period}
           revierValue={currentRevierValue}
+          cameraValue={selectedCameraId}
+          language={language}
+        />
+        <CameraFilter
+          period={period}
+          revierValue={currentRevierValue}
+          selectedCameraId={selectedCameraId}
+          cameras={cameraList}
           language={language}
         />
         <div className="rounded-[24px] border border-rose-300/20 bg-rose-300/10 p-4 text-sm text-rose-100">
@@ -448,282 +478,99 @@ export default async function WildlifeActivityPage(props: {
   }
 
   const events = ((eventsData ?? []) as EventFeedRow[]).filter((e) => e.top_species);
-  const eventIds = events.map((e) => e.id);
 
-  let summaryRows: EventSpeciesSummaryRow[] = [];
-  if (eventIds.length > 0) {
-    try {
-      summaryRows = await fetchEventSpeciesSummaryChunked(supabase, eventIds, 200);
-    } catch (err) {
-      return (
-        <main className="space-y-8">
-          <ActivityPageHeader
-            period={period}
-            revierValue={currentRevierValue}
-            language={language}
-          />
-          <div className="rounded-[24px] border border-rose-300/20 bg-rose-300/10 p-4 text-sm text-rose-100">
-            {text.speciesSummaryLoadFailed}{" "}
-            {err instanceof Error ? err.message : text.unknownError}
-          </div>
-        </main>
-      );
-    }
-  }
-
-  const speciesStats = new Map<
-    string,
-    {
-      species: string;
-      eventCount: number;
-      topCameraId: string | null;
-      topCameraCount: number;
-      cameraCounts: Map<string, number>;
-    }
-  >();
-
-  const eventById = new Map(events.map((e) => [e.id, e]));
-
-  for (const row of summaryRows) {
-    const evt = eventById.get(row.event_id);
-    if (!evt) continue;
-
-    const existing =
-      speciesStats.get(row.species) ?? {
-        species: row.species,
-        eventCount: 0,
-        topCameraId: null,
-        topCameraCount: 0,
-        cameraCounts: new Map<string, number>(),
-      };
-
-    existing.eventCount += 1;
-
-    const prevCam = existing.cameraCounts.get(evt.camera_id) ?? 0;
-    existing.cameraCounts.set(evt.camera_id, prevCam + 1);
-
-    if (prevCam + 1 > existing.topCameraCount) {
-      existing.topCameraCount = prevCam + 1;
-      existing.topCameraId = evt.camera_id;
-    }
-
-    speciesStats.set(row.species, existing);
-  }
-
-  const speciesOverview = Array.from(speciesStats.values()).sort(
-    (a, b) => b.eventCount - a.eventCount
-  );
-
-  const overallHourly = Array.from({ length: 24 }, (_, hour) => ({
+  const hourlyActivity = Array.from({ length: 24 }, (_, hour) => ({
     hour,
     count: 0,
   }));
+  const cameraEventCounts = new Map<string, number>();
 
   for (const evt of events) {
+    cameraEventCounts.set(evt.camera_id, (cameraEventCounts.get(evt.camera_id) ?? 0) + 1);
+
     const timeZone = timeZoneByCameraId.get(evt.camera_id) ?? DEFAULT_APP_TIME_ZONE;
-    const h = getAppHour(evt.start_at, timeZone);
-    if (h === null) continue;
-    overallHourly[h].count += 1;
+    const hour = getAppHour(evt.start_at, timeZone);
+    if (hour !== null) hourlyActivity[hour].count += 1;
   }
 
-  const maxOverallHourly = Math.max(1, ...overallHourly.map((r) => r.count));
-
-  const cameraActivity = cameraList
-    .map((c) => {
-      const camEvents = events.filter((e) => e.camera_id === c.id);
-
-      const leadingSpecies =
-        speciesOverview
-          .filter((s) => s.topCameraId === c.id)
-          .sort((a, b) => b.topCameraCount - a.topCameraCount)[0]?.species ?? null;
-
-      return {
-        cameraId: c.id,
-        cameraLabel: cameraLabelById[c.id] ?? c.name,
-        wildlifeEvents: camEvents.length,
-        avgRelevance:
-          camEvents.length > 0
-            ? camEvents.reduce((sum, e) => sum + (e.relevance_score ?? 0), 0) /
-              camEvents.length
-            : 0,
-        leadingSpecies,
-      };
-    })
-    .sort((a, b) => b.wildlifeEvents - a.wildlifeEvents);
-
-  const latestEvents = events
-    .slice()
-    .sort((a, b) => {
-      const ta = a.start_at ? new Date(a.start_at).getTime() : 0;
-      const tb = b.start_at ? new Date(b.start_at).getTime() : 0;
-      return tb - ta;
-    })
-    .slice(0, 10);
-
-  const peakHour =
-    overallHourly.slice().sort((a, b) => b.count - a.count)[0] ?? {
-      hour: 0,
-      count: 0,
-    };
+  const maxHourlyActivity = Math.max(1, ...hourlyActivity.map((row) => row.count));
+  const peakHour = hourlyActivity.slice().sort((a, b) => b.count - a.count)[0] ?? {
+    hour: 0,
+    count: 0,
+  };
+  const activeCameraCount = Array.from(cameraEventCounts.values()).filter(
+    (count) => count > 0
+  ).length;
+  const mostActiveCamera = Array.from(cameraEventCounts.entries())
+    .map(([cameraId, count]) => ({ cameraId, count }))
+    .sort((a, b) => b.count - a.count)[0] ?? null;
 
   return (
     <main className="space-y-8">
       <ActivityPageHeader
         period={period}
         revierValue={currentRevierValue}
+        cameraValue={selectedCameraId}
+        language={language}
+      />
+
+      <CameraFilter
+        period={period}
+        revierValue={currentRevierValue}
+        selectedCameraId={selectedCameraId}
+        cameras={cameraList}
         language={language}
       />
 
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <StatCard title={text.events} value={events.length} subline={text.inPeriod} />
         <StatCard
-          title={text.wildlifeEvents}
-          value={events.length}
-          subline={text.inPeriod}
-        />
-        <StatCard
-          title={text.camerasInScope}
-          value={cameraList.length}
-          subline={text.currentGroundScope}
+          title={text.mostActiveCamera}
+          value={
+            mostActiveCamera
+              ? cameraLabelById[mostActiveCamera.cameraId] ?? mostActiveCamera.cameraId
+              : "—"
+          }
+          subline={mostActiveCamera ? `${mostActiveCamera.count} ${text.events}` : text.noEvents}
         />
         <StatCard
           title={text.peakActivity}
-          value={fmtHour(peakHour.hour)}
-          subline={`${peakHour.count} ${text.events}`}
+          value={events.length > 0 ? fmtHour(peakHour.hour) : "—"}
+          subline={events.length > 0 ? `${peakHour.count} ${text.events}` : text.noEvents}
         />
         <StatCard
-          title={text.speciesInActivity}
-          value={speciesOverview.length}
-          subline={text.withActivitySignal}
+          title={text.activeCameras}
+          value={activeCameraCount}
+          subline={text.ofCameras(selectedCameraId === "all" ? cameraList.length : 1)}
         />
-      </section>
-
-      <section className="grid gap-6 lg:grid-cols-2">
-        <div className="rounded-[28px] border border-white/10 bg-white/5 p-5 backdrop-blur-sm">
-          <div className="mb-4">
-            <h2 className="text-lg font-medium text-white">
-              {text.overallWildlifeActivityByHour}
-            </h2>
-            <p className="text-sm text-white/65">
-              {text.overallWildlifeActivityByHourText}
-            </p>
-          </div>
-
-          <div className="space-y-2">
-            {overallHourly.map((row) => {
-              const widthPct = `${(row.count / maxOverallHourly) * 100}%`;
-
-              return (
-                <div
-                  key={row.hour}
-                  className="grid grid-cols-[72px_1fr_48px] items-center gap-3"
-                >
-                  <div className="text-sm text-white/72">{fmtHour(row.hour)}</div>
-                  <div className="h-5 rounded-full bg-white/8">
-                    <div
-                      className="h-5 rounded-full bg-[#c9952e]"
-                      style={{ width: widthPct }}
-                    />
-                  </div>
-                  <div className="text-right text-sm text-white/72">{row.count}</div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-
-        <div className="rounded-[28px] border border-white/10 bg-white/5 p-5 backdrop-blur-sm">
-          <div className="mb-4">
-            <h2 className="text-lg font-medium text-white">{text.cameraActivity}</h2>
-            <p className="text-sm text-white/65">{text.cameraActivityText}</p>
-          </div>
-
-          <div className="overflow-x-auto">
-            <table className="min-w-full border-collapse text-sm">
-              <thead>
-                <tr className="border-b border-white/8 text-left text-white/55">
-                  <th className="px-3 py-2 font-medium">{text.camera}</th>
-                  <th className="px-3 py-2 font-medium">{text.wildlifeEvents}</th>
-                  <th className="px-3 py-2 font-medium">{text.avgRelevance}</th>
-                  <th className="px-3 py-2 font-medium">{text.leadingSpecies}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {cameraActivity.map((row) => (
-                  <tr
-                    key={row.cameraId}
-                    className="border-b border-white/8 last:border-b-0"
-                  >
-                    <td className="px-3 py-2 text-white/72">{row.cameraLabel}</td>
-                    <td className="px-3 py-2 text-white/72">{row.wildlifeEvents}</td>
-                    <td className="px-3 py-2 text-white/72">
-                      {`${Math.round(row.avgRelevance * 100)}%`}
-                    </td>
-                    <td className="px-3 py-2 text-white/72">
-                      {getSpeciesLabel(row.leadingSpecies, language, speciesMetaMap)}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-
-          {cameraActivity.length === 0 && (
-            <div className="mt-3 text-sm text-white/68">{text.noCameraActivity}</div>
-          )}
-        </div>
       </section>
 
       <section className="rounded-[28px] border border-white/10 bg-white/5 p-5 backdrop-blur-sm">
-        <div className="mb-4 flex items-center justify-between">
-          <div>
-            <h2 className="text-lg font-medium text-white">{text.latestWildlifeEvents}</h2>
-            <p className="text-sm text-white/65">{text.latestWildlifeEventsText}</p>
+        <div className="mb-5">
+          <h2 className="text-lg font-medium text-white">{text.activityByHour}</h2>
+          <p className="text-sm text-white/65">{text.activityByHourText}</p>
+        </div>
+
+        {events.length === 0 ? (
+          <div className="rounded-[14px] border border-white/10 bg-white/5 p-4 text-sm text-white/68">
+            {text.noActivityData}
           </div>
-
-          <Link
-            href="/cameras/ingest"
-            className="rounded-[10px] border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/78 hover:border-amber-300/20 hover:bg-white/8 hover:text-white"
-          >
-            {text.toIngest}
-          </Link>
-        </div>
-
-        <div className="space-y-3">
-          {latestEvents.map((evt) => {
-            const timeZone =
-              timeZoneByCameraId.get(evt.camera_id) ?? DEFAULT_APP_TIME_ZONE;
-
-            return (
-              <Link
-                key={evt.id}
-                href={`/cameras/events/${evt.id}`}
-                className="block rounded-[20px] border border-white/10 bg-white/5 p-3 text-sm hover:bg-white/8"
-              >
-                <div className="flex items-center justify-between gap-3">
-                  <div className="font-medium text-white">
-                    {getSpeciesLabel(evt.top_species, language, speciesMetaMap)}
-                    {typeof evt.top_count === "number" ? ` (${evt.top_count})` : ""}
-                  </div>
-                  <div className="text-white/72">
-                    {typeof evt.relevance_score === "number"
-                      ? evt.relevance_score.toFixed(3)
-                      : "—"}
-                  </div>
+        ) : (
+          <div className="space-y-2">
+            {hourlyActivity.map((row) => (
+              <div key={row.hour} className="grid grid-cols-[56px_1fr_48px] items-center gap-3 text-sm">
+                <div className="tabular-nums text-white/55">{fmtHour(row.hour)}</div>
+                <div className="h-3 overflow-hidden rounded-full bg-white/8">
+                  <div
+                    className="h-full rounded-full bg-[#c9952e]"
+                    style={{ width: `${Math.max(2, (row.count / maxHourlyActivity) * 100)}%` }}
+                  />
                 </div>
-
-                <div className="mt-1 text-xs text-white/45">
-                  {cameraLabelById[evt.camera_id] ?? evt.camera_id} ·{" "}
-                  {fmtTs(evt.start_at, language, timeZone)} · {text.assets}{" "}
-                  {evt.asset_count ?? 0}
-                </div>
-              </Link>
-            );
-          })}
-
-          {latestEvents.length === 0 && (
-            <div className="text-sm text-white/68">{text.noWildlifeEventsYet}</div>
-          )}
-        </div>
+                <div className="text-right tabular-nums text-white/65">{row.count}</div>
+              </div>
+            ))}
+          </div>
+        )}
       </section>
     </main>
   );

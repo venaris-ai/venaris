@@ -1,4 +1,4 @@
-// src/app/api/asset-relevant/route.ts #6
+// src/app/api/asset-relevant/route.ts #7
 export const runtime = "nodejs";
 
 import { NextRequest, NextResponse } from "next/server";
@@ -14,6 +14,8 @@ function t(language: AppLanguage) {
         relevantMustBeBooleanOrNull: "relevant must be boolean or null",
         assetNotFound: "asset not found",
         notAllowed: "not allowed",
+        assetAlreadyDeleted:
+          "The image file has already been deleted and cannot be restored.",
       }
     : {
         activeOrganizationNotFound: "aktive Organisation nicht gefunden",
@@ -21,7 +23,13 @@ function t(language: AppLanguage) {
         relevantMustBeBooleanOrNull: "relevant muss boolean oder null sein",
         assetNotFound: "Asset nicht gefunden",
         notAllowed: "nicht erlaubt",
+        assetAlreadyDeleted:
+          "Die Bilddatei wurde bereits gelöscht und kann nicht wiederhergestellt werden.",
       };
+}
+
+function getStorageDeleteAfterIso() {
+  return new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
 }
 
 export async function POST(req: NextRequest) {
@@ -63,7 +71,7 @@ export async function POST(req: NextRequest) {
 
     const { data: asset, error: assetError } = await supabase
       .from("assets")
-      .select("id, camera_id")
+      .select("id, camera_id, storage_deleted_at")
       .eq("id", assetId)
       .maybeSingle();
 
@@ -89,9 +97,31 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: text.notAllowed }, { status: 403 });
     }
 
+    if (relevant !== false && asset.storage_deleted_at) {
+      return NextResponse.json(
+        { error: text.assetAlreadyDeleted },
+        { status: 409 }
+      );
+    }
+
+    const assetUpdate =
+      relevant === false
+        ? {
+            relevant_user: relevant,
+            storage_delete_after: getStorageDeleteAfterIso(),
+            storage_delete_reason: "manual_irrelevant",
+            storage_delete_error: null,
+          }
+        : {
+            relevant_user: relevant,
+            storage_delete_after: null,
+            storage_delete_reason: null,
+            storage_delete_error: null,
+          };
+
     const { error: updateAssetError } = await supabase
       .from("assets")
-      .update({ relevant_user: relevant })
+      .update(assetUpdate)
       .eq("id", assetId);
 
     if (updateAssetError) {
@@ -116,29 +146,28 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    const { data: reclusterEventId, error: reclusterError } = await supabase.rpc(
+      "recluster_asset_event",
+      {
+        p_asset_id: assetId,
+      }
+    );
 
-const { data: reclusterEventId, error: reclusterError } = await supabase.rpc(
-  "recluster_asset_event",
-  {
-    p_asset_id: assetId,
-  }
-);
+    if (reclusterError) {
+      return NextResponse.json(
+        { error: reclusterError.message },
+        { status: 500 }
+      );
+    }
 
-if (reclusterError) {
-  return NextResponse.json(
-    { error: reclusterError.message },
-    { status: 500 }
-  );
-}
-
-return NextResponse.json({
-  ok: true,
-  eventId: reclusterEventId ?? null,
-});
-
-
-
-
+    return NextResponse.json({
+      ok: true,
+      eventId: reclusterEventId ?? null,
+      storageDeleteAfter:
+        relevant === false ? assetUpdate.storage_delete_after : null,
+      storageDeleteReason:
+        relevant === false ? assetUpdate.storage_delete_reason : null,
+    });
   } catch (e: any) {
     return NextResponse.json(
       { error: "asset_relevant_api_crashed", details: e?.message ?? String(e) },

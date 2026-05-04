@@ -1,4 +1,4 @@
-// src/app/cameras/events/[id]/EventAssetReviewPanel.tsx #1
+// src/app/cameras/events/[id]/EventAssetReviewPanel.tsx #2
 "use client";
 
 import { useMemo, useState } from "react";
@@ -55,6 +55,9 @@ export default function EventAssetReviewPanel({
   topSpeciesLabel,
   eventCount,
   cameraLabel,
+  currentEventId,
+  afterRemoveHref,
+  eventQuerySuffix,
 }: {
   assets: AssetItem[];
   detectionsByAssetId: Record<string, DetectionTopRow>;
@@ -66,6 +69,9 @@ export default function EventAssetReviewPanel({
   topSpeciesLabel?: string;
   eventCount?: number | null;
   cameraLabel: string;
+  currentEventId: string;
+  afterRemoveHref: string;
+  eventQuerySuffix: string;
 }) {
   const text = t(language);
   const [selectedAssetId, setSelectedAssetId] = useState<string | null>(
@@ -115,6 +121,9 @@ export default function EventAssetReviewPanel({
             topSpeciesLabel={topSpeciesLabel}
             eventCount={eventCount}
             assetCount={assets.length}
+            currentEventId={currentEventId}
+            afterRemoveHref={afterRemoveHref}
+            eventQuerySuffix={eventQuerySuffix}
           />
         </aside>
       </section>

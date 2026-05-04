@@ -1,4 +1,4 @@
-// src/app/api/asset-species/route.ts #3
+// src/app/api/asset-species/route.ts #4
 export const runtime = "nodejs";
 
 import { NextRequest, NextResponse } from "next/server";
@@ -39,7 +39,8 @@ function t(language: AppLanguage) {
           "species must be null or a valid taxonomy species",
         assetNotFound: "asset not found",
         notAllowed: "not allowed",
-        noAnimalDetectionsFound: "no animal detections found for asset",
+        assetAlreadyDeleted:
+          "The image file has already been deleted and cannot be changed.",
       }
     : {
         activeOrganizationNotFound: "aktive Organisation nicht gefunden",
@@ -48,7 +49,8 @@ function t(language: AppLanguage) {
           "species muss null oder eine gültige taxonomy species sein",
         assetNotFound: "Asset nicht gefunden",
         notAllowed: "nicht erlaubt",
-        noAnimalDetectionsFound: "keine Tier-Detections für das Asset gefunden",
+        assetAlreadyDeleted:
+          "Die Bilddatei wurde bereits gelöscht und kann nicht mehr geändert werden.",
       };
 }
 
@@ -91,7 +93,7 @@ export async function POST(req: NextRequest) {
 
     const { data: asset, error: assetError } = await supabase
       .from("assets")
-      .select("id, camera_id")
+      .select("id, camera_id, storage_deleted_at")
       .eq("id", assetId)
       .maybeSingle();
 
@@ -117,6 +119,13 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: text.notAllowed }, { status: 403 });
     }
 
+    if (asset.storage_deleted_at) {
+      return NextResponse.json(
+        { error: text.assetAlreadyDeleted },
+        { status: 409 }
+      );
+    }
+
     const { data: animalDetections, error: detectionsError } = await supabase
       .from("detections")
       .select("id")
@@ -127,45 +136,79 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: detectionsError.message }, { status: 500 });
     }
 
-    if ((animalDetections ?? []).length === 0) {
+    const detectionIds = (animalDetections ?? []).map((row) => row.id);
+
+    if (detectionIds.length > 0) {
+      const { error: updateError } = await supabase
+        .from("detections")
+        .update({ species_user: species })
+        .in("id", detectionIds);
+
+      if (updateError) {
+        return NextResponse.json({ error: updateError.message }, { status: 500 });
+      }
+    } else if (species !== null) {
+      const { error: insertDetectionError } = await supabase
+        .from("detections")
+        .insert({
+          asset_id: assetId,
+          label: "animal",
+          species_user: species,
+          count: 1,
+          score: 1,
+          meta: {
+            source: "manual_review",
+            created_by: "asset_species_api",
+          },
+        });
+
+      if (insertDetectionError) {
+        return NextResponse.json(
+          { error: insertDetectionError.message },
+          { status: 500 }
+        );
+      }
+    }
+
+    if (species !== null) {
+      const { error: updateAssetError } = await supabase
+        .from("assets")
+        .update({
+          empty: false,
+          relevant_user: true,
+          storage_delete_after: null,
+          storage_delete_reason: null,
+          storage_delete_error: null,
+        })
+        .eq("id", assetId);
+
+      if (updateAssetError) {
+        return NextResponse.json(
+          { error: updateAssetError.message },
+          { status: 500 }
+        );
+      }
+    }
+
+    const { data: reclusterEventId, error: reclusterError } = await supabase.rpc(
+      "recluster_asset_event",
+      {
+        p_asset_id: assetId,
+      }
+    );
+
+    if (reclusterError) {
       return NextResponse.json(
-        { error: text.noAnimalDetectionsFound },
-        { status: 400 }
+        { error: reclusterError.message },
+        { status: 500 }
       );
     }
 
-    const detectionIds = (animalDetections ?? []).map((row) => row.id);
-
-    const { error: updateError } = await supabase
-      .from("detections")
-      .update({ species_user: species })
-      .in("id", detectionIds);
-
-    if (updateError) {
-      return NextResponse.json({ error: updateError.message }, { status: 500 });
-    }
-
-
-const { data: reclusterEventId, error: reclusterError } = await supabase.rpc(
-  "recluster_asset_event",
-  {
-    p_asset_id: assetId,
-  }
-);
-
-if (reclusterError) {
-  return NextResponse.json(
-    { error: reclusterError.message },
-    { status: 500 }
-  );
-}
-
-return NextResponse.json({
-  ok: true,
-  eventId: reclusterEventId ?? null,
-});
-
-
+    return NextResponse.json({
+      ok: true,
+      eventId: reclusterEventId ?? null,
+      manualDetectionCreated: detectionIds.length === 0 && species !== null,
+    });
   } catch (e: any) {
     return NextResponse.json(
       { error: "asset_species_api_crashed", details: e?.message ?? String(e) },

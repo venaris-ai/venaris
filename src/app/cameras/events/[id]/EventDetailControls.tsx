@@ -1,7 +1,8 @@
-// src/app/cameras/events/[id]/EventDetailControls.tsx #10
+// src/app/cameras/events/[id]/EventDetailControls.tsx #11
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { type AppLanguage } from "@/lib/i18n";
 import type { SpeciesOption } from "@/lib/speciesMeta";
 
@@ -146,6 +147,9 @@ export default function EventDetailControls({
   topSpeciesLabel,
   eventCount,
   assetCount,
+  currentEventId,
+  afterRemoveHref,
+  eventQuerySuffix,
 }: {
   assetId: string | null;
   initialRelevantAuto: boolean | null;
@@ -162,7 +166,11 @@ export default function EventDetailControls({
   topSpeciesLabel?: string;
   eventCount?: number | null;
   assetCount?: number | null;
+  currentEventId: string;
+  afterRemoveHref: string;
+  eventQuerySuffix: string;
 }) {
+  const router = useRouter();
   const text = t(language);
 
   const initialRelevantValue = relevantToSelect(
@@ -178,17 +186,13 @@ export default function EventDetailControls({
   const [busy, setBusy] = useState(false);
   const [isReadOnlyModalOpen, setIsReadOnlyModalOpen] = useState(false);
 
+  const isManuallyNotRelevant = relevantValue === "no";
+  const hasManualSpeciesOverride =
+    !isManuallyNotRelevant && speciesValue !== "auto";
 
-const isManuallyNotRelevant = relevantValue === "no";
-const hasManualSpeciesOverride =
-  !isManuallyNotRelevant && speciesValue !== "auto";
-
-const dirty =
-  relevantValue !== initialRelevantValue ||
-  (!isManuallyNotRelevant && speciesValue !== initialSpeciesValue);
-
-
-
+  const dirty =
+    relevantValue !== initialRelevantValue ||
+    (!isManuallyNotRelevant && speciesValue !== initialSpeciesValue);
 
   async function saveChanges() {
     if (!assetId || !dirty || busy || isDemo) return;
@@ -198,67 +202,71 @@ const dirty =
     try {
       const nextRelevant = selectToRelevantUser(relevantValue);
 
+      const relevantRes = await fetch("/api/asset-relevant", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          assetId,
+          relevant: nextRelevant,
+        }),
+      });
 
-const relevantRes = await fetch("/api/asset-relevant", {
-  method: "POST",
-  headers: { "Content-Type": "application/json" },
-  body: JSON.stringify({
-    assetId,
-    relevant: nextRelevant,
-  }),
-});
+      if (!relevantRes.ok) {
+        const rawText = await relevantRes.text();
+        throw new Error(rawText || `Relevant HTTP ${relevantRes.status}`);
+      }
 
-if (!relevantRes.ok) {
-  const rawText = await relevantRes.text();
-  throw new Error(rawText || `Relevant HTTP ${relevantRes.status}`);
-}
-
-const relevantPayload = await relevantRes.json().catch(() => null);
-let nextEventId =
-  typeof relevantPayload?.eventId === "string" ? relevantPayload.eventId : null;
-
-if (nextRelevant) {
-  const nextSpecies = speciesValue === "auto" ? null : speciesValue;
-
-  const speciesRes = await fetch("/api/asset-species", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      assetId,
-      species: nextSpecies,
-    }),
-  });
-
-  if (!speciesRes.ok) {
-    const rawText = await speciesRes.text();
-    throw new Error(rawText || `Species HTTP ${speciesRes.status}`);
-  }
-
-  const speciesPayload = await speciesRes.json().catch(() => null);
-  nextEventId =
-    typeof speciesPayload?.eventId === "string"
-      ? speciesPayload.eventId
-      : nextEventId;
-}
-
-if (nextEventId) {
-  window.location.href = `/cameras/events/${nextEventId}`;
-  return;
-}
+      const relevantPayload = await relevantRes.json().catch(() => null);
+      let nextEventId =
+        typeof relevantPayload?.eventId === "string"
+          ? relevantPayload.eventId
+          : null;
 
 if (!nextRelevant) {
-  window.location.href = "/cameras/ingest";
+  if (typeof assetCount === "number" && assetCount > 1) {
+    router.refresh();
+    return;
+  }
+
+  router.push(afterRemoveHref);
   return;
 }
 
-window.location.reload();
 
 
 
+      const nextSpecies = speciesValue === "auto" ? null : speciesValue;
 
+      const speciesRes = await fetch("/api/asset-species", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          assetId,
+          species: nextSpecies,
+        }),
+      });
 
+      if (!speciesRes.ok) {
+        const rawText = await speciesRes.text();
+        throw new Error(rawText || `Species HTTP ${speciesRes.status}`);
+      }
 
+      const speciesPayload = await speciesRes.json().catch(() => null);
+      nextEventId =
+        typeof speciesPayload?.eventId === "string"
+          ? speciesPayload.eventId
+          : nextEventId;
 
+      if (
+        typeof nextEventId === "string" &&
+        nextEventId !== currentEventId &&
+        assetCount === 1
+      ) {
+        router.push(`/cameras/events/${nextEventId}${eventQuerySuffix}`);
+        return;
+      }
+
+      router.refresh();
     } catch (error) {
       const message = String((error as { message?: string })?.message ?? error);
       alert(`${text.couldNotSave} ${message}`);
@@ -385,18 +393,14 @@ window.location.reload();
           </div>
         </div>
 
-
-<div className="rounded-[20px] border border-white/10 bg-white/5 p-4">
-  <div className="text-xs text-white/45">{text.probability}</div>
-  <div className="mt-1 text-sm font-medium text-white">
-    {isManuallyNotRelevant || hasManualSpeciesOverride
-      ? text.manual
-      : formatProbability(probabilityScore, language)}
-  </div>
-</div>
-
-
-
+        <div className="rounded-[20px] border border-white/10 bg-white/5 p-4">
+          <div className="text-xs text-white/45">{text.probability}</div>
+          <div className="mt-1 text-sm font-medium text-white">
+            {isManuallyNotRelevant || hasManualSpeciesOverride
+              ? text.manual
+              : formatProbability(probabilityScore, language)}
+          </div>
+        </div>
 
         <div className="rounded-[20px] border border-white/10 bg-white/5 p-4">
           <div className="text-xs text-white/45">{text.camera}</div>

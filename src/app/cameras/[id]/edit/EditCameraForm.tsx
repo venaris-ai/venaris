@@ -1,4 +1,4 @@
-// src/app/cameras/[id]/edit/EditCameraForm.tsx #1
+// src/app/cameras/[id]/edit/EditCameraForm.tsx #2
 "use client";
 
 import Link from "next/link";
@@ -55,9 +55,15 @@ function t(language: AppLanguage) {
       ground: "Ground",
       locationName: "Location name (optional)",
       locationPlaceholder: "e.g. Forest edge west",
-      latitude: "Latitude (optional)",
-      longitude: "Longitude (optional)",
+      latitude: "Latitude (N/S, optional)",
+      longitude: "Longitude (E/W, optional)",
       direction: "Direction (0–359, optional)",
+      latitudePlaceholder: "e.g. N 51.82752",
+      longitudePlaceholder: "e.g. E 7.12735",
+      north: "N",
+      south: "S",
+      east: "E",
+      west: "W",
       notes: "Notes (optional)",
       notesPlaceholder: "Optional setup notes",
       status: "Status",
@@ -70,6 +76,7 @@ function t(language: AppLanguage) {
       cancel: "Cancel",
       selectGround: "Please select a ground.",
       invalidDirection: "Direction must be between 0 and 359.",
+      invalidCoordinates: "Latitude and longitude must be valid numbers.",
       updateFailed: "Failed to update camera",
       unexpectedError: "Unexpected error",
       demoReadOnly: "Demo mode: changes are disabled.",
@@ -91,9 +98,15 @@ function t(language: AppLanguage) {
     ground: "Revier",
     locationName: "Standortname (optional)",
     locationPlaceholder: "z. B. Waldrand West",
-    latitude: "Breitengrad (optional)",
-    longitude: "Längengrad (optional)",
+    latitude: "Breitengrad (N/S, optional)",
+    longitude: "Längengrad (O/W, optional)",
     direction: "Richtung (0–359, optional)",
+    latitudePlaceholder: "z. B. N 51,82752",
+    longitudePlaceholder: "z. B. O 7,12735",
+    north: "N",
+    south: "S",
+    east: "O",
+    west: "W",
     notes: "Notizen (optional)",
     notesPlaceholder: "Optionale Setup-Notizen",
     status: "Status",
@@ -106,6 +119,7 @@ function t(language: AppLanguage) {
     cancel: "Abbrechen",
     selectGround: "Bitte ein Revier auswählen.",
     invalidDirection: "Richtung muss zwischen 0 und 359 liegen.",
+    invalidCoordinates: "Breitengrad und Längengrad müssen gültige Zahlen sein.",
     updateFailed: "Kamera konnte nicht aktualisiert werden",
     unexpectedError: "Unerwarteter Fehler",
     demoReadOnly: "Demo-Modus: Änderungen sind deaktiviert.",
@@ -115,6 +129,52 @@ function t(language: AppLanguage) {
       "Das ist ein Demo-Account. Datensätze können weder entfernt noch hinzugefügt oder geändert werden.",
     understood: "Verstanden",
   };
+}
+
+function parseOptionalNumber(value: string) {
+  const normalized = value.trim().replace(",", ".");
+  if (!normalized) return null;
+
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? parsed : Number.NaN;
+}
+
+function parseLatitude(value: string) {
+  const normalized = value.trim().replace(",", ".");
+  if (!normalized) return null;
+
+  const prefixedMatch = normalized.match(/^([NS])\s*(.+)$/i);
+  if (!prefixedMatch) return parseOptionalNumber(normalized);
+
+  const hemisphere = prefixedMatch[1].toUpperCase();
+  const parsed = parseOptionalNumber(prefixedMatch[2]);
+
+  if (parsed === null || Number.isNaN(parsed)) return parsed;
+  return hemisphere === "S" ? -Math.abs(parsed) : Math.abs(parsed);
+}
+
+function parseLongitude(value: string) {
+  const normalized = value.trim().replace(",", ".");
+  if (!normalized) return null;
+
+  const prefixedMatch = normalized.match(/^([EOW])\s*(.+)$/i);
+  if (!prefixedMatch) return parseOptionalNumber(normalized);
+
+  const hemisphere = prefixedMatch[1].toUpperCase();
+  const parsed = parseOptionalNumber(prefixedMatch[2]);
+
+  if (parsed === null || Number.isNaN(parsed)) return parsed;
+  return hemisphere === "W" ? -Math.abs(parsed) : Math.abs(parsed);
+}
+
+function formatLatitude(value: number | null) {
+  if (value === null) return "";
+  return `${value < 0 ? "S" : "N"} ${Math.abs(value)}`;
+}
+
+function formatLongitude(value: number | null, language: AppLanguage) {
+  if (value === null) return "";
+  return `${value < 0 ? "W" : language === "en" ? "E" : "O"} ${Math.abs(value)}`;
 }
 
 function formatRevierLabel(revier: Revier, language: AppLanguage) {
@@ -161,17 +221,17 @@ export default function EditCameraForm({
   const [vendor, setVendor] = useState(currentVendor || vendors[0]?.key || "");
   const [revierId, setRevierId] = useState(camera.revier_id);
   const [locationName, setLocationName] = useState(camera.location_name ?? "");
-  const [latitude, setLatitude] = useState(
-    camera.latitude === null ? "" : String(camera.latitude)
-  );
+  const [latitude, setLatitude] = useState(formatLatitude(camera.latitude));
   const [longitude, setLongitude] = useState(
-    camera.longitude === null ? "" : String(camera.longitude)
+    formatLongitude(camera.longitude, language),
   );
   const [directionDeg, setDirectionDeg] = useState(
-    camera.direction_deg === null ? "" : String(camera.direction_deg)
+    camera.direction_deg === null ? "" : String(camera.direction_deg),
   );
   const [notes, setNotes] = useState(camera.notes ?? "");
-  const [status, setStatus] = useState(camera.is_active ? "active" : "disabled");
+  const [status, setStatus] = useState(
+    camera.is_active ? "active" : "disabled",
+  );
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [showDemoModal, setShowDemoModal] = useState(false);
@@ -189,10 +249,24 @@ export default function EditCameraForm({
       return;
     }
 
-    const parsedDirection = directionDeg === "" ? null : Number(directionDeg);
+    const parsedLatitude = parseLatitude(latitude);
+    const parsedLongitude = parseLongitude(longitude);
+    const parsedDirection = parseOptionalNumber(directionDeg);
+
+    if (
+      Number.isNaN(parsedLatitude) ||
+      Number.isNaN(parsedLongitude) ||
+      Number.isNaN(parsedDirection)
+    ) {
+      setError(text.invalidCoordinates);
+      return;
+    }
+
     if (
       parsedDirection !== null &&
-      (!Number.isInteger(parsedDirection) || parsedDirection < 0 || parsedDirection >= 360)
+      (!Number.isInteger(parsedDirection) ||
+        parsedDirection < 0 ||
+        parsedDirection >= 360)
     ) {
       setError(text.invalidDirection);
       return;
@@ -211,8 +285,8 @@ export default function EditCameraForm({
           revierId,
           cameraName,
           locationName: locationName || null,
-          latitude: latitude ? Number(latitude) : null,
-          longitude: longitude ? Number(longitude) : null,
+          latitude: parsedLatitude,
+          longitude: parsedLongitude,
           directionDeg: parsedDirection,
           notes: notes || null,
           isActive: status === "active",
@@ -238,26 +312,6 @@ export default function EditCameraForm({
 
   return (
     <div className="space-y-6">
-      <section className="rounded-[28px] border border-white/10 bg-white/5 p-5 backdrop-blur-sm">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div>
-            <h2 className="text-base font-semibold text-white">{text.metaTitle}</h2>
-            <p className="mt-1 text-sm leading-6 text-white/68">{text.metaText}</p>
-          </div>
-        </div>
-
-        <div className="mt-4 grid gap-3 sm:grid-cols-2">
-          <div className="rounded-[14px] border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/72">
-            <span className="font-medium text-white">{text.technicalName}:</span>{" "}
-            {camera.technical_name ?? "—"}
-          </div>
-          <div className="rounded-[14px] border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/72">
-            <span className="font-medium text-white">{text.method}:</span>{" "}
-            {formatMethod(camera.import_method, language)}
-          </div>
-        </div>
-      </section>
-
       {isDemo ? (
         <section className="rounded-[24px] border border-amber-300/20 bg-amber-300/10 p-4">
           <p className="text-sm text-amber-100">{text.demoReadOnly}</p>
@@ -320,7 +374,11 @@ export default function EditCameraForm({
               title={isDemo ? text.demoReadOnly : ""}
             >
               {reviers.map((revier) => (
-                <option key={revier.id} value={revier.id} className="bg-[#102018] text-white">
+                <option
+                  key={revier.id}
+                  value={revier.id}
+                  className="bg-[#102018] text-white"
+                >
                   {formatRevierLabel(revier, language)}
                 </option>
               ))}
@@ -341,54 +399,67 @@ export default function EditCameraForm({
             />
           </div>
 
-          <div>
-            <label className="mb-1 block text-sm font-medium text-white">
-              {text.latitude}
-            </label>
-            <input
-              type="number"
-              step="any"
-              value={latitude}
-              onChange={(e) => setLatitude(e.target.value)}
-              className="w-full rounded-[14px] border border-white/10 bg-white/5 px-3 py-2 text-white outline-none placeholder:text-white/35 disabled:bg-white/5 disabled:text-white/35"
-              placeholder="52.123456"
-              disabled={loading || isDemo}
-              title={isDemo ? text.demoReadOnly : ""}
-            />
+          <div className="md:col-span-2">
+            <div className="grid gap-5 md:grid-cols-3">
+              <div>
+                <label className="mb-1 block text-sm font-medium text-white">
+                  {text.latitude}
+                </label>
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  value={latitude}
+                  onChange={(e) => setLatitude(e.target.value)}
+                  className="w-full rounded-[14px] border border-white/10 bg-white/5 px-3 py-2 text-white outline-none placeholder:text-white/35 disabled:bg-white/5 disabled:text-white/35"
+                  placeholder={text.latitudePlaceholder}
+                  disabled={loading || isDemo}
+                  title={isDemo ? text.demoReadOnly : ""}
+                />
+              </div>
+
+              <div>
+                <label className="mb-1 block text-sm font-medium text-white">
+                  {text.longitude}
+                </label>
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  value={longitude}
+                  onChange={(e) => setLongitude(e.target.value)}
+                  className="w-full rounded-[14px] border border-white/10 bg-white/5 px-3 py-2 text-white outline-none placeholder:text-white/35 disabled:bg-white/5 disabled:text-white/35"
+                  placeholder={text.longitudePlaceholder}
+                  disabled={loading || isDemo}
+                  title={isDemo ? text.demoReadOnly : ""}
+                />
+              </div>
+
+              <div>
+                <label className="mb-1 block text-sm font-medium text-white">
+                  {text.direction}
+                </label>
+                <input
+                  type="number"
+                  min={0}
+                  max={359}
+                  step={1}
+                  value={directionDeg}
+                  onChange={(e) => setDirectionDeg(e.target.value)}
+                  className="w-full rounded-[14px] border border-white/10 bg-white/5 px-3 py-2 text-white outline-none placeholder:text-white/35 disabled:bg-white/5 disabled:text-white/35"
+                  placeholder="180"
+                  disabled={loading || isDemo}
+                  title={isDemo ? text.demoReadOnly : ""}
+                />
+              </div>
+            </div>
           </div>
 
           <div>
             <label className="mb-1 block text-sm font-medium text-white">
-              {text.longitude}
+              {text.method}
             </label>
-            <input
-              type="number"
-              step="any"
-              value={longitude}
-              onChange={(e) => setLongitude(e.target.value)}
-              className="w-full rounded-[14px] border border-white/10 bg-white/5 px-3 py-2 text-white outline-none placeholder:text-white/35 disabled:bg-white/5 disabled:text-white/35"
-              placeholder="8.123456"
-              disabled={loading || isDemo}
-              title={isDemo ? text.demoReadOnly : ""}
-            />
-          </div>
-
-          <div>
-            <label className="mb-1 block text-sm font-medium text-white">
-              {text.direction}
-            </label>
-            <input
-              type="number"
-              min={0}
-              max={359}
-              step={1}
-              value={directionDeg}
-              onChange={(e) => setDirectionDeg(e.target.value)}
-              className="w-full rounded-[14px] border border-white/10 bg-white/5 px-3 py-2 text-white outline-none placeholder:text-white/35 disabled:bg-white/5 disabled:text-white/35"
-              placeholder="180"
-              disabled={loading || isDemo}
-              title={isDemo ? text.demoReadOnly : ""}
-            />
+            <div className="w-full rounded-[14px] border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/72">
+              {formatMethod(camera.import_method, language)}
+            </div>
           </div>
 
           <div>
@@ -453,7 +524,9 @@ export default function EditCameraForm({
       {showDemoModal ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="w-full max-w-md rounded-[20px] border border-white/10 bg-[#102018] p-6 shadow-2xl">
-            <h3 className="text-lg font-semibold text-white">{text.demoTitle}</h3>
+            <h3 className="text-lg font-semibold text-white">
+              {text.demoTitle}
+            </h3>
             <p className="mt-2 text-sm text-white/70">{text.demoText}</p>
 
             <div className="mt-5 flex items-center justify-end gap-3">
