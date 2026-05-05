@@ -1,4 +1,4 @@
-// src/app/orga/reviere/page.tsx #14
+// src/app/orga/reviere/page.tsx #15
 import Link from "next/link";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
@@ -26,6 +26,10 @@ type RevierRow = {
   created_at: string;
   is_default: boolean;
   timezone: string;
+};
+
+type RevierBoundaryRow = {
+  revier_id: string;
 };
 
 async function resolveUiLanguageForProtectedPath(pathname: string) {
@@ -86,12 +90,15 @@ function t(language: AppLanguage) {
         areaCol: "Area",
         timezoneCol: "Time zone",
         statusCol: "Status",
+        boundaryCol: "Boundary",
         actionsCol: "Actions",
         defaultBadge: "Default",
         active: "Active",
         paused: "Paused",
         archived: "Archived",
         unknown: "Unknown",
+        boundaryCaptured: "Captured",
+        boundaryMissing: "Not captured",
       }
     : {
         missingTarget: "Ziel-Revier fehlt.",
@@ -125,12 +132,15 @@ function t(language: AppLanguage) {
         areaCol: "Fläche",
         timezoneCol: "Zeitzone",
         statusCol: "Status",
+        boundaryCol: "Kontur",
         actionsCol: "Aktionen",
         defaultBadge: "Standard",
         active: "Aktiv",
         paused: "Pausiert",
         archived: "Archiviert",
         unknown: "Unbekannt",
+        boundaryCaptured: "Erfasst",
+        boundaryMissing: "Nicht erfasst",
       };
 }
 
@@ -166,6 +176,27 @@ function StatusBadge({
       className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-medium ${className}`}
     >
       {labels[status]}
+    </span>
+  );
+}
+
+function BoundaryBadge({
+  hasBoundary,
+  language,
+}: {
+  hasBoundary: boolean;
+  language: AppLanguage;
+}) {
+  const text = t(language);
+  const className = hasBoundary
+    ? "border-emerald-300/25 bg-emerald-300/10 text-emerald-100"
+    : "border-white/10 bg-white/8 text-white/55";
+
+  return (
+    <span
+      className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-medium ${className}`}
+    >
+      {hasBoundary ? text.boundaryCaptured : text.boundaryMissing}
     </span>
   );
 }
@@ -308,7 +339,22 @@ export default async function OrgaRevierePage({
     throw new Error(`Failed to load reviers: ${error.message}`);
   }
 
+  const { data: boundariesData, error: boundariesError } = await supabase
+    .from("revier_boundaries")
+    .select("revier_id")
+    .eq("organization_id", organization.id);
+
+  if (boundariesError) {
+    throw new Error(
+      `Failed to load revier boundaries: ${boundariesError.message}`
+    );
+  }
+
   const reviers = (data ?? []) as RevierRow[];
+  const boundaryRows = (boundariesData ?? []) as RevierBoundaryRow[];
+  const boundaryRevierIds = new Set(
+    boundaryRows.map((boundary) => boundary.revier_id)
+  );
 
   const activeCount = reviers.filter(
     (revier) => revier.status === "active"
@@ -427,6 +473,9 @@ export default async function OrgaRevierePage({
                   <th className="whitespace-nowrap px-6 py-3 font-medium">
                     {text.statusCol}
                   </th>
+                  <th className="whitespace-nowrap px-6 py-3 font-medium">
+                    {text.boundaryCol}
+                  </th>
                   <th className="whitespace-nowrap px-6 py-3 text-right font-medium">
                     {text.actionsCol}
                   </th>
@@ -456,11 +505,15 @@ export default async function OrgaRevierePage({
                     <td className="whitespace-nowrap px-6 py-4 text-white/72">
                       {revier.timezone}
                     </td>
-
-<td className="whitespace-nowrap px-6 py-4">
-  <StatusBadge status={revier.status} language={language} />
-</td>
-
+                    <td className="whitespace-nowrap px-6 py-4">
+                      <StatusBadge status={revier.status} language={language} />
+                    </td>
+                    <td className="whitespace-nowrap px-6 py-4">
+                      <BoundaryBadge
+                        hasBoundary={boundaryRevierIds.has(revier.id)}
+                        language={language}
+                      />
+                    </td>
 
                     <RevierRowActions
                       revierId={revier.id}

@@ -24,9 +24,14 @@ const STORAGE_DOWNLOAD_ENABLED =
 // EXIF safety caps (soft)
 const EXIF_MAX_BYTES = Number(process.env.EXIF_MAX_BYTES || 6_000_000);
 const EXIF_TIMEOUT_MS = Number(process.env.EXIF_TIMEOUT_MS || 4_000);
+const EXIF_MAX_FUTURE_MINUTES = Number(
+  process.env.EXIF_MAX_FUTURE_MINUTES || 30
+);
+const EXIF_MAX_PAST_YEARS = Number(process.env.EXIF_MAX_PAST_YEARS || 5);
+const DEFAULT_TIME_ZONE = process.env.DEFAULT_TIME_ZONE || "Europe/Berlin";
 
 const EXIF_ONLY_FOR_IMPORT_METHODS = new Set(
-  (process.env.EXIF_ONLY_FOR_IMPORT_METHODS || "ftp,manual,token-ingest")
+  (process.env.EXIF_ONLY_FOR_IMPORT_METHODS || "ftp,manual,smtp,token-ingest")
     .split(",")
     .map((s) => s.trim())
     .filter(Boolean)
@@ -72,11 +77,228 @@ function exifrParse() {
   return exifrNS?.parse || exifrDefault?.parse || exifrNS?.default?.parse || null;
 }
 
-function toIso(dt) {
-  if (!dt) return null;
-  if (dt instanceof Date && !isNaN(dt.getTime())) return dt.toISOString();
-  const parsed = new Date(dt);
-  return isNaN(parsed.getTime()) ? null : parsed.toISOString();
+const EXPLICIT_OFFSET_RE = /(?:z|[+-]\d{2}:?\d{2})$/i;
+
+function isValidTimeZone(value) {
+  if (!value || typeof value !== "string") return false;
+  try {
+    new Intl.DateTimeFormat("en-US", { timeZone: value }).format(new Date());
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function normalizeTimeZone(value) {
+  const trimmed = typeof value === "string" ? value.trim() : "";
+  return isValidTimeZone(trimmed) ? trimmed : DEFAULT_TIME_ZONE;
+}
+
+function parseNaiveExifString(value) {
+  if (!value || typeof value !== "string") return null;
+
+  const trimmed = value.trim();
+
+  const m = trimmed.match(
+    /^(\d{4})[-:](\d{2})[-:](\d{2})[ T](\d{2}):(\d{2})(?::(\d{2})(?:\.(\d{1,3}))?)?$/
+  );
+
+  if (!m) return null;
+
+  return {
+    year: Number(m[1]),
+    month: Number(m[2]),
+    day: Number(m[3]),
+    hour: Number(m[4]),
+    minute: Number(m[5]),
+    second: Number(m[6] ?? 0),
+    millisecond: Number((m[7] ?? "0").padEnd(3, "0")),
+  };
+}
+
+function dateObjectAsWallTimeParts(value) {
+  if (!(value instanceof Date) || Number.isNaN(value.getTime())) return null;
+
+  return {
+    year: value.getUTCFullYear(),
+    month: value.getUTCMonth() + 1,
+    day: value.getUTCDate(),
+    hour: value.getUTCHours(),
+    minute: value.getUTCMinutes(),
+    second: value.getUTCSeconds(),
+    millisecond: value.getUTCMilliseconds(),
+  };
+}
+
+function getTimeZoneOffsetMs(utcMs, timeZone) {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    hourCycle: "h23",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  }).formatToParts(new Date(utcMs));
+
+  const valueByType = new Map(
+    parts
+      .filter((part) => part.type !== "literal")
+      .map((part) => [part.type, part.value])
+  );
+
+  const asUtcMs = Date.UTC(
+    Number(valueByType.get("year")),
+    Number(valueByType.get("month")) - 1,
+    Number(valueByType.get("day")),
+    Number(valueByType.get("hour")),
+    Number(valueByType.get("minute")),
+    Number(valueByType.get("second")),
+    0
+  );
+
+  return asUtcMs - utcMs;
+}
+
+function addMinutesToParts(parts, minutes) {
+  const ms = Date.UTC(
+    parts.year,
+    parts.month - 1,
+    parts.day,
+    parts.hour,
+    parts.minute,
+    parts.second,
+    parts.millisecond
+  );
+
+  const shifted = new Date(ms + Number(minutes || 0) * 60_000);
+
+  return {
+    year: shifted.getUTCFullYear(),
+    month: shifted.getUTCMonth() + 1,
+    day: shifted.getUTCDate(),
+    hour: shifted.getUTCHours(),
+    minute: shifted.getUTCMinutes(),
+    second: shifted.getUTCSeconds(),
+    millisecond: shifted.getUTCMilliseconds(),
+  };
+}
+
+function wallTimePartsToUtcIso(parts, timeZone) {
+  const wallAsUtcMs = Date.UTC(
+    parts.year,
+    parts.month - 1,
+    parts.day,
+    parts.hour,
+    parts.minute,
+    parts.second,
+    parts.millisecond
+  );
+
+  let utcMs = wallAsUtcMs;
+
+  for (let i = 0; i < 3; i++) {
+    const offsetMs = getTimeZoneOffsetMs(utcMs, timeZone);
+    const nextUtcMs = wallAsUtcMs - offsetMs;
+
+    if (Math.abs(nextUtcMs - utcMs) < 1) {
+      utcMs = nextUtcMs;
+      break;
+    }
+
+    utcMs = nextUtcMs;
+  }
+
+  const date = new Date(utcMs);
+  return Number.isNaN(date.getTime()) ? null : date.toISOString();
+}
+
+function validateCapturedAtIso(iso, now = new Date()) {
+  const ts = new Date(iso).getTime();
+  if (!Number.isFinite(ts)) return { ok: false, warning: "exif_parse_failed" };
+
+  const futureLimit = now.getTime() + EXIF_MAX_FUTURE_MINUTES * 60 * 1000;
+  const pastLimit = new Date(now);
+  pastLimit.setFullYear(pastLimit.getFullYear() - EXIF_MAX_PAST_YEARS);
+
+  if (ts > futureLimit) {
+    return { ok: false, warning: "exif_future" };
+  }
+
+  if (ts < pastLimit.getTime()) {
+    return { ok: false, warning: "exif_before_min_date" };
+  }
+
+  return { ok: true, warning: null };
+}
+
+function normalizeExifDate(dt, cam) {
+  const timeZone = normalizeTimeZone(cam?.timezone);
+  const clockOffsetMinutes = Number(cam?.clock_offset_minutes || 0);
+
+  if (!dt) {
+    return {
+      captured_at: null,
+      source: "exif",
+      confidence: "rejected",
+      timezone: timeZone,
+      warning: "exif_missing",
+    };
+  }
+
+  let iso = null;
+
+  if (typeof dt === "string") {
+    const trimmed = dt.trim();
+
+    if (EXPLICIT_OFFSET_RE.test(trimmed)) {
+      const parsed = new Date(trimmed);
+      iso = Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
+    } else {
+      const parts = parseNaiveExifString(trimmed);
+      const shiftedParts = parts
+        ? addMinutesToParts(parts, clockOffsetMinutes)
+        : null;
+      iso = shiftedParts ? wallTimePartsToUtcIso(shiftedParts, timeZone) : null;
+    }
+  } else if (dt instanceof Date && !Number.isNaN(dt.getTime())) {
+    const parts = dateObjectAsWallTimeParts(dt);
+    const shiftedParts = parts
+      ? addMinutesToParts(parts, clockOffsetMinutes)
+      : null;
+    iso = shiftedParts ? wallTimePartsToUtcIso(shiftedParts, timeZone) : null;
+  }
+
+  if (!iso) {
+    return {
+      captured_at: null,
+      source: "exif",
+      confidence: "rejected",
+      timezone: timeZone,
+      warning: "exif_parse_failed",
+    };
+  }
+
+  const validation = validateCapturedAtIso(iso);
+
+  if (!validation.ok) {
+    return {
+      captured_at: null,
+      source: "exif",
+      confidence: "rejected",
+      timezone: timeZone,
+      warning: validation.warning,
+    };
+  }
+
+  return {
+    captured_at: iso,
+    source: "exif",
+    confidence: "high",
+    timezone: timeZone,
+    warning: clockOffsetMinutes !== 0 ? "clock_offset_applied" : null,
+  };
 }
 
 async function withTimeout(promise, ms, label) {
@@ -122,15 +344,36 @@ async function fetchAssetCore(assetId) {
   return data;
 }
 
-async function fetchCameraImportMethod(cameraId) {
-  const { data, error } = await supabase
+async function fetchCameraContext(cameraId) {
+  const { data: camera, error } = await supabase
     .from("cameras")
-    .select("id,import_method,name")
+    .select("id,import_method,name,revier_id,clock_offset_minutes")
     .eq("id", cameraId)
     .single();
 
   if (error) throw new Error(`camera_fetch_failed:${error.message}`);
-  return data;
+
+  let timezone = DEFAULT_TIME_ZONE;
+
+  if (camera?.revier_id) {
+    const { data: revier, error: revierError } = await supabase
+      .from("reviers")
+      .select("timezone")
+      .eq("id", camera.revier_id)
+      .maybeSingle();
+
+    if (revierError) {
+      throw new Error(`revier_fetch_failed:${revierError.message}`);
+    }
+
+    timezone = normalizeTimeZone(revier?.timezone);
+  }
+
+  return {
+    ...camera,
+    timezone,
+    clock_offset_minutes: Number(camera?.clock_offset_minutes || 0),
+  };
 }
 
 async function markProcessed(assetId, patch = {}) {
@@ -332,7 +575,15 @@ function computeEmptyFromBestAnimal(bestAnimal) {
 }
 
 async function resolveCapturedAt(core, cam, buf) {
-  if (core.captured_at) return { captured_at: core.captured_at, source: "existing" };
+  if (core.captured_at) {
+    return {
+      captured_at: core.captured_at,
+      source: "existing",
+      confidence: null,
+      timezone: normalizeTimeZone(cam?.timezone),
+      warning: null,
+    };
+  }
 
   const importMethod = cam?.import_method || "unknown";
   const mayTryExif =
@@ -341,6 +592,9 @@ async function resolveCapturedAt(core, cam, buf) {
     buf.length > 0 &&
     buf.length <= EXIF_MAX_BYTES &&
     EXIF_ONLY_FOR_IMPORT_METHODS.has(importMethod);
+
+  let exifWarning = null;
+  let exifTimezone = normalizeTimeZone(cam?.timezone);
 
   if (mayTryExif) {
     const parseFn = exifrParse();
@@ -352,16 +606,41 @@ async function resolveCapturedAt(core, cam, buf) {
           "exif"
         );
         const dt = pickExifDate(exif);
-        const iso = toIso(dt);
-        if (iso) return { captured_at: iso, source: "exif" };
+        const resolved = normalizeExifDate(dt, cam);
+
+        exifWarning = resolved.warning;
+        exifTimezone = resolved.timezone;
+
+        if (resolved.captured_at) {
+          return resolved;
+        }
       } catch {
-        // ignore EXIF failures -> fallback below
+        exifWarning = "exif_parse_failed";
       }
+    } else {
+      exifWarning = "exif_unavailable";
     }
+  } else {
+    exifWarning = "exif_unavailable";
   }
 
-  if (core.created_at) return { captured_at: core.created_at, source: "created_at_fallback" };
-  return { captured_at: new Date().toISOString(), source: "now_fallback" };
+  if (core.created_at) {
+    return {
+      captured_at: core.created_at,
+      source: "created_at_fallback",
+      confidence: "fallback",
+      timezone: exifTimezone,
+      warning: exifWarning ?? "exif_unavailable",
+    };
+  }
+
+  return {
+    captured_at: new Date().toISOString(),
+    source: "now_fallback",
+    confidence: "fallback",
+    timezone: exifTimezone,
+    warning: exifWarning ?? "exif_unavailable",
+  };
 }
 
 async function processAsset(assetFromBatch) {
@@ -374,7 +653,7 @@ async function processAsset(assetFromBatch) {
       : await fetchAssetCore(assetFromBatch.id);
 
   const core = asset.camera_id ? asset : await fetchAssetCore(asset.id);
-  const cam = await fetchCameraImportMethod(core.camera_id);
+  const cam = await fetchCameraContext(core.camera_id);
 
   if (!core.storage_path) throw new Error("asset_missing_storage_path");
 
@@ -387,6 +666,10 @@ async function processAsset(assetFromBatch) {
   const resolved = await resolveCapturedAt(core, cam, buf);
   if (!core.captured_at && resolved.captured_at) {
     patch.captured_at = resolved.captured_at;
+    patch.captured_at_source = resolved.source;
+    patch.captured_at_timezone = resolved.timezone ?? null;
+    patch.captured_at_confidence = resolved.confidence ?? null;
+    patch.captured_at_warning = resolved.warning ?? null;
   }
 
   // keep extension (jpg/webp/...)
@@ -558,6 +841,9 @@ async function main() {
     STORAGE_DOWNLOAD_ENABLED,
     EXIF_MAX_BYTES,
     EXIF_TIMEOUT_MS,
+    EXIF_MAX_FUTURE_MINUTES,
+    EXIF_MAX_PAST_YEARS,
+    DEFAULT_TIME_ZONE,
     EXIF_ONLY_FOR_IMPORT_METHODS: [...EXIF_ONLY_FOR_IMPORT_METHODS],
 
     MEGADETECTOR_MODEL_PATH: MD_MODEL,
