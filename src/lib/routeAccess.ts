@@ -1,4 +1,4 @@
-// src/lib/routeAccess.ts #5
+// src/lib/routeAccess.ts #6
 import type { AppLanguage } from "@/lib/i18n";
 
 export type { AppLanguage } from "@/lib/i18n";
@@ -37,6 +37,7 @@ export const ROUTE_ACCESS_RULES: RouteAccessRule[] = [
   { path: "/cameras", allowedRoles: ["owner", "admin", "member"] },
   { path: "/cameras/new", allowedRoles: ["owner", "admin"] },
   { path: "/cameras/health", allowedRoles: ["owner", "admin", "member"] },
+  { path: "/cameras/tipps", allowedRoles: ["owner", "admin", "member"] },
   { path: "/cameras/events", match: "startsWith", allowedRoles: ["owner", "admin", "member"] },
   { path: "/cameras/import", allowedRoles: ["owner", "admin", "member"] },
   { path: "/cameras/ingest", allowedRoles: ["owner", "admin", "member"] },
@@ -75,6 +76,7 @@ export const SECTION_NAV_ITEMS = {
     { href: "/cameras/ingest", label: "Ingest", match: "exact" },
     { href: "/cameras/import", label: "Import", match: "exact" },
     { href: "/cameras/health", label: "Status", match: "exact" },
+    { href: "/cameras/tipps", label: "Tips", match: "exact" },
   ] satisfies NavItem[],
 
   orga: [
@@ -98,6 +100,7 @@ const DEMO_VISIBLE_RULES: RouteAccessRule[] = [
   { path: "/cameras", allowedRoles: ["viewer"] },
   { path: "/cameras/new", allowedRoles: ["viewer"] },
   { path: "/cameras/health", allowedRoles: ["viewer"] },
+  { path: "/cameras/tipps", allowedRoles: ["viewer"] },
   { path: "/cameras/events", match: "startsWith", allowedRoles: ["viewer"] },
   { path: "/cameras/import", allowedRoles: ["viewer"] },
   { path: "/cameras/ingest", allowedRoles: ["viewer"] },
@@ -232,6 +235,7 @@ export function getSectionNavItems(language: AppLanguage) {
           { href: "/cameras/ingest", label: "Ingest", match: "exact" },
           { href: "/cameras/import", label: "Import", match: "exact" },
           { href: "/cameras/health", label: "Status", match: "exact" },
+          { href: "/cameras/tipps", label: "Tips", match: "exact" },
         ] satisfies NavItem[],
 
         orga: [
@@ -256,6 +260,7 @@ export function getSectionNavItems(language: AppLanguage) {
           { href: "/cameras/ingest", label: "Ingest", match: "exact" },
           { href: "/cameras/import", label: "Import", match: "exact" },
           { href: "/cameras/health", label: "Status", match: "exact" },
+          { href: "/cameras/tipps", label: "Tipps", match: "exact" },
         ] satisfies NavItem[],
 
         orga: [
