@@ -550,9 +550,20 @@ export default async function HomePage() {
     );
   }
 
-  const cameras = (camerasResult.data ?? []) as CameraRow[];
-  const cameraIds = cameras.map((camera) => camera.id);
-  const reviers = (reviersResult.data ?? []) as RevierRow[];
+
+const cameras = (camerasResult.data ?? []) as CameraRow[];
+const reviers = (reviersResult.data ?? []) as RevierRow[];
+
+const activeRevierIds = new Set(reviers.map((revier) => revier.id));
+
+const scopedCameras = cameras.filter(
+  (camera) => camera.revier_id && activeRevierIds.has(camera.revier_id),
+);
+
+const cameraIds = scopedCameras.map((camera) => camera.id);
+
+
+
 
   const membersCount = membersResult.count ?? 0;
   const openInvitesCount = invitesResult.count ?? 0;
@@ -575,11 +586,16 @@ export default async function HomePage() {
         .limit(9)
         .returns<EventRow[]>(),
 
-      supabase
-        .from("events")
-        .select("id", { count: "exact", head: true })
-        .in("camera_id", cameraIds)
-        .gte("start_at", recentWindowIso),
+supabase
+  .from("event_feed")
+  .select("id", { count: "exact", head: true })
+  .in("camera_id", cameraIds)
+  .gte("start_at", recentWindowIso)
+  .lt("start_at", nowIso)
+  .not("top_species", "is", null),
+
+
+
     ]);
 
     if (latestEventsResult.error) {

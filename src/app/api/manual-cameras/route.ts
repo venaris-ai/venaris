@@ -26,6 +26,7 @@ export async function GET(req: Request) {
       .select(`
         id,
         name,
+location_name,
         technical_name,
         camera_ingest_configs!inner (
           method,
@@ -51,12 +52,16 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    const items = (data ?? []).map((row: any) => ({
-      id: row.id,
-      name: row.name,
-      technicalName: row.technical_name,
-      manualLabel: row.camera_ingest_configs?.[0]?.manual_label ?? null,
-    }));
+
+const items = (data ?? []).map((row: any) => ({
+  id: row.id,
+  name: row.name,
+  locationName: row.location_name ?? null,
+  technicalName: row.technical_name,
+  manualLabel: row.camera_ingest_configs?.[0]?.manual_label ?? null,
+}));
+
+
 
     return NextResponse.json({ items });
   } catch (err: any) {

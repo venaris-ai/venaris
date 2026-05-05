@@ -8,6 +8,7 @@ import { type AppLanguage } from "@/lib/i18n";
 type CameraRow = {
   id: string;
   name: string;
+  locationName: string | null;
   technicalName: string;
   manualLabel: string | null;
 };
@@ -341,8 +342,14 @@ export default function CamerasImportPageClient({
                 value={camera.id}
                 className="bg-[#102018] text-white"
               >
-                {camera.name}
-                {camera.technicalName ? ` · ${camera.technicalName}` : ""}
+
+
+{camera.name}
+{camera.locationName ? ` · ${camera.locationName}` : ""}
+{camera.manualLabel || camera.technicalName
+  ? ` · ${camera.manualLabel || camera.technicalName}`
+  : ""}
+
               </option>
             ))}
           </select>

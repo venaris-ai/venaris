@@ -91,8 +91,8 @@ function t(language: AppLanguage) {
       noCamerasInScope:
         "There are no cameras for the current ground scope.",
       eventsLoadFailed: "Failed to load events:",
-      events: "Events",
-      inPeriod: "in period",
+      events: "Wildlife Events",
+      inPeriod: "with species assignment in period",
       mostActiveCamera: "Most Active Camera",
       noEvents: "No events",
       peakActivity: "Peak Activity",
@@ -124,8 +124,8 @@ function t(language: AppLanguage) {
     noCamerasInScope:
       "Für den aktuellen Revier-Scope sind keine Kameras vorhanden.",
     eventsLoadFailed: "Fehler beim Laden der Ereignisse:",
-    events: "Ereignisse",
-    inPeriod: "im Zeitraum",
+    events: "Wildtier-Ereignisse",
+    inPeriod: "mit Artzuordnung im Zeitraum",
     mostActiveCamera: "Aktivste Kamera",
     noEvents: "Keine Ereignisse",
     peakActivity: "Aktivste Zeit",
@@ -446,13 +446,16 @@ export default async function WildlifeActivityPage(props: {
     );
   }
 
-  const { data: eventsData, error: eventsError } = await supabase
-    .from("event_feed")
-    .select("id,camera_id,start_at,top_species")
-    .in("camera_id", eventCameraIds)
-    .gte("start_at", startAt)
-    .lt("start_at", endAt)
-    .order("start_at", { ascending: false });
+
+const { data: eventsData, error: eventsError } = await supabase
+  .from("event_feed")
+  .select("id,camera_id,start_at,top_species")
+  .in("camera_id", eventCameraIds)
+  .gte("start_at", startAt)
+  .lt("start_at", endAt)
+  .not("top_species", "is", null)
+  .order("start_at", { ascending: false });
+
 
   if (eventsError) {
     return (
@@ -477,7 +480,7 @@ export default async function WildlifeActivityPage(props: {
     );
   }
 
-  const events = ((eventsData ?? []) as EventFeedRow[]).filter((e) => e.top_species);
+  const events = (eventsData ?? []) as EventFeedRow[];
 
   const hourlyActivity = Array.from({ length: 24 }, (_, hour) => ({
     hour,

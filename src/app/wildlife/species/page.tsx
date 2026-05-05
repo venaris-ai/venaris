@@ -1,4 +1,4 @@
-// src/app/wildlife/species/page.tsx #5
+// src/app/wildlife/species/page.tsx #6
 export const runtime = "nodejs";
 
 import Link from "next/link";
@@ -159,13 +159,18 @@ function t(language: AppLanguage) {
       speciesSummaryLoadFailed: "Failed to load species summary:",
       unknownError: "unknown error",
       species: "Species",
-      events: "Events",
+      events: "Wildlife Events",
       inPeriod: "in period",
       withSpeciesAssignment: "with species assignment",
       mostFrequentSpecies: "Most Frequent Species",
-      recordedWildlife: "Recorded Wildlife",
-      fromEvents: "from events",
+      recordedWildlife: "Counted Wildlife",
+      fromEvents: "animals counted in events",
       eventsBySpecies: "Events by Species",
+      eventsBySpeciesText:
+        "An event with multiple species is counted once for each species shown here.",
+      countedWildlifeBySpecies: "Counted Wildlife by Species",
+      countedWildlifeBySpeciesText:
+        "Sum of counted animals from events in the selected period.",
       noSpeciesData: "No species data in the selected period yet.",
     };
   }
@@ -185,13 +190,18 @@ function t(language: AppLanguage) {
     speciesSummaryLoadFailed: "Fehler beim Laden der Artenzusammenfassung:",
     unknownError: "Unbekannter Fehler",
     species: "Arten",
-    events: "Ereignisse",
+    events: "Wildtier-Ereignisse",
     inPeriod: "im Zeitraum",
     withSpeciesAssignment: "mit Artzuordnung",
     mostFrequentSpecies: "Häufigste Art",
-    recordedWildlife: "Erfasstes Wild",
-    fromEvents: "aus Ereignissen",
+    recordedWildlife: "Gezähltes Wild",
+    fromEvents: "Tiere aus Ereignissen",
     eventsBySpecies: "Ereignisse nach Art",
+    eventsBySpeciesText:
+      "Ein Ereignis mit mehreren Arten wird hier bei jeder betroffenen Art einmal gezählt.",
+    countedWildlifeBySpecies: "Gezähltes Wild nach Art",
+    countedWildlifeBySpeciesText:
+      "Summe der gezählten Tiere aus den Ereignissen im gewählten Zeitraum.",
     noSpeciesData: "Noch keine Artdaten im gewählten Zeitraum.",
   };
 }
@@ -474,6 +484,7 @@ export default async function WildlifeSpeciesPage(props: {
     .sort((a, b) => sortSpeciesOverview(a, b, language, speciesMetaMap));
   const topSpecies = speciesOverview[0] ?? null;
   const maxSpeciesEvents = Math.max(1, ...speciesOverview.map((row) => row.eventCount));
+  const maxWildCount = Math.max(1, ...speciesOverview.map((row) => row.wildCount));
 
   return (
     <main className="space-y-8">
@@ -487,7 +498,7 @@ export default async function WildlifeSpeciesPage(props: {
         <StatCard title={text.species} value={speciesOverview.length} subline={text.inPeriod} />
         <StatCard
           title={text.events}
-          value={totalSpeciesEvents}
+          value={events.length}
           subline={text.withSpeciesAssignment}
         />
         <StatCard
@@ -505,6 +516,7 @@ export default async function WildlifeSpeciesPage(props: {
       <section className="rounded-[28px] border border-white/10 bg-white/5 p-5 backdrop-blur-sm">
         <div className="mb-5">
           <h2 className="text-lg font-medium text-white">{text.eventsBySpecies}</h2>
+          <p className="mt-1 text-sm text-white/65">{text.eventsBySpeciesText}</p>
         </div>
 
         {speciesOverview.length === 0 ? (
@@ -526,6 +538,42 @@ export default async function WildlifeSpeciesPage(props: {
                 </div>
                 <div className="text-right tabular-nums text-white/68">
                   {row.eventCount}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+
+      <section className="rounded-[28px] border border-white/10 bg-white/5 p-5 backdrop-blur-sm">
+        <div className="mb-5">
+          <h2 className="text-lg font-medium text-white">
+            {text.countedWildlifeBySpecies}
+          </h2>
+          <p className="mt-1 text-sm text-white/65">
+            {text.countedWildlifeBySpeciesText}
+          </p>
+        </div>
+
+        {speciesOverview.length === 0 ? (
+          <div className="rounded-[14px] border border-white/10 bg-white/5 p-4 text-sm text-white/68">
+            {text.noSpeciesData}
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {speciesOverview.map((row) => (
+              <div key={row.species} className="grid grid-cols-[140px_1fr_64px] items-center gap-3 text-sm md:grid-cols-[220px_1fr_80px]">
+                <div className="truncate font-medium text-white">
+                  {getSpeciesLabel(row.species, language, speciesMetaMap)}
+                </div>
+                <div className="h-3 overflow-hidden rounded-full bg-white/8">
+                  <div
+                    className="h-full rounded-full bg-[#c9952e]"
+                    style={{ width: `${Math.max(2, (row.wildCount / maxWildCount) * 100)}%` }}
+                  />
+                </div>
+                <div className="text-right tabular-nums text-white/68">
+                  {row.wildCount}
                 </div>
               </div>
             ))}
