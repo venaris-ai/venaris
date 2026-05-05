@@ -1,11 +1,11 @@
-// src/app/cameras/CamerasPageClient.tsx #5
+// src/app/cameras/CamerasPageClient.tsx #6
 "use client";
 
 import dynamic from "next/dynamic";
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import type { AppLanguage } from "@/lib/i18n";
-import type { CameraMapItem } from "./CameraMap";
+import type { BoundaryGeoJson, CameraMapItem } from "./CameraMap";
 
 const CameraMap = dynamic(() => import("./CameraMap"), {
   ssr: false,
@@ -103,6 +103,8 @@ export default function CamerasPageClient({
   const revierParam = searchParams.get("revier");
 
   const [cameras, setCameras] = useState<CameraRow[]>([]);
+  const [boundaryGeoJson, setBoundaryGeoJson] =
+    useState<BoundaryGeoJson | null>(null);
   const [msg, setMsg] = useState("");
 
   const text = t(language);
@@ -129,10 +131,12 @@ export default function CamerasPageClient({
         )
       );
       setCameras([]);
+      setBoundaryGeoJson(null);
       return;
     }
 
     setCameras((json.items ?? []) as CameraRow[]);
+    setBoundaryGeoJson((json.boundaryGeoJson ?? null) as BoundaryGeoJson | null);
   }
 
   async function loadOverview() {
@@ -204,7 +208,11 @@ export default function CamerasPageClient({
         </div>
       ) : null}
 
-      <CameraMap cameras={cameras} language={language} />
+      <CameraMap
+        cameras={cameras}
+        language={language}
+        boundaryGeoJson={boundaryGeoJson}
+      />
     </main>
   );
 }

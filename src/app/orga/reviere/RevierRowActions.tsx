@@ -1,19 +1,15 @@
-// src/app/orga/reviere/RevierRowActions.tsx #8
+// src/app/orga/reviere/RevierRowActions.tsx #9
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import type { AppLanguage } from "@/lib/i18n";
-
-type DirtyEventDetail = {
-  revierId: string;
-  dirty: boolean;
-};
 
 function t(language: AppLanguage) {
   return language === "en"
     ? {
-        save: "Save changes",
+        edit: "Edit ground",
         delete: "Delete ground permanently",
         confirmDeleteTitle: "Delete ground?",
         confirmDeleteText:
@@ -27,7 +23,7 @@ function t(language: AppLanguage) {
         defaultDeleteBlocked: "Default ground cannot be deleted",
       }
     : {
-        save: "Änderungen speichern",
+        edit: "Revier bearbeiten",
         delete: "Revier dauerhaft löschen",
         confirmDeleteTitle: "Revier löschen?",
         confirmDeleteText:
@@ -42,7 +38,7 @@ function t(language: AppLanguage) {
       };
 }
 
-function SaveIcon() {
+function EditIcon() {
   return (
     <svg
       aria-hidden="true"
@@ -52,9 +48,8 @@ function SaveIcon() {
       stroke="currentColor"
       strokeWidth="2"
     >
-      <path d="M5 3h11l3 3v15H5z" />
-      <path d="M8 3v6h8V3" />
-      <path d="M9 17h6" />
+      <path d="M12 20h9" />
+      <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
     </svg>
   );
 }
@@ -80,155 +75,55 @@ function TrashIcon() {
 
 export default function RevierRowActions({
   revierId,
+  editHref,
   canDelete,
   deleteAction,
   isDemo = false,
   language,
 }: {
   revierId: string;
+  editHref: string;
   canDelete: boolean;
   deleteAction: (formData: FormData) => void | Promise<void>;
   isDemo?: boolean;
   language: AppLanguage;
 }) {
   const text = t(language);
-  const [isDirty, setIsDirty] = useState(false);
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
   const [isReadOnlyModalOpen, setIsReadOnlyModalOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
-  const formId = useMemo(() => `revier-controls-${revierId}`, [revierId]);
 
   useEffect(() => {
     setMounted(true);
   }, []);
 
-  useEffect(() => {
-    const handler = (event: Event) => {
-      const customEvent = event as CustomEvent<DirtyEventDetail>;
-      if (customEvent.detail?.revierId !== revierId) return;
-      setIsDirty(Boolean(customEvent.detail.dirty));
-    };
-
-    window.addEventListener("revier-row-dirty-change", handler);
-    return () => {
-      window.removeEventListener("revier-row-dirty-change", handler);
-    };
-  }, [revierId]);
-
   return (
     <>
-      <td className="px-6 py-4 text-right whitespace-nowrap">
+      <td className="whitespace-nowrap px-6 py-4 text-right">
         <div className="flex items-center justify-end gap-2">
-          {isDirty ? (
-            isDemo ? (
-              <button
-                type="button"
-                onClick={() => setIsReadOnlyModalOpen(true)}
-                className="inline-flex h-8 w-8 items-center justify-center rounded-[10px] border border-amber-300/20 bg-amber-300/10 text-amber-200 hover:bg-amber-300/15"
-                aria-label={text.save}
-                title={text.save}
-              >
-                <SaveIcon />
-              </button>
-            ) : (
-              <button
-                type="submit"
-                form={formId}
-                className="inline-flex h-8 w-8 items-center justify-center rounded-[10px] border border-amber-300/20 bg-amber-300/10 text-amber-200 hover:bg-amber-300/15"
-                aria-label={text.save}
-                title={text.save}
-              >
-                <SaveIcon />
-              </button>
-            )
-          ) : (
-            <span
-              className="inline-flex h-8 w-8 items-center justify-center rounded-[10px] border border-white/8 text-white/20"
-              aria-label={text.save}
-              title={text.save}
-            >
-              <SaveIcon />
-            </span>
-          )}
+          <Link
+            href={editHref}
+            className="inline-flex h-8 w-8 items-center justify-center rounded-[10px] border border-white/10 bg-white/5 text-white/72 hover:border-amber-300/20 hover:bg-amber-300/10 hover:text-amber-100"
+            aria-label={text.edit}
+            title={text.edit}
+          >
+            <EditIcon />
+          </Link>
 
           {canDelete ? (
-            <>
-              <button
-                type="button"
-                onClick={() =>
-                  isDemo
-                    ? setIsReadOnlyModalOpen(true)
-                    : setIsDeleteConfirmOpen(true)
-                }
-                className="inline-flex h-8 w-8 items-center justify-center rounded-[10px] border border-white/10 bg-white/5 text-white/72 hover:border-rose-300/20 hover:bg-rose-300/10 hover:text-rose-200"
-                aria-label={text.delete}
-                title={text.delete}
-              >
-                <TrashIcon />
-              </button>
-
-              {mounted && isDeleteConfirmOpen
-                ? createPortal(
-                    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-                      <div className="w-full max-w-md rounded-[20px] border border-white/10 bg-[#102018] p-6 shadow-2xl">
-                        <h3 className="text-lg font-semibold text-white">
-                          {text.confirmDeleteTitle}
-                        </h3>
-                        <p className="mt-2 text-sm text-white/70">
-                          {text.confirmDeleteText}
-                        </p>
-
-                        <div className="mt-5 flex items-center justify-end gap-3">
-                          <button
-                            type="button"
-                            onClick={() => setIsDeleteConfirmOpen(false)}
-                            className="rounded-[10px] border border-white/10 bg-white/5 px-4 py-2 text-sm text-white/78 hover:bg-white/8 hover:text-white"
-                          >
-                            {text.cancel}
-                          </button>
-
-                          <form action={deleteAction}>
-                            <input type="hidden" name="revier_id" value={revierId} />
-                            <button
-                              type="submit"
-                              className="rounded-[10px] border border-rose-300/20 bg-rose-300/10 px-4 py-2 text-sm text-rose-100 hover:bg-rose-300/15"
-                            >
-                              {text.confirmDelete}
-                            </button>
-                          </form>
-                        </div>
-                      </div>
-                    </div>,
-                    document.body
-                  )
-                : null}
-
-              {mounted && isReadOnlyModalOpen
-                ? createPortal(
-                    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-                      <div className="w-full max-w-md rounded-[20px] border border-white/10 bg-[#102018] p-6 shadow-2xl">
-                        <h3 className="text-lg font-semibold text-white">
-                          {text.demoTitle}
-                        </h3>
-                        <p className="mt-2 text-sm text-white/70">
-                          {text.demoText}
-                        </p>
-
-                        <div className="mt-5 flex items-center justify-end gap-3">
-                          <button
-                            type="button"
-                            onClick={() => setIsReadOnlyModalOpen(false)}
-                            className="rounded-[10px] border border-white/10 bg-white/5 px-4 py-2 text-sm text-white/78 hover:bg-white/8 hover:text-white"
-                          >
-                            {text.understood}
-                          </button>
-                        </div>
-                      </div>
-                    </div>,
-                    document.body
-                  )
-                : null}
-            </>
+            <button
+              type="button"
+              onClick={() =>
+                isDemo
+                  ? setIsReadOnlyModalOpen(true)
+                  : setIsDeleteConfirmOpen(true)
+              }
+              className="inline-flex h-8 w-8 items-center justify-center rounded-[10px] border border-white/10 bg-white/5 text-white/72 hover:border-rose-300/20 hover:bg-rose-300/10 hover:text-rose-200"
+              aria-label={text.delete}
+              title={text.delete}
+            >
+              <TrashIcon />
+            </button>
           ) : (
             <span
               className="inline-flex h-8 w-8 items-center justify-center rounded-[10px] border border-white/8 text-white/20"
@@ -240,6 +135,66 @@ export default function RevierRowActions({
           )}
         </div>
       </td>
+
+      {mounted && isDeleteConfirmOpen
+        ? createPortal(
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+              <div className="w-full max-w-md rounded-[20px] border border-white/10 bg-[#102018] p-6 shadow-2xl">
+                <h3 className="text-lg font-semibold text-white">
+                  {text.confirmDeleteTitle}
+                </h3>
+                <p className="mt-2 text-sm text-white/70">
+                  {text.confirmDeleteText}
+                </p>
+
+                <div className="mt-5 flex items-center justify-end gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setIsDeleteConfirmOpen(false)}
+                    className="rounded-[10px] border border-white/10 bg-white/5 px-4 py-2 text-sm text-white/78 hover:bg-white/8 hover:text-white"
+                  >
+                    {text.cancel}
+                  </button>
+
+                  <form action={deleteAction}>
+                    <input type="hidden" name="revier_id" value={revierId} />
+                    <button
+                      type="submit"
+                      className="rounded-[10px] border border-rose-300/20 bg-rose-300/10 px-4 py-2 text-sm text-rose-100 hover:bg-rose-300/15"
+                    >
+                      {text.confirmDelete}
+                    </button>
+                  </form>
+                </div>
+              </div>
+            </div>,
+            document.body
+          )
+        : null}
+
+      {mounted && isReadOnlyModalOpen
+        ? createPortal(
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+              <div className="w-full max-w-md rounded-[20px] border border-white/10 bg-[#102018] p-6 shadow-2xl">
+                <h3 className="text-lg font-semibold text-white">
+                  {text.demoTitle}
+                </h3>
+                <p className="mt-2 text-sm text-white/70">{text.demoText}</p>
+
+                <div className="mt-5 flex items-center justify-end gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setIsReadOnlyModalOpen(false)}
+                    className="rounded-[10px] border border-white/10 bg-white/5 px-4 py-2 text-sm text-white/78 hover:bg-white/8 hover:text-white"
+                  >
+                    {text.understood}
+                  </button>
+                </div>
+              </div>
+            </div>,
+            document.body
+          )
+        : null}
     </>
   );
 }

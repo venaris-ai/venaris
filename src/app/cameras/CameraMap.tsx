@@ -1,4 +1,4 @@
-// src/app/cameras/CameraMap.tsx #3
+// src/app/cameras/CameraMap.tsx #4
 "use client";
 
 import { useEffect, useMemo, useRef } from "react";
@@ -26,12 +26,21 @@ type LocatedCamera = CameraMapItem & {
   longitude: number;
 };
 
+export type BoundaryGeoJson = Exclude<
+  Parameters<GeoJSONSource["setData"]>[0],
+  string
+>;
+
 const DEFAULT_STYLE_URL =
   process.env.NEXT_PUBLIC_OPENFREEMAP_STYLE_URL ||
   "https://tiles.openfreemap.org/styles/liberty";
 
 const DIRECTION_SOURCE_ID = "camera-directions";
 const DIRECTION_LAYER_ID = "camera-directions-layer";
+
+const BOUNDARY_SOURCE_ID = "revier-boundary";
+const BOUNDARY_FILL_LAYER_ID = "revier-boundary-fill";
+const BOUNDARY_LINE_LAYER_ID = "revier-boundary-line";
 
 function t(language: AppLanguage) {
   if (language === "en") {
@@ -250,6 +259,147 @@ function updateDirectionLayer(map: MapLibreMap, cameras: LocatedCamera[]) {
   source?.setData(buildDirectionGeoJson(cameras));
 }
 
+function ensureBoundaryLayer(map: MapLibreMap) {
+  if (!map.getSource(BOUNDARY_SOURCE_ID)) {
+    map.addSource(BOUNDARY_SOURCE_ID, {
+      type: "geojson",
+      data: {
+        type: "FeatureCollection",
+        features: [],
+      },
+    });
+  }
+
+  if (!map.getLayer(BOUNDARY_FILL_LAYER_ID)) {
+    map.addLayer({
+      id: BOUNDARY_FILL_LAYER_ID,
+      type: "fill",
+      source: BOUNDARY_SOURCE_ID,
+      paint: {
+        "fill-color": "#c9952e",
+        "fill-opacity": 0.12,
+      },
+    });
+  }
+
+  if (!map.getLayer(BOUNDARY_LINE_LAYER_ID)) {
+    map.addLayer({
+      id: BOUNDARY_LINE_LAYER_ID,
+      type: "line",
+      source: BOUNDARY_SOURCE_ID,
+      paint: {
+        "line-color": "#c9952e",
+        "line-width": 3,
+        "line-opacity": 0.88,
+      },
+      layout: {
+        "line-cap": "round",
+        "line-join": "round",
+      },
+    });
+  }
+}
+
+function updateBoundaryLayer(
+  map: MapLibreMap,
+  boundaryGeoJson: BoundaryGeoJson | null
+) {
+  ensureBoundaryLayer(map);
+
+  const source = map.getSource(BOUNDARY_SOURCE_ID) as GeoJSONSource | undefined;
+
+  source?.setData(
+    boundaryGeoJson ?? {
+      type: "FeatureCollection",
+      features: [],
+    }
+  );
+}
+
+function collectLngLatCoordinates(value: unknown, result: [number, number][]) {
+  if (!Array.isArray(value)) return;
+
+  if (
+    value.length >= 2 &&
+    typeof value[0] === "number" &&
+    typeof value[1] === "number" &&
+    Number.isFinite(value[0]) &&
+    Number.isFinite(value[1]) &&
+    value[0] >= -180 &&
+    value[0] <= 180 &&
+    value[1] >= -90 &&
+    value[1] <= 90
+  ) {
+    result.push([value[0], value[1]]);
+    return;
+  }
+
+  for (const item of value) {
+    collectLngLatCoordinates(item, result);
+  }
+}
+
+function getBoundaryCoordinates(
+  boundaryGeoJson: BoundaryGeoJson | null
+): [number, number][] {
+  if (!boundaryGeoJson) return [];
+
+  const coordinates: [number, number][] = [];
+
+  if (
+    typeof boundaryGeoJson === "object" &&
+    boundaryGeoJson !== null &&
+    "type" in boundaryGeoJson &&
+    boundaryGeoJson.type === "FeatureCollection" &&
+    "features" in boundaryGeoJson &&
+    Array.isArray(boundaryGeoJson.features)
+  ) {
+    for (const feature of boundaryGeoJson.features) {
+      if (
+        typeof feature === "object" &&
+        feature !== null &&
+        "geometry" in feature
+      ) {
+        const geometry = (feature as { geometry?: unknown }).geometry;
+
+        if (
+          typeof geometry === "object" &&
+          geometry !== null &&
+          "coordinates" in geometry
+        ) {
+          collectLngLatCoordinates(
+            (geometry as { coordinates?: unknown }).coordinates,
+            coordinates
+          );
+        }
+      }
+    }
+
+    return coordinates;
+  }
+
+  if (
+    typeof boundaryGeoJson === "object" &&
+    boundaryGeoJson !== null &&
+    "geometry" in boundaryGeoJson
+  ) {
+    const geometry = (boundaryGeoJson as { geometry?: unknown }).geometry;
+
+    if (
+      typeof geometry === "object" &&
+      geometry !== null &&
+      "coordinates" in geometry
+    ) {
+      collectLngLatCoordinates(
+        (geometry as { coordinates?: unknown }).coordinates,
+        coordinates
+      );
+    }
+  }
+
+  return coordinates;
+}
+
 function createMarkerElement(camera: LocatedCamera) {
   const direction = normalizeDirection(camera.direction_deg);
   const colors = statusMarkerColors(camera.health_status);
@@ -320,9 +470,11 @@ function createPopupHtml(camera: LocatedCamera, language: AppLanguage) {
 export default function CameraMap({
   cameras,
   language,
+  boundaryGeoJson = null,
 }: {
   cameras: CameraMapItem[];
   language: AppLanguage;
+  boundaryGeoJson?: BoundaryGeoJson | null;
 }) {
   const text = t(language);
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -334,6 +486,10 @@ export default function CameraMap({
       isValidCoordinate(camera.latitude, camera.longitude)
     );
   }, [cameras]);
+
+  const boundaryCoordinates = useMemo(() => {
+    return getBoundaryCoordinates(boundaryGeoJson);
+  }, [boundaryGeoJson]);
 
   const missingLocationCameras = useMemo(() => {
     return cameras.filter(
@@ -364,14 +520,11 @@ export default function CameraMap({
 
     map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }));
 
-
-map.addControl(
-  new maplibregl.AttributionControl({
-    compact: true,
-  })
-);
-
-
+    map.addControl(
+      new maplibregl.AttributionControl({
+        compact: true,
+      })
+    );
 
     mapRef.current = map;
 
@@ -406,36 +559,41 @@ map.addControl(
       markersRef.current.push(marker);
     }
 
-    const syncDirections = () => updateDirectionLayer(map, locatedCameras);
+    const syncLayers = () => {
+      updateBoundaryLayer(map, boundaryGeoJson);
+      updateDirectionLayer(map, locatedCameras);
+    };
 
     if (map.loaded()) {
-      syncDirections();
+      syncLayers();
     } else {
-      map.once("load", syncDirections);
+      map.once("load", syncLayers);
     }
 
-    if (locatedCameras.length === 1) {
-      map.easeTo({
-        center: [locatedCameras[0].longitude, locatedCameras[0].latitude],
-        zoom: 14,
-        duration: 600,
-      });
+    const bounds = new maplibregl.LngLatBounds();
+
+    for (const coordinate of boundaryCoordinates) {
+      bounds.extend(coordinate);
     }
 
-    if (locatedCameras.length > 1) {
-      const bounds = new maplibregl.LngLatBounds();
+    for (const camera of locatedCameras) {
+      bounds.extend([camera.longitude, camera.latitude]);
+    }
 
-      for (const camera of locatedCameras) {
-        bounds.extend([camera.longitude, camera.latitude]);
-      }
+    const hasBounds =
+      boundaryCoordinates.length > 0 || locatedCameras.length > 0;
 
+    if (hasBounds) {
       map.fitBounds(bounds, {
         padding: 72,
-        maxZoom: 15,
+        maxZoom:
+          locatedCameras.length === 1 && boundaryCoordinates.length === 0
+            ? 14
+            : 15,
         duration: 600,
       });
     }
-  }, [language, locatedCameras]);
+  }, [language, locatedCameras, boundaryGeoJson, boundaryCoordinates]);
 
   return (
     <section className="rounded-[28px] border border-white/10 bg-white/5 p-6 backdrop-blur-sm">

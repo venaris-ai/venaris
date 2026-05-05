@@ -1,4 +1,4 @@
-// src/app/orga/reviere/new/page.tsx #11
+// src/app/orga/reviere/new/page.tsx #12
 import Link from "next/link";
 import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
@@ -53,6 +53,8 @@ function t(language: AppLanguage) {
         title: "Create ground",
         intro:
           "Create a new ground for the active organization here. It will then be available as the operational scope for cameras and analytics.",
+        boundaryHint:
+          "You can add or replace the ground boundary as a GeoJSON file after creating the ground on the edit page.",
         demoReadOnly: "Demo mode: changes are disabled.",
         nameLabel: "Ground name *",
         namePlaceholder: "e.g. Demo North",
@@ -81,6 +83,8 @@ function t(language: AppLanguage) {
         title: "Revier anlegen",
         intro:
           "Lege hier ein neues Revier für die aktive Organisation an. Das Revier wird anschließend als fachlicher Scope für Kameras und Auswertungen verfügbar.",
+        boundaryHint:
+          "Die Revierkontur kannst Du nach dem Anlegen auf der Bearbeiten-Seite als GeoJSON-Datei hinzufügen oder ersetzen.",
         demoReadOnly: "Demo-Modus: Änderungen sind deaktiviert.",
         nameLabel: "Reviername *",
         namePlaceholder: "z. B. Demo-Nord",
@@ -90,9 +94,9 @@ function t(language: AppLanguage) {
         timezoneHelp:
           "Wird für Wildlife-, Bild- und Eventzeiten in diesem Revier verwendet.",
         statusLabel: "Status",
-        active: "Active",
-        paused: "Paused",
-        archived: "Archived",
+        active: "Aktiv",
+        paused: "Pausiert",
+        archived: "Archiviert",
         saveIdle: "Revier speichern",
         savePending: "Speichert...",
         demoMode: "Demo-Modus",
@@ -220,6 +224,10 @@ export default async function NewRevierPage({
           <p className="text-sm text-amber-100">{text.demoReadOnly}</p>
         </section>
       ) : null}
+
+      <section className="rounded-[24px] border border-white/10 bg-white/5 p-4 backdrop-blur-sm">
+        <p className="text-sm text-white/68">{text.boundaryHint}</p>
+      </section>
 
       <section className="rounded-[28px] border border-white/10 bg-white/5 p-6 backdrop-blur-sm">
         <form action={createRevier} className="space-y-6">

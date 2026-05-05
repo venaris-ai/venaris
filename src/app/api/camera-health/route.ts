@@ -1,4 +1,4 @@
-// src/app/api/camera-health/route.ts #3
+// src/app/api/camera-health/route.ts #4
 export const runtime = "nodejs";
 
 import { NextResponse } from "next/server";
@@ -17,6 +17,10 @@ type CameraGeoRow = {
   direction_deg: number | null;
 };
 
+type RevierBoundaryRow = {
+  geometry: unknown;
+};
+
 type CameraHealthStatus = "online" | "stale" | "offline" | "unknown";
 
 const HEALTH_STALE_AFTER_MINUTES = 12 * 60;
@@ -33,6 +37,38 @@ function deriveHealthStatus(lastSeenAt: string | null): CameraHealthStatus {
   if (diffMinutes >= HEALTH_OFFLINE_AFTER_MINUTES) return "offline";
   if (diffMinutes >= HEALTH_STALE_AFTER_MINUTES) return "stale";
   return "online";
+}
+
+function extractGeoJsonFeatures(geometry: unknown): unknown[] {
+  if (
+    typeof geometry !== "object" ||
+    geometry === null ||
+    !("type" in geometry)
+  ) {
+    return [];
+  }
+
+  const type = (geometry as { type?: unknown }).type;
+
+  if (type === "FeatureCollection") {
+    const features = (geometry as { features?: unknown }).features;
+    return Array.isArray(features) ? features : [];
+  }
+
+  if (type === "Feature") {
+    return [geometry];
+  }
+
+  return [];
+}
+
+function buildBoundaryGeoJson(boundaries: RevierBoundaryRow[]) {
+  return {
+    type: "FeatureCollection" as const,
+    features: boundaries.flatMap((boundary) =>
+      extractGeoJsonFeatures(boundary.geometry)
+    ),
+  };
 }
 
 export async function GET(req: Request) {
@@ -79,8 +115,34 @@ export async function GET(req: Request) {
     const allowedRevierIds = allowedReviers.map((revier) => revier.id);
 
     if (allowedRevierIds.length === 0) {
-      return NextResponse.json({ items: [] });
+      return NextResponse.json({
+        items: [],
+        boundaryGeoJson: {
+          type: "FeatureCollection",
+          features: [],
+        },
+      });
     }
+
+    const scopedRevierIds =
+      revierScope.type === "single" ? [revierScope.revierId] : allowedRevierIds;
+
+    const { data: boundariesData, error: boundariesError } = await supabase
+      .from("revier_boundaries")
+      .select("geometry")
+      .eq("organization_id", activeOrganization.id)
+      .in("revier_id", scopedRevierIds);
+
+    if (boundariesError) {
+      return NextResponse.json(
+        { error: boundariesError.message },
+        { status: 500 }
+      );
+    }
+
+    const boundaryGeoJson = buildBoundaryGeoJson(
+      (boundariesData ?? []) as RevierBoundaryRow[]
+    );
 
     let camerasQuery = supabase
       .from("cameras")
@@ -105,7 +167,10 @@ export async function GET(req: Request) {
     const allowedCameraIds = cameraRows.map((camera) => camera.id);
 
     if (allowedCameraIds.length === 0) {
-      return NextResponse.json({ items: [] });
+      return NextResponse.json({
+        items: [],
+        boundaryGeoJson,
+      });
     }
 
     const cameraGeoById = new Map(
@@ -140,7 +205,7 @@ export async function GET(req: Request) {
       };
     });
 
-    return NextResponse.json({ items });
+    return NextResponse.json({ items, boundaryGeoJson });
   } catch (err: any) {
     return NextResponse.json(
       { error: err?.message ?? "camera health failed" },

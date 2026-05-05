@@ -1,4 +1,4 @@
-// src/app/orga/reviere/page.tsx #13
+// src/app/orga/reviere/page.tsx #14
 import Link from "next/link";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
@@ -6,15 +6,12 @@ import { revalidatePath } from "next/cache";
 import { redirectIfDemoWrite } from "@/lib/auth";
 import { requirePathAccess } from "@/lib/authz";
 import { supabaseServer } from "@/lib/supabaseServer";
-import RevierRowControls from "./RevierRowControls";
 import RevierRowActions from "./RevierRowActions";
 import {
   LOCALE_COOKIE,
   resolveLanguage,
   type AppLanguage,
 } from "@/lib/i18n";
-
-const DEFAULT_TIME_ZONE = "Europe/Berlin";
 
 type RevierStatus = "active" | "paused" | "archived";
 
@@ -30,29 +27,6 @@ type RevierRow = {
   is_default: boolean;
   timezone: string;
 };
-
-function isRevierStatus(value: string): value is RevierStatus {
-  return ["active", "paused", "archived"].includes(value);
-}
-
-function isValidTimeZone(value: string): boolean {
-  try {
-    new Intl.DateTimeFormat("en-US", { timeZone: value }).format(new Date());
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-function normalizeTimeZone(value: FormDataEntryValue | null): string {
-  if (typeof value !== "string") return DEFAULT_TIME_ZONE;
-
-  const trimmed = value.trim();
-
-  if (!trimmed || trimmed.length > 100) return DEFAULT_TIME_ZONE;
-
-  return isValidTimeZone(trimmed) ? trimmed : DEFAULT_TIME_ZONE;
-}
 
 async function resolveUiLanguageForProtectedPath(pathname: string) {
   const ctx = await requirePathAccess(pathname);
@@ -82,13 +56,7 @@ function t(language: AppLanguage) {
   return language === "en"
     ? {
         missingTarget: "Missing target ground.",
-        nameRequired: "Ground name is required.",
-        areaRequired: "Area in ha is required.",
-        areaInvalid: "Area in ha must be a valid positive number.",
-        statusInvalid: "Invalid ground status.",
-        timezoneInvalid: "Invalid time zone.",
         targetNotFound: "Target ground not found.",
-        saveFailedPrefix: "Failed to save ground changes:",
         defaultDeleteBlocked: "The default ground cannot be deleted.",
         deleteFailedPrefix: "Failed to delete ground:",
         eyebrow: "Grounds",
@@ -119,16 +87,15 @@ function t(language: AppLanguage) {
         timezoneCol: "Time zone",
         statusCol: "Status",
         actionsCol: "Actions",
+        defaultBadge: "Default",
+        active: "Active",
+        paused: "Paused",
+        archived: "Archived",
+        unknown: "Unknown",
       }
     : {
         missingTarget: "Ziel-Revier fehlt.",
-        nameRequired: "Reviername ist erforderlich.",
-        areaRequired: "Fläche in ha ist erforderlich.",
-        areaInvalid: "Fläche in ha muss eine gültige positive Zahl sein.",
-        statusInvalid: "Ungültiger Revierstatus.",
-        timezoneInvalid: "Ungültige Zeitzone.",
         targetNotFound: "Ziel-Revier wurde nicht gefunden.",
-        saveFailedPrefix: "Fehler beim Speichern der Revieränderungen:",
         defaultDeleteBlocked: "Das Standard-Revier kann nicht gelöscht werden.",
         deleteFailedPrefix: "Fehler beim Löschen des Reviers:",
         eyebrow: "Reviere",
@@ -140,7 +107,8 @@ function t(language: AppLanguage) {
         updated: "Revier wurde erfolgreich aktualisiert.",
         deleted: "Revier wurde erfolgreich gelöscht.",
         activeTitle: "Aktiv",
-        activeText: "Produktiv genutzte Reviere im aktuellen Organisationskontext.",
+        activeText:
+          "Produktiv genutzte Reviere im aktuellen Organisationskontext.",
         pausedTitle: "Pausiert",
         pausedText: "Vorübergehend aus dem aktiven Fokus genommene Reviere.",
         archivedTitle: "Archiviert",
@@ -158,7 +126,48 @@ function t(language: AppLanguage) {
         timezoneCol: "Zeitzone",
         statusCol: "Status",
         actionsCol: "Aktionen",
+        defaultBadge: "Standard",
+        active: "Aktiv",
+        paused: "Pausiert",
+        archived: "Archiviert",
+        unknown: "Unbekannt",
       };
+}
+
+function StatusBadge({
+  status,
+  language,
+}: {
+  status: RevierStatus;
+  language: AppLanguage;
+}) {
+  const labels =
+    language === "en"
+      ? {
+          active: "Active",
+          paused: "Paused",
+          archived: "Archived",
+        }
+      : {
+          active: "Aktiv",
+          paused: "Pausiert",
+          archived: "Archiviert",
+        };
+
+  const className =
+    status === "active"
+      ? "border-emerald-300/25 bg-emerald-300/10 text-emerald-100"
+      : status === "paused"
+        ? "border-amber-300/25 bg-amber-300/10 text-amber-100"
+        : "border-white/10 bg-white/8 text-white/60";
+
+  return (
+    <span
+      className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-medium ${className}`}
+    >
+      {labels[status]}
+    </span>
+  );
 }
 
 async function loadRevierForMutation(params: {
@@ -169,7 +178,9 @@ async function loadRevierForMutation(params: {
 
   const { data, error } = await supabase
     .from("reviers")
-    .select("id,name,area_ha,region,country,notes,status,created_at,is_default,timezone")
+    .select(
+      "id,name,area_ha,region,country,notes,status,created_at,is_default,timezone"
+    )
     .eq("organization_id", params.organizationId)
     .eq("id", params.revierId)
     .maybeSingle();
@@ -179,98 +190,6 @@ async function loadRevierForMutation(params: {
   }
 
   return (data as RevierRow | null) ?? null;
-}
-
-async function saveRevierChanges(formData: FormData) {
-  "use server";
-
-  const { ctx, supabase, language } = await resolveUiLanguageForProtectedPath(
-    "/orga/reviere"
-  );
-  redirectIfDemoWrite(ctx, "/orga/reviere?demo_read_only=1");
-
-  if (!ctx.activeMembership) {
-    throw new Error("Active organization context required");
-  }
-
-  const organization = ctx.activeMembership.organizations;
-  const text = t(language);
-
-  const revierId = String(formData.get("revier_id") ?? "").trim();
-  const name = String(formData.get("name") ?? "").trim();
-  const areaHaRaw = String(formData.get("area_ha") ?? "").trim();
-  const timezone = normalizeTimeZone(formData.get("timezone"));
-  const statusRaw = String(formData.get("status") ?? "active").trim();
-
-  if (!organization) {
-    throw new Error("Active organization not found");
-  }
-
-  if (!revierId) {
-    throw new Error(text.missingTarget);
-  }
-
-  if (!name) {
-    throw new Error(text.nameRequired);
-  }
-
-  if (!areaHaRaw) {
-    throw new Error(text.areaRequired);
-  }
-
-  const parsed = Number(areaHaRaw);
-
-  if (!Number.isFinite(parsed) || parsed <= 0) {
-    throw new Error(text.areaInvalid);
-  }
-
-  if (!isValidTimeZone(timezone)) {
-    throw new Error(text.timezoneInvalid);
-  }
-
-  if (!isRevierStatus(statusRaw)) {
-    throw new Error(text.statusInvalid);
-  }
-
-  const targetRevier = await loadRevierForMutation({
-    organizationId: organization.id,
-    revierId,
-  });
-
-  if (!targetRevier) {
-    throw new Error(text.targetNotFound);
-  }
-
-  const areaHa = Math.round(parsed);
-
-  if (
-    targetRevier.name === name &&
-    (targetRevier.area_ha ?? null) === areaHa &&
-    targetRevier.timezone === timezone &&
-    targetRevier.status === statusRaw
-  ) {
-    revalidatePath("/orga/reviere");
-    redirect("/orga/reviere");
-  }
-
-  const { error } = await supabase
-    .from("reviers")
-    .update({
-      name,
-      area_ha: areaHa,
-      timezone,
-      status: statusRaw,
-    })
-    .eq("id", revierId)
-    .eq("organization_id", organization.id);
-
-  if (error) {
-    throw new Error(`${text.saveFailedPrefix} ${error.message}`);
-  }
-
-  revalidatePath("/orga/reviere");
-  revalidatePath("/", "layout");
-  redirect("/orga/reviere?updated=1");
 }
 
 async function deleteRevier(formData: FormData) {
@@ -378,7 +297,9 @@ export default async function OrgaRevierePage({
 
   const { data, error } = await supabase
     .from("reviers")
-    .select("id,name,area_ha,region,country,notes,status,created_at,is_default,timezone")
+    .select(
+      "id,name,area_ha,region,country,notes,status,created_at,is_default,timezone"
+    )
     .eq("organization_id", organization.id)
     .order("is_default", { ascending: false })
     .order("name", { ascending: true });
@@ -389,8 +310,12 @@ export default async function OrgaRevierePage({
 
   const reviers = (data ?? []) as RevierRow[];
 
-  const activeCount = reviers.filter((revier) => revier.status === "active").length;
-  const pausedCount = reviers.filter((revier) => revier.status === "paused").length;
+  const activeCount = reviers.filter(
+    (revier) => revier.status === "active"
+  ).length;
+  const pausedCount = reviers.filter(
+    (revier) => revier.status === "paused"
+  ).length;
   const archivedCount = reviers.filter(
     (revier) => revier.status === "archived"
   ).length;
@@ -490,39 +415,56 @@ export default async function OrgaRevierePage({
             <table className="min-w-full text-sm">
               <thead className="bg-white/5 text-left text-white/55">
                 <tr>
-                  <th className="px-6 py-3 font-medium whitespace-nowrap">
+                  <th className="whitespace-nowrap px-6 py-3 font-medium">
                     {text.nameCol}
                   </th>
-                  <th className="px-6 py-3 font-medium whitespace-nowrap">
+                  <th className="whitespace-nowrap px-6 py-3 font-medium">
                     {text.areaCol}
                   </th>
-                  <th className="px-6 py-3 font-medium whitespace-nowrap">
+                  <th className="whitespace-nowrap px-6 py-3 font-medium">
                     {text.timezoneCol}
                   </th>
-                  <th className="px-6 py-3 font-medium whitespace-nowrap">
+                  <th className="whitespace-nowrap px-6 py-3 font-medium">
                     {text.statusCol}
                   </th>
-                  <th className="px-6 py-3 font-medium whitespace-nowrap text-right">
+                  <th className="whitespace-nowrap px-6 py-3 text-right font-medium">
                     {text.actionsCol}
                   </th>
                 </tr>
               </thead>
               <tbody>
                 {reviers.map((revier) => (
-                  <tr key={revier.id} className="border-t border-white/8 align-middle">
-                    <RevierRowControls
-                      revierId={revier.id}
-                      initialName={revier.name}
-                      initialAreaHa={revier.area_ha ?? 1}
-                      initialTimeZone={revier.timezone}
-                      initialStatus={revier.status}
-                      saveAction={saveRevierChanges}
-                      isDemo={isDemo}
-                      language={language}
-                    />
+                  <tr
+                    key={revier.id}
+                    className="border-t border-white/8 align-middle"
+                  >
+                    <td className="px-6 py-4">
+                      <div className="flex flex-col gap-1">
+                        <div className="font-medium text-white">
+                          {revier.name}
+                        </div>
+                        {revier.is_default ? (
+                          <div className="text-xs text-amber-100/75">
+                            {text.defaultBadge}
+                          </div>
+                        ) : null}
+                      </div>
+                    </td>
+                    <td className="whitespace-nowrap px-6 py-4 text-white/72">
+                      {revier.area_ha ?? "—"} ha
+                    </td>
+                    <td className="whitespace-nowrap px-6 py-4 text-white/72">
+                      {revier.timezone}
+                    </td>
+
+<td className="whitespace-nowrap px-6 py-4">
+  <StatusBadge status={revier.status} language={language} />
+</td>
+
 
                     <RevierRowActions
                       revierId={revier.id}
+                      editHref={`/orga/reviere/${revier.id}/edit`}
                       canDelete={!revier.is_default}
                       deleteAction={deleteRevier}
                       isDemo={isDemo}
