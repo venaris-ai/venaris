@@ -1,4 +1,4 @@
-// src/app/cameras/import/CamerasImportPageClient.tsx #1
+// src/app/cameras/import/CamerasImportPageClient.tsx #2
 "use client";
 
 import { useEffect, useRef, useState } from "react";
@@ -409,21 +409,36 @@ export default function CamerasImportPageClient({
             onChange={onPickFiles}
           />
 
-          <div className="mt-4 text-xs text-white/45">{text.dragHint}</div>
-        </div>
 
-        <div className="flex items-center justify-between gap-3">
-          <div className="text-sm text-white/72">
-            {files.length > 0 ? (
-              <>
-                {text.selected}{" "}
-                <span className="font-medium text-white">{files.length}</span>{" "}
-                {text.files}
-              </>
-            ) : (
-              <span className="text-white/45">{text.noneSelected}</span>
-            )}
-          </div>
+<div className="mt-4 text-xs text-white/45">{text.dragHint}</div>
+
+{files.length > 0 ? (
+  <ul className="mt-3 max-h-32 space-y-1 overflow-auto rounded-[14px] border border-white/10 bg-white/5 p-3 text-xs text-white/62">
+    {files.map((file, index) => (
+      <li key={`${file.name}-${file.size}-${index}`} className="truncate">
+        {file.name}
+      </li>
+    ))}
+  </ul>
+) : null}
+</div>
+
+<div className="flex items-center justify-between gap-3">
+  <div className="text-sm text-white/72">
+    {files.length > 0 ? (
+      <>
+        {text.selected}{" "}
+        <span className="font-medium text-white">{files.length}</span>{" "}
+        {text.files}
+      </>
+    ) : (
+      <span className="text-white/45">{text.noneSelected}</span>
+    )}
+  </div>
+
+
+
+
 
           <div className="flex items-center gap-2">
             <button
@@ -444,15 +459,24 @@ export default function CamerasImportPageClient({
               {text.clearSelection}
             </button>
 
-            <button
-              type="button"
-              onClick={startImport}
-              disabled={!canImport}
-              className="rounded-[10px] bg-[#c9952e] px-4 py-2 text-sm text-[#102018] disabled:opacity-60"
-              title={isDemo ? text.demoReadOnly : ""}
-            >
-              {busy ? text.running : isDemo ? text.demoMode : text.startImport}
-            </button>
+
+<button
+  type="button"
+  onClick={startImport}
+  disabled={!canImport}
+  className={[
+    "rounded-[10px] px-4 py-2 text-sm transition disabled:cursor-not-allowed",
+    canImport
+      ? "bg-[#c9952e] text-[#102018] hover:bg-[#d6a13a]"
+      : "bg-white/10 text-white/35",
+  ].join(" ")}
+  title={isDemo ? text.demoReadOnly : ""}
+>
+  {busy ? text.running : isDemo ? text.demoMode : text.startImport}
+</button>
+
+
+
           </div>
         </div>
       </section>
