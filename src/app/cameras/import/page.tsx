@@ -30,5 +30,5 @@ if (!ctx.user) {
     profileLanguage: profileData?.preferred_language,
   });
 
-  return <CamerasImportPageClient language={language} />;
+  return <CamerasImportPageClient language={language} isDemo={ctx.isDemo} />;
 }

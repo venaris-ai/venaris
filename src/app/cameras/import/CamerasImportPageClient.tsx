@@ -130,7 +130,6 @@ export default function CamerasImportPageClient({
 }) {
   const searchParams = useSearchParams();
   const revierParam = searchParams.get("revier");
-  const isDemo = searchParams.get("demo") === "1";
 
   const [cameras, setCameras] = useState<CameraRow[]>([]);
   const [cameraId, setCameraId] = useState("");

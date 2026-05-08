@@ -196,7 +196,16 @@ export async function POST(req: NextRequest) {
       file_count: files.length,
       channel,
     });
+
+
   } catch (err: any) {
+    if (err?.message === "Demo mode is read-only") {
+      return NextResponse.json(
+        { error: "Demo mode is read-only" },
+        { status: 403 }
+      );
+    }
+
     console.error("UPLOAD crashed:", err);
     return NextResponse.json(
       { error: text.uploadRouteCrashed, details: err?.message ?? String(err) },
