@@ -123,14 +123,16 @@ function alertTone(tone: MessageTone) {
   };
 }
 
+
 export default function CamerasImportPageClient({
   language,
+  isDemo = false,
 }: {
   language: AppLanguage;
+  isDemo?: boolean;
 }) {
   const searchParams = useSearchParams();
   const revierParam = searchParams.get("revier");
-
   const [cameras, setCameras] = useState<CameraRow[]>([]);
   const [cameraId, setCameraId] = useState("");
   const [files, setFiles] = useState<File[]>([]);
