@@ -286,12 +286,6 @@ function sourceTone(source?: string | null) {
   return "muted" as const;
 }
 
-function errorTone(status?: string | null, error?: string | null) {
-  if (!error) return "muted" as const;
-  if (statusTone(status) === "err") return "err" as const;
-  return "warn" as const;
-}
-
 function formatProbability(value?: number | null) {
   if (typeof value !== "number") return "—";
   return `${Math.round(value * 100)}%`;
@@ -598,14 +592,6 @@ export default async function CamerasIngestPage(props: {
               items.map((row) => {
                 const stTone = statusTone(row.ingestStatus);
                 const srcTone = sourceTone(row.source);
-                const errTone = errorTone(row.ingestStatus, row.errorSummary);
-
-                const errorClass =
-                  errTone === "err"
-                    ? "text-rose-200"
-                    : errTone === "warn"
-                      ? "text-amber-200"
-                      : "text-white/72";
 
                 const eventHref = rawRevier
                   ? `/cameras/events/${row.eventId}?${new URLSearchParams({
@@ -646,11 +632,6 @@ export default async function CamerasIngestPage(props: {
                       <div className="font-medium text-white">
                         {getSpeciesLabel(row.topSpecies, language, speciesMetaMap)}
                       </div>
-                      {row.errorSummary ? (
-                        <div className={`mt-1 text-xs ${errorClass}`}>
-                          {row.errorSummary}
-                        </div>
-                      ) : null}
                     </td>
 
                     <td className="px-3 py-3 text-white/72 whitespace-nowrap">
