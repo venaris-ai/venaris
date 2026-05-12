@@ -218,7 +218,20 @@ export default async function CameraEventDetailPage(props: {
 
   const speciesMetaRows = await loadSpeciesMeta();
   const speciesMetaMap = buildSpeciesMetaMap(speciesMetaRows);
-  const speciesOptions = getSpeciesOptions(speciesMetaRows, language);
+
+const speciesOptions = getSpeciesOptions(speciesMetaRows, language).sort(
+  (a, b) => {
+    if (a.value === "other") return 1;
+    if (b.value === "other") return -1;
+
+    return a.label.localeCompare(b.label, language === "de" ? "de" : "en", {
+      sensitivity: "base",
+    });
+  }
+);
+
+
+
   const speciesLabelByCode = speciesOptions.reduce<Record<string, string>>(
     (acc, option) => {
       acc[option.value] = option.label;

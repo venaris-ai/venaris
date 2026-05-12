@@ -769,13 +769,20 @@ async function processAsset(assetFromBatch) {
             },
           };
 
-          const { error: upErr } = await supabase
-            .from("detections")
-            .update({
-              species: sp,
-              meta: mergedMeta,
-            })
-            .eq("id", target.id);
+
+const { error: upErr } = await supabase
+  .from("detections")
+  .update({
+    species: sp,
+    species_model: modelName,
+    species_score: Number.isFinite(spScore) ? spScore : null,
+    species_sim: Number.isFinite(spSim) ? spSim : null,
+    species_sim_threshold: species?.payload?.sim_threshold ?? null,
+    species_bbox_pad: species?.payload?.bbox_pad ?? null,
+    meta: mergedMeta,
+  })
+  .eq("id", target.id);
+
 
           if (upErr) {
             speciesFailures++;

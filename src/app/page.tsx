@@ -319,13 +319,13 @@ function t(language: AppLanguage) {
       `${price} inkl. MwSt. · ${status}`,
     noSubscriptionStored: "Kein Abo hinterlegt",
 
-    latestEventTitle: "Letzte Wildlife Events",
+    latestEventTitle: "Letzte Wildtier-Ereignisse",
     latestEventText:
-      "Kompakte Bildübersicht der letzten Wildlife Events im aktuellen Scope.",
-    noRecentEvents: "Noch kein Wildlife Event im Dashboard-Scope sichtbar.",
+      "Kompakte Bildübersicht der letzten Wildtier-Ereignisse.",
+    noRecentEvents: "Noch kein Wildtier-Ereignis sichtbar.",
     detailsLabel: "Details ansehen",
-    noPreview: "Kein Preview",
-    previewAlt: "Vorschau des letzten Wildlife Events",
+    noPreview: "Keine Vorschau",
+    previewAlt: "Vorschau des letzten Wildtier-Ereignisse",
   };
 }
 

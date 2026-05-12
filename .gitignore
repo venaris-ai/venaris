@@ -44,3 +44,6 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 .smtp-bridge-state.json
+
+# Local detection benchmark data/cache - do not commit images or generated cache files
+infrastructure/hetzner-worker/detection-benchmark/data/

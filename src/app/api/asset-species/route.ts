@@ -1,4 +1,4 @@
-// src/app/api/asset-species/route.ts #4
+// src/app/api/asset-species/route.ts #5
 export const runtime = "nodejs";
 
 import { NextRequest, NextResponse } from "next/server";
@@ -6,29 +6,25 @@ import { supabaseServer } from "@/lib/supabaseServer";
 import { assertNotDemoWrite, requireOrganizationRole } from "@/lib/auth";
 import { getLanguageFromRequest, type AppLanguage } from "@/lib/i18n";
 
-const ALLOWED_SPECIES = [
-  "roe_deer",
-  "wild_boar",
-  "red_deer",
-  "fallow_deer",
-  "mouflon",
-  "fox",
-  "wolf",
-  "badger",
-  "raccoon",
-  "raccoon_dog",
-  "hare",
-  "rabbit",
-  "pheasant",
-  "crow",
-  "other",
-] as const;
+async function isAllowedSpecies(
+  supabase: ReturnType<typeof supabaseServer>,
+  value: unknown
+): Promise<boolean> {
+  if (typeof value !== "string") return false;
 
-type SpeciesValue = (typeof ALLOWED_SPECIES)[number];
+  const { data, error } = await supabase
+    .from("taxonomy_species_meta")
+    .select("species")
+    .eq("species", value)
+    .maybeSingle();
 
-function isAllowedSpecies(value: unknown): value is SpeciesValue {
-  return typeof value === "string" && ALLOWED_SPECIES.includes(value as SpeciesValue);
+  if (error) {
+    throw new Error(error.message || "Failed to validate taxonomy species");
+  }
+
+  return Boolean(data);
 }
+
 
 function t(language: AppLanguage) {
   return language === "en"
@@ -84,12 +80,17 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    if (species !== null && !isAllowedSpecies(species)) {
-      return NextResponse.json(
-        { error: text.speciesMustBeValid },
-        { status: 400 }
-      );
-    }
+if (species !== null) {
+  const allowed = await isAllowedSpecies(supabase, species);
+
+  if (!allowed) {
+    return NextResponse.json(
+      { error: text.speciesMustBeValid },
+      { status: 400 }
+    );
+  }
+}
+
 
     const { data: asset, error: assetError } = await supabase
       .from("assets")
