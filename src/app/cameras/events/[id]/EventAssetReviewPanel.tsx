@@ -23,8 +23,10 @@ type DetectionTopRow = {
   asset_id: string | null;
   species: string | null;
   species_user: string | null;
-  score: number | null;
+  score: number | null; // MegaDetector animal score
+  speciesScore?: number | null; // SpeciesNet species score
 };
+
 
 function t(language: AppLanguage) {
   if (language === "en") {
@@ -111,7 +113,13 @@ export default function EventAssetReviewPanel({
             initialRelevantUser={selectedAsset?.relevantUser ?? null}
             initialSpeciesAuto={selectedDetection?.species ?? null}
             initialSpeciesUser={selectedDetection?.species_user ?? null}
-            probabilityScore={selectedDetection?.score ?? null}
+            
+probabilityScore={
+  selectedDetection?.speciesScore ??
+  selectedDetection?.score ??
+  null
+}
+
             cameraLabel={cameraLabel}
             timestampLabel={selectedAsset?.timestampLabel ?? null}
             isDemo={isDemo}

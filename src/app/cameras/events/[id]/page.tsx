@@ -1,4 +1,4 @@
-// src/app/cameras/events/[id]/page.tsx #17
+// src/app/cameras/events/[id]/page.tsx #18
 export const runtime = "nodejs";
 
 import Link from "next/link";
@@ -45,12 +45,30 @@ type AssetViewItem = {
   emptyConfidence?: number | null;
 };
 
+
 type DetectionTopRow = {
   asset_id: string | null;
   species: string | null;
   species_user: string | null;
-  score: number | null;
+  score: number | null; // MegaDetector animal score
+  meta: unknown;
+  speciesScore?: number | null; // SpeciesNet species score from meta.species.score
 };
+
+function readSpeciesScore(meta: unknown): number | null {
+  if (!meta || typeof meta !== "object") return null;
+
+  const speciesMeta = (meta as { species?: unknown }).species;
+  if (!speciesMeta || typeof speciesMeta !== "object") return null;
+
+  const value = (speciesMeta as { score?: unknown }).score;
+  const numericValue =
+    typeof value === "number" ? value : typeof value === "string" ? Number(value) : NaN;
+
+  return Number.isFinite(numericValue) ? numericValue : null;
+}
+
+
 
 function buildBackHref(revier?: string) {
   if (!revier) return "/cameras/ingest";
@@ -523,19 +541,24 @@ const speciesOptions = getSpeciesOptions(speciesMetaRows, language).sort(
 
   const detectionsByAssetId: Record<string, DetectionTopRow> = {};
   if (assetIds.length > 0) {
-    const { data: detectionData } = await supabase
-      .from("detections")
-      .select("asset_id,species,species_user,score")
-      .in("asset_id", assetIds)
-      .eq("label", "animal")
-      .order("score", { ascending: false })
-      .returns<DetectionTopRow[]>();
 
-    for (const detection of detectionData ?? []) {
-      if (detection.asset_id && !detectionsByAssetId[detection.asset_id]) {
-        detectionsByAssetId[detection.asset_id] = detection;
-      }
-    }
+const { data: detectionData } = await supabase
+  .from("detections")
+  .select("asset_id,species,species_user,score,meta")
+  .in("asset_id", assetIds)
+  .eq("label", "animal")
+  .order("score", { ascending: false })
+  .returns<DetectionTopRow[]>();
+
+for (const detection of detectionData ?? []) {
+  if (detection.asset_id && !detectionsByAssetId[detection.asset_id]) {
+    detectionsByAssetId[detection.asset_id] = {
+      ...detection,
+      speciesScore: readSpeciesScore(detection.meta),
+    };
+  }
+}
+
   }
 
   const initialAssets: AssetViewItem[] = assets
@@ -554,8 +577,15 @@ const speciesOptions = getSpeciesOptions(speciesMetaRows, language).sort(
       emptyConfidence: asset.empty_confidence ?? null,
     }))
     .sort((a, b) => {
-      const scoreA = detectionsByAssetId[a.id]?.score ?? -1;
-      const scoreB = detectionsByAssetId[b.id]?.score ?? -1;
+const scoreA =
+  detectionsByAssetId[a.id]?.speciesScore ??
+  detectionsByAssetId[a.id]?.score ??
+  -1;
+const scoreB =
+  detectionsByAssetId[b.id]?.speciesScore ??
+  detectionsByAssetId[b.id]?.score ??
+  -1;
+
       const scoreDiff = scoreB - scoreA;
 
       if (scoreDiff !== 0) return scoreDiff;
