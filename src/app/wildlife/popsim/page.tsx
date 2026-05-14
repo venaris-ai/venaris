@@ -1,4 +1,4 @@
-// src/app/wildlife/popsim/page.tsx #8
+// src/app/wildlife/popsim/page.tsx #10
 export const runtime = "nodejs";
 
 import { cookies } from "next/headers";
@@ -61,6 +61,10 @@ function fmtInt(value: number | null | undefined, language: AppLanguage) {
   return Math.round(value).toLocaleString(locale(language));
 }
 
+function getRoundedHarvestSurplus(row: PopulationEstimateRow) {
+  return Math.round(row.harvest_surplus_v0 ?? 0);
+}
+
 function getPopulationStatus(
   estimated: number | null | undefined,
   target: number | null | undefined
@@ -102,7 +106,7 @@ function t(language: AppLanguage) {
       eyebrow: "PopSim",
       title: "PopSim",
       intro:
-        "Model-based population estimate for stock, target values and potential harvest recommendation.",
+        "Model-based population estimate for stock, target values and potential removal recommendation.",
       activeOrganizationNotFound: "Active organization not found.",
       reviersLoadFailed: "Failed to load grounds:",
       noActiveGroundForPopSim:
@@ -125,20 +129,22 @@ function t(language: AppLanguage) {
       withCurrentSnapshot: "with current snapshot",
       estimatedTotal: "Estimated Total",
       acrossAllSpecies: "across all species",
-      harvestSurplus: "Harvest Recommendation",
-      speciesGreaterThanZero: (count: string) => `${count} species > 0`,
+      harvestSurplus: "Removal Recommendation",
+      speciesGreaterThanZero: (count: string) => `Sum across ${count} species`,
       noSnapshotTitle: "No PopSim snapshot available",
       noSnapshotTextA: "No PopSim results were found in",
       noSnapshotTextB: "for the selected ground yet.",
       speciesEstimates: "Species Estimates",
       speciesEstimatesText:
         "Rounded UI view of the newest modeled snapshot of the selected ground.",
+      currentState: "Current State",
+      targetState: "Target State",
       species: "Species",
       estimatedTotalCol: "Estimated Total",
       per100ha: "Per 100 ha",
       targetTotal: "Target Total",
       targetPer100ha: "Per 100 ha",
-      harvestSurplusCol: "Harvest Recommendation",
+      harvestSurplusCol: "Removal Recommendation",
       noSpeciesRows: "No species rows are available for the newest snapshot.",
       classification: "Classification",
       classificationText:
@@ -152,7 +158,7 @@ function t(language: AppLanguage) {
     eyebrow: "PopSim",
     title: "PopSim",
     intro:
-      "Modellgestützte Populationsschätzung für Bestand, Zielwerte und potenziellen Abschuss-Vorschlag.",
+      "Modellgestützte Populationsschätzung für Bestand, Zielwerte und potenziellen Entnahmevorschlag.",
     activeOrganizationNotFound: "Aktive Organisation nicht gefunden.",
     reviersLoadFailed: "Fehler beim Laden der Reviere:",
     noActiveGroundForPopSim:
@@ -176,8 +182,8 @@ function t(language: AppLanguage) {
     withCurrentSnapshot: "mit aktuellem Snapshot",
     estimatedTotal: "Geschätzter Bestand",
     acrossAllSpecies: "über alle Arten",
-    harvestSurplus: "Abschuss-Vorschlag",
-    speciesGreaterThanZero: (count: string) => `${count} Arten > 0`,
+    harvestSurplus: "Entnahmevorschlag",
+    speciesGreaterThanZero: (count: string) => `Summe über ${count} Arten`,
     noSnapshotTitle: "Kein PopSim-Snapshot vorhanden",
     noSnapshotTextA:
       "Für das ausgewählte Revier wurden noch keine PopSim-Ergebnisse in",
@@ -185,12 +191,14 @@ function t(language: AppLanguage) {
     speciesEstimates: "Artenschätzungen",
     speciesEstimatesText:
       "Gerundete UI-Sicht auf den neuesten modellierten Snapshot des ausgewählten Reviers.",
+    currentState: "Ist-Zustand",
+    targetState: "Soll-Zustand",
     species: "Art",
     estimatedTotalCol: "Geschätzter Bestand",
     per100ha: "Pro 100 ha",
     targetTotal: "Zielbestand",
     targetPer100ha: "Pro 100 ha",
-    harvestSurplusCol: "Abschuss-Vorschlag",
+    harvestSurplusCol: "Entnahmevorschlag",
     noSpeciesRows:
       "Für den neuesten Snapshot sind keine Artenschätzungen vorhanden.",
     classification: "Einordnung",
@@ -314,23 +322,21 @@ export default async function PopSimPage({
     );
   }
 
-const defaultRevier =
-  reviers.find((revier) => revier.is_default) ?? reviers[0];
+  const defaultRevier =
+    reviers.find((revier) => revier.is_default) ?? reviers[0];
 
-if (!resolvedSearchParams.revier || resolvedSearchParams.revier === "all") {
-  redirect(`/wildlife/popsim?revier=${defaultRevier.id}`);
-}
+  if (!resolvedSearchParams.revier || resolvedSearchParams.revier === "all") {
+    redirect(`/wildlife/popsim?revier=${defaultRevier.id}`);
+  }
 
-const revierScope = resolveRevierScope(
-  resolvedSearchParams.revier,
-  allowedReviers
-);
+  const revierScope = resolveRevierScope(
+    resolvedSearchParams.revier,
+    allowedReviers
+  );
 
-if (revierScope.type === "all") {
-  redirect(`/wildlife/popsim?revier=${defaultRevier.id}`);
-}
-
-
+  if (revierScope.type === "all") {
+    redirect(`/wildlife/popsim?revier=${defaultRevier.id}`);
+  }
 
   const selectedRevier = reviers.find((r) => r.id === revierScope.revierId);
 
@@ -415,11 +421,11 @@ if (revierScope.type === "all") {
     0
   );
   const totalHarvestSurplus = snapshotRows.reduce(
-    (sum, row) => sum + (row.harvest_surplus_v0 ?? 0),
+    (sum, row) => sum + getRoundedHarvestSurplus(row),
     0
   );
   const speciesWithSurplus = snapshotRows.filter(
-    (row) => (row.harvest_surplus_v0 ?? 0) > 0
+    (row) => getRoundedHarvestSurplus(row) > 0
   ).length;
 
   return (
@@ -492,20 +498,40 @@ if (revierScope.type === "all") {
               <table className="min-w-full border-collapse text-sm">
                 <thead>
                   <tr className="border-b border-white/8 text-left text-white/55">
-                    <th className="px-3 py-2 font-medium">{text.species}</th>
+                    <th rowSpan={2} className="px-3 py-2 align-bottom font-medium">
+                      {text.species}
+                    </th>
+                    <th
+                      colSpan={2}
+                      className="px-3 py-2 text-center text-xs font-semibold uppercase tracking-wide text-white/45"
+                    >
+                      {text.currentState}
+                    </th>
+                    <th
+                      colSpan={2}
+                      className="border-l border-white/10 px-3 py-2 text-center text-xs font-semibold uppercase tracking-wide text-white/45"
+                    >
+                      {text.targetState}
+                    </th>
+                    <th
+                      aria-hidden="true"
+                      className="border-l border-white/10 px-3 py-2"
+                    />
+                  </tr>
+                  <tr className="border-b border-white/8 text-left text-white/55">
                     <th className="px-3 py-2 text-center font-medium">
                       {text.estimatedTotalCol}
                     </th>
                     <th className="px-3 py-2 text-center font-medium">
                       {text.per100ha}
                     </th>
-                    <th className="px-3 py-2 text-center font-medium">
+                    <th className="border-l border-white/10 px-3 py-2 text-center font-medium">
                       {text.targetTotal}
                     </th>
                     <th className="px-3 py-2 text-center font-medium">
                       {text.targetPer100ha}
                     </th>
-                    <th className="px-3 py-2 text-center font-medium">
+                    <th className="border-l border-white/10 px-3 py-2 text-center font-medium text-white/70">
                       {text.harvestSurplusCol}
                     </th>
                   </tr>
@@ -533,13 +559,13 @@ if (revierScope.type === "all") {
                         <td className="px-3 py-3 text-center text-white/72">
                           {fmtInt(row.estimated_population_per_100ha, language)}
                         </td>
-                        <td className="px-3 py-3 text-center text-white/72">
+                        <td className="border-l border-white/10 px-3 py-3 text-center text-white/72">
                           {fmtInt(row.target_total, language)}
                         </td>
                         <td className="px-3 py-3 text-center text-white/72">
                           {fmtInt(row.target_per_100ha, language)}
                         </td>
-                        <td className="px-3 py-3 text-center text-white/72">
+                        <td className="border-l border-white/10 px-3 py-3 text-center font-medium text-white/78">
                           {fmtInt(row.harvest_surplus_v0, language)}
                         </td>
                       </tr>
