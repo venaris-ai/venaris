@@ -1,4 +1,4 @@
-// src/app/orga/members/invite/page.tsx #17
+// src/app/orga/members/invite/page.tsx #18
 import Link from "next/link";
 import { randomBytes } from "crypto";
 import { cookies } from "next/headers";
@@ -15,11 +15,7 @@ import {
   canInviteMember,
   resolveSubscriptionState,
 } from "@/lib/billing/subscriptionPolicy";
-import {
-  LOCALE_COOKIE,
-  resolveLanguage,
-  type AppLanguage,
-} from "@/lib/i18n";
+import { LOCALE_COOKIE, resolveLanguage, type AppLanguage } from "@/lib/i18n";
 
 type SubscriptionPolicyRow = {
   status: "trialing" | "active" | "past_due" | "canceled" | "expired";
@@ -60,7 +56,8 @@ function t(language: AppLanguage) {
         invalidRole: "Invalid role.",
         invalidLanguage: "Invalid language.",
         invalidExpiry: "Expiry must be between 1 and 90 days.",
-        openInviteExists: "There is already an open invitation for this email address.",
+        openInviteExists:
+          "There is already an open invitation for this email address.",
         noSubscription: "No subscription was found for this organization.",
         inviteCreatedMailFailedPrefix:
           "Invitation was created, but email delivery failed:",
@@ -91,16 +88,18 @@ function t(language: AppLanguage) {
           "New invitations are sent by email. The recipient can then create their account and accept the invitation directly.",
         roleOverviewTitle: "Role overview",
         roleOverviewText:
-          "This overview helps with choosing the appropriate role for new members.",
-        roleCol: "Role",
-        meaningCol: "Meaning",
+          "This overview shows which areas each role can access.",
+        accessAreaCol: "Area",
+        canAccess: "Access granted",
       }
     : {
         invalidEmail: "Bitte eine gültige E-Mail-Adresse eingeben.",
         invalidRole: "Ungültige Rolle.",
         invalidLanguage: "Ungültige Sprache.",
-        invalidExpiry: "Die Gültigkeitsdauer muss zwischen 1 und 90 Tagen liegen.",
-        openInviteExists: "Für diese E-Mail existiert bereits eine offene Einladung.",
+        invalidExpiry:
+          "Die Gültigkeitsdauer muss zwischen 1 und 90 Tagen liegen.",
+        openInviteExists:
+          "Für diese E-Mail existiert bereits eine offene Einladung.",
         noSubscription: "Für diese Organisation wurde kein Abo gefunden.",
         inviteCreatedMailFailedPrefix:
           "Einladung wurde angelegt, aber E-Mail-Versand fehlgeschlagen:",
@@ -131,48 +130,72 @@ function t(language: AppLanguage) {
           "Neue Einladungen werden per E-Mail verschickt. Der Empfänger kann danach seinen Account anlegen und die Einladung direkt annehmen.",
         roleOverviewTitle: "Rollenübersicht",
         roleOverviewText:
-          "Diese Übersicht hilft bei der Auswahl der passenden Rolle für neue Mitglieder.",
-        roleCol: "Rolle",
-        meaningCol: "Bedeutung",
+          "Diese Übersicht zeigt, welche Bereiche die jeweilige Rolle nutzen darf.",
+        accessAreaCol: "Bereich",
+        canAccess: "Zugriff erlaubt",
       };
 }
 
-function getRoleDescriptions(language: AppLanguage) {
+function getRoleAccessRows(language: AppLanguage) {
   return language === "en"
     ? [
         {
-          role: "Owner",
-          text: "Full administrative access to organization, members, grounds and later subscription functions.",
+          area: "Wildlife",
+          owner: true,
+          admin: true,
+          member: true,
+          viewer: true,
         },
         {
-          role: "Admin",
-          text: "Operational administration of the platform without necessarily having the same ownership role as an owner.",
+          area: "Cameras",
+          owner: true,
+          admin: true,
+          member: true,
+          viewer: false,
         },
         {
-          role: "Member",
-          text: "Regular working access for daily use within the shared organizational structure.",
+          area: "Organization without subscription",
+          owner: true,
+          admin: true,
+          member: false,
+          viewer: false,
         },
         {
-          role: "Viewer",
-          text: "Read-only access for users who should see content but not change administrative settings.",
+          area: "Organization incl. subscription",
+          owner: true,
+          admin: false,
+          member: false,
+          viewer: false,
         },
       ]
     : [
         {
-          role: "Owner",
-          text: "Voller administrativer Zugriff auf Organisation, Mitglieder, Reviere und spätere Abo-Funktionen.",
+          area: "Wildlife",
+          owner: true,
+          admin: true,
+          member: true,
+          viewer: true,
         },
         {
-          role: "Admin",
-          text: "Operative Verwaltung der Plattform, ohne zwingend dieselbe Eigentümerrolle wie ein Owner zu haben.",
+          area: "Kameras",
+          owner: true,
+          admin: true,
+          member: true,
+          viewer: false,
         },
         {
-          role: "Member",
-          text: "Regulärer Arbeitszugang für die tägliche Nutzung innerhalb der freigegebenen Organisationsstruktur.",
+          area: "Organisation ohne Abo",
+          owner: true,
+          admin: true,
+          member: false,
+          viewer: false,
         },
         {
-          role: "Viewer",
-          text: "Lesender Zugriff für Nutzer, die Inhalte sehen, aber nicht administrativ verändern sollen.",
+          area: "Organisation inkl. Abo",
+          owner: true,
+          admin: false,
+          member: false,
+          viewer: false,
         },
       ];
 }
@@ -181,7 +204,7 @@ async function createInvite(formData: FormData) {
   "use server";
 
   const { ctx, supabase, language } = await resolveUiLanguageForProtectedPath(
-    "/orga/members/invite"
+    "/orga/members/invite",
   );
   redirectIfDemoWrite(ctx, "/orga/members/invite?demo_read_only=1");
 
@@ -197,9 +220,14 @@ async function createInvite(formData: FormData) {
     throw new Error("Active organization not found");
   }
 
-  const email = String(formData.get("email") ?? "").trim().toLowerCase();
-  const inviteRole = String(formData.get("role") ?? "member").trim() || "member";
-  const expiresInDaysRaw = String(formData.get("expires_in_days") ?? "14").trim();
+  const email = String(formData.get("email") ?? "")
+    .trim()
+    .toLowerCase();
+  const inviteRole =
+    String(formData.get("role") ?? "member").trim() || "member";
+  const expiresInDaysRaw = String(
+    formData.get("expires_in_days") ?? "14",
+  ).trim();
   const inviteLanguageRaw = String(formData.get("language") ?? "").trim();
 
   if (!email || !email.includes("@")) {
@@ -217,7 +245,11 @@ async function createInvite(formData: FormData) {
   const inviteLanguage = inviteLanguageRaw as AppLanguage;
   const expiresInDays = Number(expiresInDaysRaw);
 
-  if (!Number.isFinite(expiresInDays) || expiresInDays < 1 || expiresInDays > 90) {
+  if (
+    !Number.isFinite(expiresInDays) ||
+    expiresInDays < 1 ||
+    expiresInDays > 90
+  ) {
     throw new Error(text.invalidExpiry);
   }
 
@@ -236,35 +268,42 @@ async function createInvite(formData: FormData) {
     .maybeSingle();
 
   if (existingPendingError) {
-    throw new Error(`Failed to check existing invites: ${existingPendingError.message}`);
+    throw new Error(
+      `Failed to check existing invites: ${existingPendingError.message}`,
+    );
   }
 
   if (existingPending) {
     throw new Error(text.openInviteExists);
   }
 
-  const [subscriptionResult, memberCountResult, inviteCountResult] = await Promise.all([
-    supabase
-      .from("organization_subscriptions")
-      .select("status,trial_ends_at,current_period_end,max_cameras,max_members")
-      .eq("organization_id", organization.id)
-      .maybeSingle<SubscriptionPolicyRow>(),
+  const [subscriptionResult, memberCountResult, inviteCountResult] =
+    await Promise.all([
+      supabase
+        .from("organization_subscriptions")
+        .select(
+          "status,trial_ends_at,current_period_end,max_cameras,max_members",
+        )
+        .eq("organization_id", organization.id)
+        .maybeSingle<SubscriptionPolicyRow>(),
 
-    supabase
-      .from("organization_members")
-      .select("user_id", { count: "exact", head: true })
-      .eq("organization_id", organization.id),
+      supabase
+        .from("organization_members")
+        .select("user_id", { count: "exact", head: true })
+        .eq("organization_id", organization.id),
 
-    supabase
-      .from("organization_invites")
-      .select("id", { count: "exact", head: true })
-      .eq("organization_id", organization.id)
-      .eq("status", "pending")
-      .or(`expires_at.is.null,expires_at.gt.${nowIso}`),
-  ]);
+      supabase
+        .from("organization_invites")
+        .select("id", { count: "exact", head: true })
+        .eq("organization_id", organization.id)
+        .eq("status", "pending")
+        .or(`expires_at.is.null,expires_at.gt.${nowIso}`),
+    ]);
 
   if (subscriptionResult.error) {
-    throw new Error(`Failed to load subscription limits: ${subscriptionResult.error.message}`);
+    throw new Error(
+      `Failed to load subscription limits: ${subscriptionResult.error.message}`,
+    );
   }
 
   if (!subscriptionResult.data) {
@@ -272,11 +311,15 @@ async function createInvite(formData: FormData) {
   }
 
   if (memberCountResult.error) {
-    throw new Error(`Failed to load member usage: ${memberCountResult.error.message}`);
+    throw new Error(
+      `Failed to load member usage: ${memberCountResult.error.message}`,
+    );
   }
 
   if (inviteCountResult.error) {
-    throw new Error(`Failed to load invite usage: ${inviteCountResult.error.message}`);
+    throw new Error(
+      `Failed to load invite usage: ${inviteCountResult.error.message}`,
+    );
   }
 
   const invitePolicy = canInviteMember({
@@ -311,7 +354,9 @@ async function createInvite(formData: FormData) {
     .single();
 
   if (insertError || !inviteRow) {
-    throw new Error(`Failed to create invite: ${insertError?.message ?? "Unknown error"}`);
+    throw new Error(
+      `Failed to create invite: ${insertError?.message ?? "Unknown error"}`,
+    );
   }
 
   try {
@@ -336,12 +381,14 @@ async function createInvite(formData: FormData) {
 
     if (updateMailError) {
       throw new Error(
-        `Invite was created, but provider metadata could not be saved: ${updateMailError.message}`
+        `Invite was created, but provider metadata could not be saved: ${updateMailError.message}`,
       );
     }
   } catch (mailError) {
     const message =
-      mailError instanceof Error ? mailError.message : "Unknown email delivery error";
+      mailError instanceof Error
+        ? mailError.message
+        : "Unknown email delivery error";
 
     await supabase
       .from("organization_invites")
@@ -370,7 +417,7 @@ export default async function InviteMemberPage({
   const demoReadOnly = params.demo_read_only === "1";
 
   const { ctx, supabase, language } = await resolveUiLanguageForProtectedPath(
-    "/orga/members/invite"
+    "/orga/members/invite",
   );
 
   if (!ctx.activeMembership) {
@@ -386,31 +433,34 @@ export default async function InviteMemberPage({
 
   const nowIso = new Date().toISOString();
   const text = t(language);
-  const roleDescriptions = getRoleDescriptions(language);
+  const roleAccessRows = getRoleAccessRows(language);
 
-  const [subscriptionResult, memberCountResult, inviteCountResult] = await Promise.all([
-    supabase
-      .from("organization_subscriptions")
-      .select("status,trial_ends_at,current_period_end,max_cameras,max_members")
-      .eq("organization_id", organization.id)
-      .maybeSingle<SubscriptionPolicyRow>(),
+  const [subscriptionResult, memberCountResult, inviteCountResult] =
+    await Promise.all([
+      supabase
+        .from("organization_subscriptions")
+        .select(
+          "status,trial_ends_at,current_period_end,max_cameras,max_members",
+        )
+        .eq("organization_id", organization.id)
+        .maybeSingle<SubscriptionPolicyRow>(),
 
-    supabase
-      .from("organization_members")
-      .select("user_id", { count: "exact", head: true })
-      .eq("organization_id", organization.id),
+      supabase
+        .from("organization_members")
+        .select("user_id", { count: "exact", head: true })
+        .eq("organization_id", organization.id),
 
-    supabase
-      .from("organization_invites")
-      .select("id", { count: "exact", head: true })
-      .eq("organization_id", organization.id)
-      .eq("status", "pending")
-      .or(`expires_at.is.null,expires_at.gt.${nowIso}`),
-  ]);
+      supabase
+        .from("organization_invites")
+        .select("id", { count: "exact", head: true })
+        .eq("organization_id", organization.id)
+        .eq("status", "pending")
+        .or(`expires_at.is.null,expires_at.gt.${nowIso}`),
+    ]);
 
   if (subscriptionResult.error) {
     throw new Error(
-      `Failed to load subscription member limit: ${subscriptionResult.error.message}`
+      `Failed to load subscription member limit: ${subscriptionResult.error.message}`,
     );
   }
 
@@ -419,11 +469,15 @@ export default async function InviteMemberPage({
   }
 
   if (memberCountResult.error) {
-    throw new Error(`Failed to load member usage: ${memberCountResult.error.message}`);
+    throw new Error(
+      `Failed to load member usage: ${memberCountResult.error.message}`,
+    );
   }
 
   if (inviteCountResult.error) {
-    throw new Error(`Failed to load invite usage: ${inviteCountResult.error.message}`);
+    throw new Error(
+      `Failed to load invite usage: ${inviteCountResult.error.message}`,
+    );
   }
 
   const policyInput = {
@@ -443,8 +497,10 @@ export default async function InviteMemberPage({
   const usagePercent =
     subscriptionResult.data.max_members > 0
       ? Math.min(
-          (resolvedState.currentMemberUsage / subscriptionResult.data.max_members) * 100,
-          100
+          (resolvedState.currentMemberUsage /
+            subscriptionResult.data.max_members) *
+            100,
+          100,
         )
       : 0;
 
@@ -458,17 +514,13 @@ export default async function InviteMemberPage({
           <h1 className="mt-3 text-3xl font-semibold tracking-tight text-white">
             {text.title}
           </h1>
-          <p className="mt-2 max-w-3xl text-sm text-white/68">
-            {text.intro}
-          </p>
+          <p className="mt-2 max-w-3xl text-sm text-white/68">{text.intro}</p>
         </div>
       </section>
 
       {demoReadOnly ? (
         <section className="rounded-[24px] border border-amber-300/20 bg-amber-300/10 p-4">
-          <p className="text-sm text-amber-100">
-            {text.demoReadOnly}
-          </p>
+          <p className="text-sm text-amber-100">{text.demoReadOnly}</p>
         </section>
       ) : null}
 
@@ -502,7 +554,7 @@ export default async function InviteMemberPage({
             >
               {text.usageComposition(
                 policyInput.activeMemberCount,
-                policyInput.openInviteCount
+                policyInput.openInviteCount,
               )}
             </p>
           </div>
@@ -514,7 +566,8 @@ export default async function InviteMemberPage({
                 : "border-rose-300/25 bg-white/5 text-rose-100"
             }`}
           >
-            {resolvedState.currentMemberUsage} / {subscriptionResult.data.max_members}
+            {resolvedState.currentMemberUsage} /{" "}
+            {subscriptionResult.data.max_members}
           </div>
         </div>
 
@@ -528,9 +581,7 @@ export default async function InviteMemberPage({
         </div>
 
         {resolvedState.effectiveStatus !== subscriptionResult.data.status ? (
-          <p className="mt-3 text-xs text-rose-200">
-            {text.trialExpiredHint}
-          </p>
+          <p className="mt-3 text-xs text-rose-200">{text.trialExpiredHint}</p>
         ) : null}
       </section>
 
@@ -652,7 +703,9 @@ export default async function InviteMemberPage({
         </section>
 
         <aside className="rounded-[28px] border border-amber-300/20 bg-amber-300/10 p-6 backdrop-blur-sm">
-          <h2 className="text-lg font-medium text-amber-100">{text.noteTitle}</h2>
+          <h2 className="text-lg font-medium text-amber-100">
+            {text.noteTitle}
+          </h2>
           <p className="mt-2 text-sm leading-6 text-amber-100/80">
             {isDemo ? text.noteDemo : text.noteNormal}
           </p>
@@ -661,27 +714,54 @@ export default async function InviteMemberPage({
 
       <section className="rounded-[28px] border border-white/10 bg-white/5 backdrop-blur-sm">
         <div className="border-b border-white/8 px-6 py-4">
-          <h2 className="text-lg font-medium text-white">{text.roleOverviewTitle}</h2>
-          <p className="mt-1 text-sm text-white/65">
-            {text.roleOverviewText}
-          </p>
+          <h2 className="text-lg font-medium text-white">
+            {text.roleOverviewTitle}
+          </h2>
+          <p className="mt-1 text-sm text-white/65">{text.roleOverviewText}</p>
         </div>
 
         <div className="overflow-x-auto">
           <table className="min-w-full text-sm">
             <thead className="bg-white/5 text-left text-white/55">
               <tr>
-                <th className="px-6 py-3 font-medium">{text.roleCol}</th>
-                <th className="px-6 py-3 font-medium">{text.meaningCol}</th>
+                <th className="min-w-[220px] px-6 py-3 font-medium">
+                  {text.accessAreaCol}
+                </th>
+                {["Owner", "Admin", "Member", "Viewer"].map((role) => (
+                  <th key={role} className="px-4 py-3 text-center font-medium">
+                    {role}
+                  </th>
+                ))}
               </tr>
             </thead>
             <tbody>
-              {roleDescriptions.map((item) => (
-                <tr key={item.role} className="border-t border-white/8 align-top">
+              {roleAccessRows.map((item) => (
+                <tr
+                  key={item.area}
+                  className="border-t border-white/8 align-middle"
+                >
                   <td className="px-6 py-4 font-medium text-white">
-                    {item.role}
+                    {item.area}
                   </td>
-                  <td className="px-6 py-4 text-white/68">{item.text}</td>
+                  {[item.owner, item.admin, item.member, item.viewer].map(
+                    (hasAccess, index) => (
+                      <td
+                        key={`${item.area}-${index}`}
+                        className="px-4 py-4 text-center text-white/38"
+                      >
+                        {hasAccess ? (
+                          <span
+                            aria-label={text.canAccess}
+                            className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-emerald-300/30 bg-emerald-300/12 text-sm font-semibold text-emerald-100"
+                          >
+                            ✓
+                          </span>
+                        ) : (
+                          <span aria-hidden="true">—</span>
+                        )}
+                      </td>
+                    ),
+                  )}
                 </tr>
               ))}
             </tbody>
