@@ -1,35 +1,36 @@
-// src/app/cameras/page.tsx #14
-import { cookies } from "next/headers";
-import { requirePathAccess } from "@/lib/authz";
-import { supabaseServer } from "@/lib/supabaseServer";
-import {
-  LOCALE_COOKIE,
-  resolveLanguage,
-  type AppLanguage,
-} from "@/lib/i18n";
-import CamerasPageClient from "./CamerasPageClient";
+// src/app/cameras/page.tsx #16
+import { redirect } from "next/navigation";
 
-export default async function CamerasPage() {
-  const ctx = await requirePathAccess("/cameras");
+type SearchParams = Record<string, string | string[] | undefined>;
 
-if (!ctx.user) {
-  throw new Error("Authenticated user required");
+function buildQueryString(searchParams: SearchParams | undefined) {
+  const params = new URLSearchParams();
+
+  for (const [key, value] of Object.entries(searchParams ?? {})) {
+    if (typeof value === "string" && value.length > 0) {
+      params.set(key, value);
+      continue;
+    }
+
+    if (Array.isArray(value)) {
+      for (const item of value) {
+        if (item.length > 0) {
+          params.append(key, item);
+        }
+      }
+    }
+  }
+
+  const queryString = params.toString();
+  return queryString ? `?${queryString}` : "";
 }
 
+export default async function CamerasPage(props: {
+  searchParams?: Promise<SearchParams> | SearchParams;
+}) {
+  const searchParams = props.searchParams
+    ? await Promise.resolve(props.searchParams)
+    : undefined;
 
-  const cookieStore = await cookies();
-  const supabase = supabaseServer();
-
-  const { data: profileData } = await supabase
-    .from("profiles")
-    .select("preferred_language")
-    .eq("id", ctx.user.id)
-    .maybeSingle();
-
-  const language: AppLanguage = resolveLanguage({
-    cookieLanguage: cookieStore.get(LOCALE_COOKIE)?.value,
-    profileLanguage: profileData?.preferred_language,
-  });
-
-  return <CamerasPageClient language={language} />;
+  redirect(`/cameras/health${buildQueryString(searchParams)}`);
 }

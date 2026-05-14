@@ -17,6 +17,8 @@ import {
   type AppLanguage,
 } from "@/lib/i18n";
 import CameraTableRow from "./CameraTableRow";
+import CameraHealthMap from "./CameraHealthMap";
+import type { BoundaryGeoJson } from "../CameraMap";
 
 type SearchParams = {
   revier?: string;
@@ -115,6 +117,10 @@ type HealthRuleRow = {
   methodLabel: string;
   staleAfterMinutes: number;
   offlineAfterMinutes: number;
+};
+
+type RevierBoundaryRow = {
+  geometry: unknown;
 };
 
 type CameraMutationRow = {
@@ -334,6 +340,37 @@ function buildHealthRules(
   ];
 }
 
+function extractGeoJsonFeatures(geometry: unknown): unknown[] {
+  if (
+    typeof geometry !== "object" ||
+    geometry === null ||
+    !("type" in geometry)
+  ) {
+    return [];
+  }
+
+  const type = (geometry as { type?: unknown }).type;
+
+  if (type === "FeatureCollection") {
+    const features = (geometry as { features?: unknown }).features;
+    return Array.isArray(features) ? features : [];
+  }
+
+  if (type === "Feature") {
+    return [geometry];
+  }
+
+  return [];
+}
+
+function buildBoundaryGeoJson(boundaries: RevierBoundaryRow[]): BoundaryGeoJson {
+  return {
+    type: "FeatureCollection" as const,
+    features: boundaries.flatMap((boundary) =>
+      extractGeoJsonFeatures(boundary.geometry)
+    ),
+  } as BoundaryGeoJson;
+}
 
 function buildReturnUrl(params: {
   revier?: string | null;
@@ -888,6 +925,30 @@ export default async function CamerasHealthPage(props: {
     };
   });
 
+  const scopedRevierIds =
+    revierScope.type === "single" ? [revierScope.revierId] : allowedRevierIds;
+
+  const { data: boundariesData, error: boundariesError } = await supabase
+    .from("revier_boundaries")
+    .select("geometry")
+    .eq("organization_id", activeOrganization.id)
+    .in("revier_id", scopedRevierIds);
+
+  if (boundariesError) {
+    return (
+      <main className="space-y-8">
+        <PageHeader text={text} />
+        <div className="rounded-[24px] border border-rose-300/20 bg-rose-300/10 p-4 text-sm text-rose-100">
+          {boundariesError.message}
+        </div>
+      </main>
+    );
+  }
+
+  const boundaryGeoJson = buildBoundaryGeoJson(
+    (boundariesData ?? []) as RevierBoundaryRow[]
+  );
+
   const onlineCount = rows.filter((row) => row.health_status === "online").length;
   const staleCount = rows.filter((row) => row.health_status === "stale").length;
   const offlineCount = rows.filter((row) => row.health_status === "offline").length;
@@ -1007,6 +1068,12 @@ export default async function CamerasHealthPage(props: {
           </div>
         ) : null}
       </section>
+
+      <CameraHealthMap
+        cameras={rows}
+        language={language}
+        boundaryGeoJson={boundaryGeoJson}
+      />
     </main>
   );
 }

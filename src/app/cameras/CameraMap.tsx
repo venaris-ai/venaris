@@ -49,7 +49,7 @@ function t(language: AppLanguage) {
       text: "Camera positions and viewing directions in the current scope.",
       noLocatedCameras: "No cameras with location data in the current scope.",
       noCoordinatesTitle: "Enter map coordinates to use the camera map.",
-      noCoordinatesCta: "Open camera status",
+      noCoordinatesCta: "Edit coordinates in the table above",
       partialCoordinates:
         "Only cameras with coordinates are shown on the map.",
       location: "Location",
@@ -70,7 +70,7 @@ function t(language: AppLanguage) {
     noLocatedCameras: "Keine Kameras mit Standortdaten im aktuellen Scope.",
     noCoordinatesTitle:
       "Bitte Kartenkoordinaten eingeben, um die Kartenansicht zu genießen.",
-    noCoordinatesCta: "Zum Kamerastatus",
+    noCoordinatesCta: "Koordinaten oben in der Tabelle bearbeiten",
     partialCoordinates:
       "Es werden nur die Kameras mit Koordinaten gezeigt.",
     location: "Standort",
@@ -620,12 +620,9 @@ export default function CameraMap({
               <div className="text-base font-medium text-white">
                 {text.noCoordinatesTitle}
               </div>
-              <a
-                href="/cameras/health"
-                className="mt-3 inline-flex rounded-full border border-amber-300/30 bg-amber-300/10 px-4 py-2 text-sm font-medium text-amber-100 transition hover:bg-amber-300/15"
-              >
+              <p className="mt-3 text-sm text-white/60">
                 {text.noCoordinatesCta}
-              </a>
+              </p>
             </>
           ) : (
             text.noLocatedCameras

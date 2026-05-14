@@ -1,4 +1,4 @@
-// src/app/wildlife/page.tsx #8
+// src/app/wildlife/page.tsx #9
 import { redirect } from "next/navigation";
 
 type SearchParams = Record<string, string | string[] | undefined>;
@@ -32,5 +32,5 @@ export default async function WildlifePage(props: {
     ? await Promise.resolve(props.searchParams)
     : undefined;
 
-  redirect(`/wildlife/activity${buildQueryString(searchParams)}`);
+  redirect(`/wildlife/wherewhen${buildQueryString(searchParams)}`);
 }

@@ -1,10 +1,9 @@
-// src/app/layout.tsx #15
+// src/app/layout.tsx #16
 import "./globals.css";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { cookies } from "next/headers";
-import MainNav from "@/components/MainNav";
-import SectionNav from "@/components/SectionNav";
-import ContextBar from "@/components/ContextBar";
+import HeaderMenu from "@/components/HeaderMenu";
+import HeaderRevierScope from "@/components/HeaderRevierScope";
 import LogoutButton from "@/components/LogoutButton";
 import AppShellGate from "@/components/AppShellGate";
 import DemoSessionGuard from "@/components/DemoSessionGuard";
@@ -108,7 +107,7 @@ function blockedText(status: SubscriptionStatus, language: AppLanguage) {
 
 function HeaderBrand({ email }: { email: string | null }) {
   return (
-    <div className="font-semibold tracking-[0.18em] text-white">
+    <div className="min-w-0 font-semibold tracking-[0.18em] text-white">
       VENARIS
       {email ? (
         <span className="ml-2 text-sm font-normal tracking-normal text-white/55">
@@ -293,23 +292,19 @@ export default async function RootLayout({
   }
 
   const header = (
-    <header className="border-b border-white/8 bg-[#102018]/72 backdrop-blur-xl">
+    <header className="relative z-[100] border-b border-white/8 bg-[#102018]/92 backdrop-blur-xl">
       <div className="mx-auto max-w-6xl px-6 py-3">
-        <div className="flex items-end justify-between gap-6">
-          <div className="min-w-0">
-            <HeaderBrand email={email} />
-            <div className="mt-2">
-              <ContextBar language={language} />
-            </div>
-          </div>
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <HeaderBrand email={email} />
 
-          <div className="flex flex-col items-end gap-2">
-            <div className="flex items-center gap-2">
-              <MainNav language={language} />
-              <LogoutButton language={language} />
-            </div>
-
-            <SectionNav role={role} email={email} isDemo={isDemo} language={language} />
+          <div className="flex items-center gap-3">
+            <HeaderRevierScope language={language} />
+            <HeaderMenu
+              role={role}
+              email={email}
+              isDemo={isDemo}
+              language={language}
+            />
           </div>
         </div>
       </div>
