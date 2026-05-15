@@ -39,9 +39,9 @@ function t(language: AppLanguage) {
   }
 
   return {
-    capturesTitle: "Event-Aufnahmen",
+    capturesTitle: "Bilder zu diesem Ereignis",
     capturesText:
-      "Bilder dieses Events. Wähle ein Bild aus, um die Details zu prüfen.",
+      "Wähle ein Bild aus, um die Details zu prüfen.",
     noAssets: "Keine Assets gefunden (event_assets leer oder Asset-IDs fehlen).",
   };
 }

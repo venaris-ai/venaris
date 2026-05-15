@@ -95,8 +95,8 @@ function t(language: AppLanguage) {
       title: "Event",
       intro: "Details & assets",
       overview: "Overview",
-      olderEvent: "← Older event",
-      newerEvent: "Newer event →",
+      olderEvent: "← Older",
+      newerEvent: "Newer →",
       missingId: "Event ID is missing (params.id is undefined). Please reload the page.",
       notFound: "Event not found",
       notFoundOrForbidden: "Event not found or not allowed.",
@@ -106,15 +106,15 @@ function t(language: AppLanguage) {
   }
 
   return {
-    eyebrow: "Event",
-    title: "Event",
+    eyebrow: "Ereignis",
+    title: "Ereignis",
     intro: "Details & Assets",
     overview: "Übersicht",
-    olderEvent: "← Älteres Event",
-    newerEvent: "Neueres Event →",
-    missingId: "Event-ID fehlt (params.id ist undefined). Bitte Seite neu laden.",
-    notFound: "Event nicht gefunden",
-    notFoundOrForbidden: "Event nicht gefunden oder nicht erlaubt.",
+    olderEvent: "← Älter",
+    newerEvent: "Neuer →",
+    missingId: "Ereignis-ID fehlt (params.id ist undefined). Bitte Seite neu laden.",
+    notFound: "Ereignis nicht gefunden",
+    notFoundOrForbidden: "Ereignis nicht gefunden oder nicht erlaubt.",
     errorPrefix: "Fehler:",
     unnamedCamera: "Unbenannte Kamera",
   };
