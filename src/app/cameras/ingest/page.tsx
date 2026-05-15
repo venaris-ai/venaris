@@ -1,4 +1,4 @@
-// src/app/cameras/ingest/page.tsx #13
+// src/app/cameras/ingest/page.tsx #14
 export const dynamic = "force-dynamic";
 
 import Link from "next/link";
@@ -28,7 +28,7 @@ function t(language: AppLanguage) {
       activeOrganizationNotFound: "Active organization not found",
       eyebrow: "Ingest",
       title: "Ingest",
-      intro: "Clean overview of processed events in the current scope.",
+      intro: "Overview of processed events.",
       time: "Time",
       camera: "Camera",
       channel: "Channel",
@@ -50,7 +50,7 @@ function t(language: AppLanguage) {
     activeOrganizationNotFound: "Aktive Organisation nicht gefunden",
     eyebrow: "Ingest",
     title: "Ingest",
-    intro: "Bereinigte Übersicht der verarbeiteten Events im aktuellen Scope.",
+    intro: "Übersicht der verarbeiteten Ereignisse.",
     time: "Zeit",
     camera: "Kamera",
     channel: "Kanal",
@@ -59,7 +59,7 @@ function t(language: AppLanguage) {
     assets: "Assets",
     status: "Status",
     details: "Details",
-    noEntries: "Noch keine verarbeiteten Events vorhanden.",
+    noEntries: "Noch keine verarbeiteten Ereignisse vorhanden.",
     until: "bis",
     unnamedCamera: "Unbenannte Kamera",
     showDetails: "Details anzeigen",
@@ -137,10 +137,13 @@ type EventFeedRow = {
   relevance_score: number | null;
 };
 
-type EventSpeciesSummaryRow = {
-  event_id: string;
-  species: string;
-  best_score: number | null;
+type DetectionTopRow = {
+  asset_id: string | null;
+  species: string | null;
+  species_user: string | null;
+  score: number | null;
+  meta: unknown;
+  speciesScore?: number | null;
 };
 
 type IngestEventRow = {
@@ -159,6 +162,23 @@ type IngestEventRow = {
   topCount: number | null;
   probabilityScore: number | null;
 };
+
+function readSpeciesScore(meta: unknown): number | null {
+  if (!meta || typeof meta !== "object") return null;
+
+  const speciesMeta = (meta as { species?: unknown }).species;
+  if (!speciesMeta || typeof speciesMeta !== "object") return null;
+
+  const value = (speciesMeta as { score?: unknown }).score;
+  const numericValue =
+    typeof value === "number"
+      ? value
+      : typeof value === "string"
+        ? Number(value)
+        : NaN;
+
+  return Number.isFinite(numericValue) ? numericValue : null;
+}
 
 function extractCameraName(value: BatchCameraRelation): string | null {
   if (!value) return null;
@@ -204,29 +224,53 @@ function pickLatestBatch(
 
 function buildProbabilityScoreByEventId(
   events: EventFeedRow[],
-  summaryRows: EventSpeciesSummaryRow[]
+  eventAssets: EventAssetRow[],
+  detectionRows: DetectionTopRow[]
 ) {
-  const rowsByEventId = new Map<string, EventSpeciesSummaryRow[]>();
+  const assetIdsByEventId = new Map<string, Set<string>>();
 
-  for (const row of summaryRows) {
-    const rows = rowsByEventId.get(row.event_id) ?? [];
-    rows.push(row);
-    rowsByEventId.set(row.event_id, rows);
+  for (const row of eventAssets) {
+    if (!row.asset_id) continue;
+
+    if (!assetIdsByEventId.has(row.event_id)) {
+      assetIdsByEventId.set(row.event_id, new Set<string>());
+    }
+
+    assetIdsByEventId.get(row.event_id)?.add(row.asset_id);
   }
+
+  const detectionRowsWithSpeciesScore = detectionRows.map((row) => ({
+    ...row,
+    speciesScore: readSpeciesScore(row.meta),
+  }));
 
   const scoreByEventId = new Map<string, number | null>();
 
   for (const event of events) {
-    const rows = rowsByEventId.get(event.id) ?? [];
-    const candidates = event.top_species
-      ? rows.filter((row) => row.species === event.top_species)
-      : rows;
+    const eventAssetIds = assetIdsByEventId.get(event.id);
 
-    const best = [...candidates].sort(
-      (a, b) => (b.best_score ?? -1) - (a.best_score ?? -1)
-    )[0];
+    if (!eventAssetIds || eventAssetIds.size === 0) {
+      scoreByEventId.set(event.id, null);
+      continue;
+    }
 
-    scoreByEventId.set(event.id, best?.best_score ?? null);
+    const candidates = detectionRowsWithSpeciesScore.filter((row) => {
+      if (!row.asset_id || !eventAssetIds.has(row.asset_id)) return false;
+
+      if (!event.top_species) return true;
+
+      const effectiveSpecies = row.species_user ?? row.species;
+      return effectiveSpecies === event.top_species;
+    });
+
+    const best = [...candidates].sort((a, b) => {
+      const scoreA = a.speciesScore ?? a.score ?? -1;
+      const scoreB = b.speciesScore ?? b.score ?? -1;
+
+      return scoreB - scoreA;
+    })[0];
+
+    scoreByEventId.set(event.id, best?.speciesScore ?? best?.score ?? null);
   }
 
   return scoreByEventId;
@@ -408,29 +452,17 @@ export default async function CamerasIngestPage(props: {
             const eventIds = events.map((event) => event.id);
 
             if (eventIds.length > 0) {
-              const [
-                eventAssetsResult,
-                speciesSummaryResult,
-              ] = await Promise.all([
-                supabase
+              const { data: eventAssetsData, error: eventAssetsError } =
+                await supabase
                   .from("event_assets")
                   .select("event_id,asset_id")
-                  .in("event_id", eventIds),
-                supabase
-                  .from("event_species_summary")
-                  .select("event_id,species,best_score")
-                  .in("event_id", eventIds),
-              ]);
+                  .in("event_id", eventIds);
 
-              if (eventAssetsResult.error) {
-                apiError = eventAssetsResult.error.message;
-              } else if (speciesSummaryResult.error) {
-                apiError = speciesSummaryResult.error.message;
+              if (eventAssetsError) {
+                apiError = eventAssetsError.message;
               } else {
                 const eventAssets =
-                  (eventAssetsResult.data ?? []) as EventAssetRow[];
-                const speciesSummaryRows =
-                  (speciesSummaryResult.data ?? []) as EventSpeciesSummaryRow[];
+                  (eventAssetsData ?? []) as EventAssetRow[];
 
                 const assetIds = Array.from(
                   new Set(eventAssets.map((row) => row.asset_id).filter(Boolean))
@@ -447,6 +479,24 @@ export default async function CamerasIngestPage(props: {
                     apiError = assetsError.message;
                   } else {
                     assets = (assetsData ?? []) as AssetRow[];
+                  }
+                }
+
+                let detections: DetectionTopRow[] = [];
+                if (!apiError && assetIds.length > 0) {
+                  const { data: detectionData, error: detectionError } =
+                    await supabase
+                      .from("detections")
+                      .select("asset_id,species,species_user,score,meta")
+                      .in("asset_id", assetIds)
+                      .eq("label", "animal")
+                      .order("score", { ascending: false })
+                      .returns<DetectionTopRow[]>();
+
+                  if (detectionError) {
+                    apiError = detectionError.message;
+                  } else {
+                    detections = detectionData ?? [];
                   }
                 }
 
@@ -507,7 +557,11 @@ export default async function CamerasIngestPage(props: {
                     );
 
                     const probabilityScoreByEventId =
-                      buildProbabilityScoreByEventId(events, speciesSummaryRows);
+                      buildProbabilityScoreByEventId(
+                        events,
+                        eventAssets,
+                        detections
+                      );
 
                     const resolvedRows: IngestEventRow[] = [];
 

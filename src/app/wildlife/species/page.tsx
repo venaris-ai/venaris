@@ -1,4 +1,4 @@
-// src/app/wildlife/species/page.tsx #6
+// src/app/wildlife/species/page.tsx #7
 export const runtime = "nodejs";
 
 import Link from "next/link";
@@ -32,13 +32,7 @@ type EventFeedRow = {
   camera_id: string;
   start_at: string | null;
   top_species: string | null;
-};
-
-type EventSpeciesSummaryRow = {
-  event_id: string;
-  species: string;
-  event_species_count: number;
-  best_score: number | null;
+  top_count: number | null;
 };
 
 type CameraRow = {
@@ -117,31 +111,6 @@ function buildHref(period: PeriodKey, revierValue: string) {
   return `/wildlife/species?${params.toString()}`;
 }
 
-async function fetchEventSpeciesSummaryChunked(
-  supabase: ReturnType<typeof supabaseServer>,
-  eventIds: string[],
-  chunkSize = 200
-) {
-  const rows: EventSpeciesSummaryRow[] = [];
-
-  for (let i = 0; i < eventIds.length; i += chunkSize) {
-    const chunk = eventIds.slice(i, i + chunkSize);
-
-    const { data, error } = await supabase
-      .from("event_species_summary")
-      .select("event_id,species,event_species_count,best_score")
-      .in("event_id", chunk);
-
-    if (error) {
-      throw new Error(error.message);
-    }
-
-    rows.push(...((data ?? []) as EventSpeciesSummaryRow[]));
-  }
-
-  return rows;
-}
-
 function t(language: AppLanguage) {
   if (language === "en") {
     return {
@@ -156,21 +125,19 @@ function t(language: AppLanguage) {
       noCamerasInScope:
         "There are no cameras for the current ground scope.",
       eventsLoadFailed: "Failed to load events:",
-      speciesSummaryLoadFailed: "Failed to load species summary:",
-      unknownError: "unknown error",
       species: "Species",
       events: "Wildlife Events",
       inPeriod: "in period",
       withSpeciesAssignment: "with species assignment",
       mostFrequentSpecies: "Most Frequent Species",
       recordedWildlife: "Counted Wildlife",
-      fromEvents: "animals counted in events",
+      fromEvents: "animals counted from primary event species",
       eventsBySpecies: "Events by Species",
       eventsBySpeciesText:
-        "An event with multiple species is counted once for each species shown here.",
+        "Only the primary species of each event is counted.",
       countedWildlifeBySpecies: "Counted Wildlife by Species",
       countedWildlifeBySpeciesText:
-        "Sum of counted animals from events in the selected period.",
+        "Sum of counted animals from the primary event species in the selected period.",
       noSpeciesData: "No species data in the selected period yet.",
     };
   }
@@ -187,21 +154,19 @@ function t(language: AppLanguage) {
     noCamerasInScope:
       "Für den aktuellen Revier-Scope sind keine Kameras vorhanden.",
     eventsLoadFailed: "Fehler beim Laden der Ereignisse:",
-    speciesSummaryLoadFailed: "Fehler beim Laden der Artenzusammenfassung:",
-    unknownError: "Unbekannter Fehler",
     species: "Arten",
     events: "Wildtier-Ereignisse",
     inPeriod: "im Zeitraum",
     withSpeciesAssignment: "mit Artzuordnung",
     mostFrequentSpecies: "Häufigste Art",
     recordedWildlife: "Gezähltes Wild",
-    fromEvents: "Tiere aus Ereignissen",
+    fromEvents: "Tiere aus Hauptarten der Ereignisse",
     eventsBySpecies: "Ereignisse nach Art",
     eventsBySpeciesText:
-      "Ein Ereignis mit mehreren Arten wird hier bei jeder betroffenen Art einmal gezählt.",
+      "Gezählt wird ausschließlich die Hauptart eines Ereignisses.",
     countedWildlifeBySpecies: "Gezähltes Wild nach Art",
     countedWildlifeBySpeciesText:
-      "Summe der gezählten Tiere aus den Ereignissen im gewählten Zeitraum.",
+      "Summe der gezählten Tiere aus der Hauptart der Ereignisse im gewählten Zeitraum.",
     noSpeciesData: "Noch keine Artdaten im gewählten Zeitraum.",
   };
 }
@@ -408,7 +373,7 @@ export default async function WildlifeSpeciesPage(props: {
 
   const { data: eventsData, error: eventsError } = await supabase
     .from("event_feed")
-    .select("id,camera_id,start_at,top_species")
+    .select("id,camera_id,start_at,top_species,top_count")
     .in("camera_id", cameraIds)
     .gte("start_at", startAt)
     .lt("start_at", endAt)
@@ -430,42 +395,25 @@ export default async function WildlifeSpeciesPage(props: {
   }
 
   const events = ((eventsData ?? []) as EventFeedRow[]).filter((e) => e.top_species);
-  const eventIds = events.map((e) => e.id);
 
-  let summaryRows: EventSpeciesSummaryRow[] = [];
-  if (eventIds.length > 0) {
-    try {
-      summaryRows = await fetchEventSpeciesSummaryChunked(supabase, eventIds, 200);
-    } catch (err) {
-      return (
-        <main className="space-y-8">
-          <SpeciesPageHeader
-            period={period}
-            revierValue={currentRevierValue}
-            language={language}
-          />
-          <div className="rounded-[24px] border border-rose-300/20 bg-rose-300/10 p-4 text-sm text-rose-100">
-            {text.speciesSummaryLoadFailed} {" "}
-            {err instanceof Error ? err.message : text.unknownError}
-          </div>
-        </main>
-      );
-    }
-  }
+  const speciesStats = new Map<
+    string,
+    { species: string; eventCount: number; wildCount: number }
+  >();
 
-  const speciesStats = new Map<string, { species: string; eventCount: number; wildCount: number }>();
+  for (const event of events) {
+    if (!event.top_species) continue;
 
-  for (const row of summaryRows) {
     const existing =
-      speciesStats.get(row.species) ?? {
-        species: row.species,
+      speciesStats.get(event.top_species) ?? {
+        species: event.top_species,
         eventCount: 0,
         wildCount: 0,
       };
 
     existing.eventCount += 1;
-    existing.wildCount += row.event_species_count ?? 0;
-    speciesStats.set(row.species, existing);
+    existing.wildCount += event.top_count ?? 1;
+    speciesStats.set(event.top_species, existing);
   }
 
   const totalSpeciesEvents = Array.from(speciesStats.values()).reduce(

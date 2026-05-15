@@ -1,4 +1,4 @@
-// src/app/wildlife/wherewhen/page.tsx #6
+// src/app/wildlife/wherewhen/page.tsx #7
 export const runtime = "nodejs";
 
 import Link from "next/link";
@@ -37,13 +37,6 @@ type EventFeedRow = {
   camera_id: string;
   start_at: string | null;
   top_species: string | null;
-};
-
-type EventSpeciesSummaryRow = {
-  event_id: string;
-  species: string;
-  event_species_count: number;
-  best_score: number | null;
 };
 
 type CameraRow = {
@@ -138,31 +131,6 @@ function bucket2h(hour: number) {
   return Math.floor(hour / 2) * 2;
 }
 
-async function fetchEventSpeciesSummaryChunked(
-  supabase: ReturnType<typeof supabaseServer>,
-  eventIds: string[],
-  chunkSize = 200
-) {
-  const rows: EventSpeciesSummaryRow[] = [];
-
-  for (let i = 0; i < eventIds.length; i += chunkSize) {
-    const chunk = eventIds.slice(i, i + chunkSize);
-
-    const { data, error } = await supabase
-      .from("event_species_summary")
-      .select("event_id,species,event_species_count,best_score")
-      .in("event_id", chunk);
-
-    if (error) {
-      throw new Error(error.message);
-    }
-
-    rows.push(...((data ?? []) as EventSpeciesSummaryRow[]));
-  }
-
-  return rows;
-}
-
 function t(language: AppLanguage) {
   if (language === "en") {
     return {
@@ -177,11 +145,9 @@ function t(language: AppLanguage) {
       noCamerasInScope:
         "There are no cameras for the current ground scope.",
       eventsLoadFailed: "Failed to load events:",
-      speciesSummaryLoadFailed: "Failed to load species summary:",
-      unknownError: "unknown error",
       speciesSelection: "Species Filter",
       speciesSelectionText:
-        "Select one species for the camera-by-time matrix.",
+        "Select one primary event species for the camera-by-time matrix.",
       species: "Species",
       update: "Update",
       noWhereWhenData:
@@ -194,7 +160,7 @@ function t(language: AppLanguage) {
       noEvents: "No events",
       matrix: "Where & When Matrix",
       matrixText:
-        "Bright cells show the strongest combinations of camera and time window.",
+        "Bright cells show the strongest combinations of camera and time window based on the primary event species.",
       camera: "Camera",
       timeWindow: "Time Window",
     };
@@ -212,11 +178,9 @@ function t(language: AppLanguage) {
     noCamerasInScope:
       "Für den aktuellen Revier-Scope sind keine Kameras vorhanden.",
     eventsLoadFailed: "Fehler beim Laden der Ereignisse:",
-    speciesSummaryLoadFailed: "Fehler beim Laden der Artenzusammenfassung:",
-    unknownError: "Unbekannter Fehler",
     speciesSelection: "Art-Filter",
     speciesSelectionText:
-      "Eine Art für die Kamera-Zeit-Matrix auswählen.",
+      "Eine Hauptart für die Kamera-Zeit-Matrix auswählen.",
     species: "Art",
     update: "Aktualisieren",
     noWhereWhenData:
@@ -229,7 +193,7 @@ function t(language: AppLanguage) {
     noEvents: "Keine Ereignisse",
     matrix: "Wo-&-Wann-Matrix",
     matrixText:
-      "Helle Felder zeigen die stärksten Kombinationen aus Kamera und Zeitfenster.",
+      "Helle Felder zeigen die stärksten Kombinationen aus Kamera und Zeitfenster auf Basis der Hauptart eines Ereignisses.",
     camera: "Kamera",
     timeWindow: "Zeitfenster",
   };
@@ -485,34 +449,14 @@ export default async function WildlifeWhereWhenPage(props: {
   }
 
   const events = ((eventsData ?? []) as EventFeedRow[]).filter((e) => e.top_species);
-  const eventIds = events.map((e) => e.id);
-
-  let summaryRows: EventSpeciesSummaryRow[] = [];
-  if (eventIds.length > 0) {
-    try {
-      summaryRows = await fetchEventSpeciesSummaryChunked(supabase, eventIds, 200);
-    } catch (err) {
-      return (
-        <main className="space-y-8">
-          <WhereWhenPageHeader
-            period={period}
-            revierValue={currentRevierValue}
-            language={language}
-          />
-          <div className="rounded-[24px] border border-rose-300/20 bg-rose-300/10 p-4 text-sm text-rose-100">
-            {text.speciesSummaryLoadFailed} {" "}
-            {err instanceof Error ? err.message : text.unknownError}
-          </div>
-        </main>
-      );
-    }
-  }
-
-  const eventById = new Map(events.map((e) => [e.id, e]));
   const speciesCounts = new Map<string, number>();
 
-  for (const row of summaryRows) {
-    speciesCounts.set(row.species, (speciesCounts.get(row.species) ?? 0) + 1);
+  for (const event of events) {
+    if (!event.top_species) continue;
+    speciesCounts.set(
+      event.top_species,
+      (speciesCounts.get(event.top_species) ?? 0) + 1
+    );
   }
 
   const speciesOptions: SpeciesOption[] = Array.from(speciesCounts.entries())
@@ -524,13 +468,9 @@ export default async function WildlifeWhereWhenPage(props: {
       ? searchParams.species
       : speciesOptions[0]?.species ?? null;
 
-  const selectedSpeciesRows = selectedSpecies
-    ? summaryRows.filter((row) => row.species === selectedSpecies)
+  const selectedEvents = selectedSpecies
+    ? events.filter((event) => event.top_species === selectedSpecies)
     : [];
-
-  const selectedEvents = selectedSpeciesRows
-    .map((row) => eventById.get(row.event_id) ?? null)
-    .filter((row): row is EventFeedRow => Boolean(row));
 
   const cameraCounts = new Map<string, number>();
   const windowCounts = new Map<number, number>();
