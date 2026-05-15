@@ -147,21 +147,28 @@ function getRoleAccessRows(language: AppLanguage) {
           viewer: true,
         },
         {
-          area: "Cameras",
+          area: "Cameras & events",
           owner: true,
           admin: true,
           member: true,
           viewer: false,
         },
         {
-          area: "Organization without subscription",
+          area: "Manage cameras",
           owner: true,
           admin: true,
           member: false,
           viewer: false,
         },
         {
-          area: "Organization incl. subscription",
+          area: "Organization",
+          owner: true,
+          admin: true,
+          member: false,
+          viewer: false,
+        },
+        {
+          area: "Subscription & billing",
           owner: true,
           admin: false,
           member: false,
@@ -177,21 +184,28 @@ function getRoleAccessRows(language: AppLanguage) {
           viewer: true,
         },
         {
-          area: "Kameras",
+          area: "Kameras & Ereignisse",
           owner: true,
           admin: true,
           member: true,
           viewer: false,
         },
         {
-          area: "Organisation ohne Abo",
+          area: "Kameras verwalten",
           owner: true,
           admin: true,
           member: false,
           viewer: false,
         },
         {
-          area: "Organisation inkl. Abo",
+          area: "Organisation",
+          owner: true,
+          admin: true,
+          member: false,
+          viewer: false,
+        },
+        {
+          area: "Abo & Abrechnung",
           owner: true,
           admin: false,
           member: false,
@@ -199,6 +213,8 @@ function getRoleAccessRows(language: AppLanguage) {
         },
       ];
 }
+
+
 
 async function createInvite(formData: FormData) {
   "use server";
