@@ -118,7 +118,7 @@ export default function HeaderMenu({ role, email, isDemo, language }: Props) {
       </button>
 
       {open ? (
-        <div className="absolute right-0 top-full z-[9999] mt-3 w-72 rounded-[24px] border border-white/10 bg-[#102018] p-3 shadow-[0_24px_80px_rgba(0,0,0,0.55)]">
+        <div className="fixed left-3 right-3 top-[9.5rem] z-[9999] max-h-[calc(100dvh-10.5rem)] overflow-y-auto rounded-[24px] border border-white/10 bg-[#102018] p-3 shadow-[0_24px_80px_rgba(0,0,0,0.55)] sm:absolute sm:left-auto sm:right-0 sm:top-full sm:mt-3 sm:w-72 sm:max-h-[calc(100vh-6rem)]">
           <Link
             href="/"
             onClick={() => setOpen(false)}
