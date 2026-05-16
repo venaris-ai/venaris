@@ -1,4 +1,4 @@
-// src/app/cameras/tipps/page.tsx #7
+// src/app/cameras/tipps/page.tsx #10
 export const runtime = "nodejs";
 
 import { cookies } from "next/headers";
@@ -34,15 +34,44 @@ function t(language: AppLanguage) {
   if (language === "en") {
     return {
       eyebrow: "Camera tips",
-      title: "Camera recommendations",
+      title: "Good trail cameras for Venaris are open, autonomous and affordable",
       intro:
-        "Practical evaluation of LTE trail cameras for Venaris. The focus is direct input, SIM freedom, app independency, night captures and solar operation.",
+        "Venaris works with almost all cameras once images can be downloaded. ",
+      principles: [
+        {
+          title: "Open",
+          items: [
+            "No SIM lock",
+            "No mandatory app/cloud",
+            "Direct picture transfer (FTP/SMTP)",
+          ],
+        },
+        {
+          title: "Autonomous",
+          items: [
+            "Constant energy (Solar/Water)",
+            "Stable internet (Mobile/Satellite)",
+            "Day and night modes",
+          ],
+        },
+        {
+          title: "Affordable",
+          items: [
+            "Equipment cost possible below €100",
+            "Running costs possible below €4/month",
+          ],
+        },
+      ],
+      minimumTitle: "Minimum requirement",
+      minimumItems: [
+        "Images must be downloadable",
+      ],
       tableTitle: "Camera comparison",
       tableText:
-        "Only combinations with real Venaris experience are rated conservatively. Additional cameras can be added after field tests.",
+        "Conservatively rated based on real Venaris experience.",
       simTableTitle: "SIM card providers",
       simTableText:
-        "Initial tariff recommendation for LTE trail cameras. Prices and data volumes should be checked before purchase because prepaid conditions can change.",
+        "Initial tariff recommendation for LTE trail cameras. Please check conditions before purchase.",
       simColumns: {
         provider: "Provider",
         packageName: "Package",
@@ -57,15 +86,44 @@ function t(language: AppLanguage) {
 
   return {
     eyebrow: "Kamera-Tipps",
-    title: "Kamera-Empfehlungen",
+    title: "Gute Wildkameras für Venaris sind offen, autonom und günstig",
     intro:
-      "Praxisbewertung von LTE-Wildkameras für Venaris. Im Fokus stehen direkter Input, SIM-Freiheit, App-Unabhängigkeit, Nachtaufnahmen und Solarbetrieb.",
+      "Venaris funktioniert mit fast allen Kameras, sobald Bilder herunterladbar sind.",
+    principles: [
+      {
+        title: "Offen",
+        items: [
+          "Kein SIM-Lock",
+          "Keine Pflicht-App oder Cloud",
+          "Direkter Bildtransfer (FTP/SMTP)",
+        ],
+      },
+      {
+        title: "Autonom",
+        items: [
+          "Konstante Energie (Solar/Wasser)",
+          "Stabiles Internet (Mobilfunk/Satellit)",
+          "Tag- und Nachtmodus",          
+        ],
+      },
+      {
+        title: "Günstig",
+        items: [
+          "Anschaffungskosten unter €100 möglich",
+          "Laufende Kosten unter €4/Monat möglich",
+        ],
+      },
+    ],
+    minimumTitle: "Mindestanforderung",
+    minimumItems: [
+"Bilder müssen herunterladbar sein",
+    ],
     tableTitle: "Kameravergleich",
     tableText:
-      "Nur Kombinationen mit echter Venaris-Erfahrung werden konservativ bewertet. Weitere Kameras können nach Praxistests ergänzt werden.",
+      "Konservativ bewertet auf Basis echter Venaris-Erfahrung.",
     simTableTitle: "SIM-Karten-Anbieter",
     simTableText:
-      "Erste Tarifempfehlung für LTE-Wildkameras. Preise und Datenvolumen sollten vor Kauf geprüft werden, da sich Prepaid-Konditionen ändern können.",
+      "Erste Tarifempfehlung für LTE-Wildkameras. Konditionen bitte vor Kauf prüfen.",
     simColumns: {
       provider: "Anbieter",
       packageName: "Paket",
@@ -84,28 +142,26 @@ function getRecommendations(language: AppLanguage): CameraRecommendation[] {
       {
         name: "X-View LTE 9.x",
         status: "recommended",
-        input: "direct",
-        simLock: "without",
-        appRequired: "no",
-        nightShots: "yes",
-        solar: "possible",
-        comment:
-          "Direct transfer via FTP is technically supported; free SIM/APN configuration is possible. Solar operation is plausible through external accessories, but is not rated as an included feature.",
-        verdict:
-          "Currently the strongest candidate for direct Venaris integration: open, flexible and not dependent on a mandatory app/cloud model.",
+        simLock: "no",
+        appCloudRequired: "no",
+        directTransfer: "yes",
+        constantEnergy: "possible",
+        stableInternet: "yes",
+        dayNightMode: "yes",
+        acquisitionCosts: "high",
+        runningCosts: "low",
       },
       {
         name: "Zeiss Secacam 5",
         status: "compatible",
-        input: "app_download",
-        simLock: "with",
-        appRequired: "yes",
-        nightShots: "yes",
-        solar: "possible",
-        comment:
-          "Mobile transmission runs through the ZEISS Secacam SIM and the ZEISS app/web account. For Venaris, app/web download plus manual import is therefore the required workflow.",
-        verdict:
-          "Good consumer camera with strong core features, but no open direct integration due to SIM lock and app/cloud dependency.",
+        simLock: "yes",
+        appCloudRequired: "yes",
+        directTransfer: "no",
+        constantEnergy: "possible",
+        stableInternet: "yes",
+        dayNightMode: "yes",
+        acquisitionCosts: "high",
+        runningCosts: "high",
       },
     ];
   }
@@ -114,31 +170,30 @@ function getRecommendations(language: AppLanguage): CameraRecommendation[] {
     {
       name: "X-View LTE 9.x",
       status: "recommended",
-      input: "direct",
-      simLock: "without",
-      appRequired: "no",
-      nightShots: "yes",
-      solar: "possible",
-      comment:
-        "Direkte Übertragung per FTP ist technisch belegbar; freie SIM-/APN-Konfiguration ist möglich. Solarbetrieb ist über externes Zubehör plausibel, aber nicht als inklusive Funktion bewertet.",
-      verdict:
-        "Aktuell stärkster Kandidat für direkte Venaris-Integration: offen, flexibel und ohne zwingendes App-/Cloud-Modell.",
+      simLock: "no",
+      appCloudRequired: "no",
+      directTransfer: "yes",
+      constantEnergy: "possible",
+      stableInternet: "yes",
+      dayNightMode: "yes",
+      acquisitionCosts: "high",
+      runningCosts: "low",
     },
     {
       name: "Zeiss Secacam 5",
       status: "compatible",
-      input: "app_download",
-      simLock: "with",
-      appRequired: "yes",
-      nightShots: "yes",
-      solar: "possible",
-      comment:
-        "Mobilfunk läuft über die ZEISS Secacam SIM und das ZEISS App-/Web-Konto. Für Venaris ist daher App-/Web-Download plus manueller Import notwendig.",
-      verdict:
-        "Gute Consumer-Kamera mit starken Basisfunktionen, aber wegen SIM-Lock und App-/Cloud-Bindung keine offene Direktintegration.",
+      simLock: "yes",
+      appCloudRequired: "yes",
+      directTransfer: "no",
+      constantEnergy: "possible",
+      stableInternet: "yes",
+      dayNightMode: "yes",
+      acquisitionCosts: "high",
+      runningCosts: "high",
     },
   ];
 }
+
 
 function getSimProviderRecommendations(
   language: AppLanguage
@@ -188,12 +243,57 @@ function PageHeader({ text }: { text: ReturnType<typeof t> }) {
       <p className="text-sm font-medium uppercase tracking-[0.22em] text-amber-200/80">
         {text.eyebrow}
       </p>
-      <h1 className="mt-3 text-3xl font-semibold tracking-tight text-white">
+      <h1 className="mt-3 max-w-4xl text-3xl font-semibold tracking-tight text-white">
         {text.title}
       </h1>
       <p className="mt-3 max-w-3xl text-sm leading-6 text-white/68">
         {text.intro}
       </p>
+    </section>
+  );
+}
+
+function PrincipleCards({ text }: { text: ReturnType<typeof t> }) {
+  return (
+    <section className="grid gap-4 md:grid-cols-3">
+      {text.principles.map((principle) => (
+        <article
+          key={principle.title}
+          className="rounded-[24px] border border-white/10 bg-[linear-gradient(135deg,rgba(255,255,255,0.07),rgba(255,255,255,0.025))] p-5 shadow-[0_18px_60px_rgba(0,0,0,0.18)] backdrop-blur-sm"
+        >
+          <div className="mb-4 inline-flex rounded-full border border-amber-300/25 bg-amber-300/10 px-3 py-1 text-xs font-medium text-amber-200">
+            {principle.title}
+          </div>
+
+          <ul className="space-y-2 text-sm leading-6 text-white/68">
+            {principle.items.map((item) => (
+              <li key={item} className="flex gap-2">
+                <span className="mt-[0.55rem] h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-300/80" />
+                <span>{item}</span>
+              </li>
+            ))}
+          </ul>
+        </article>
+      ))}
+    </section>
+  );
+}
+
+function MinimumRequirement({ text }: { text: ReturnType<typeof t> }) {
+  return (
+    <section className="rounded-[24px] border border-emerald-300/18 bg-emerald-300/[0.055] p-5 shadow-[0_18px_60px_rgba(0,0,0,0.16)]">
+      <h2 className="text-base font-medium text-emerald-100">
+        {text.minimumTitle}
+      </h2>
+
+      <ul className="mt-3 grid gap-2 text-sm leading-6 text-white/70 md:grid-cols-3">
+        {text.minimumItems.map((item) => (
+          <li key={item} className="flex gap-2">
+            <span className="mt-[0.55rem] h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-300/80" />
+            <span>{item}</span>
+          </li>
+        ))}
+      </ul>
     </section>
   );
 }
@@ -343,6 +443,10 @@ export default async function CameraTipsPage() {
   return (
     <main className="space-y-8">
       <PageHeader text={text} />
+
+      <PrincipleCards text={text} />
+
+      <MinimumRequirement text={text} />
 
       <section className="overflow-hidden rounded-[28px] border border-white/10 bg-[linear-gradient(135deg,rgba(255,255,255,0.07),rgba(255,255,255,0.025))] shadow-[0_24px_80px_rgba(0,0,0,0.24)] backdrop-blur-sm">
         <div className="border-b border-white/8 px-6 py-4">

@@ -1,7 +1,6 @@
-// src/app/cameras/tipps/CameraTipsTable.tsx #3
+// src/app/cameras/tipps/CameraTipsTable.tsx #4
 "use client";
 
-import { useState } from "react";
 import { type AppLanguage } from "@/lib/i18n";
 
 type RecommendationStatus =
@@ -10,36 +9,42 @@ type RecommendationStatus =
   | "certified"
   | "recommended";
 
-type InputRating = "direct" | "app_download" | "manual" | "not_possible";
-type BinaryRating = "yes" | "no";
-type SimLockRating = "without" | "with";
-type SolarRating = "included" | "possible" | "not_possible";
+type YesNoRating = "yes" | "no";
+type AvailabilityRating = "yes" | "no" | "possible";
+type CostRating = "low" | "medium" | "high";
 
 export type CameraRecommendation = {
   name: string;
   status: RecommendationStatus;
-  input: InputRating;
-  simLock: SimLockRating;
-  appRequired: BinaryRating;
-  nightShots: BinaryRating;
-  solar: SolarRating;
-  comment: string;
-  verdict: string;
+  simLock: YesNoRating;
+  appCloudRequired: YesNoRating;
+  directTransfer: YesNoRating;
+  constantEnergy: AvailabilityRating;
+  stableInternet: YesNoRating;
+  dayNightMode: YesNoRating;
+  acquisitionCosts: CostRating;
+  runningCosts: CostRating;
 };
 
 function t(language: AppLanguage) {
   if (language === "en") {
     return {
+      groups: {
+        open: "Open",
+        autonomous: "Autonomous",
+        affordable: "Affordable",
+      },
       columns: {
         camera: "Camera",
         status: "Status",
-        input: "Input",
         simLock: "SIM lock",
-        appRequired: "App required",
-        nightShots: "Night captures",
-        solar: "Solar panel",
-        details: "Details",
-        verdict: "Verdict",
+        appCloudRequired: "Mandatory app/cloud",
+        directTransfer: "Direct image transfer",
+        constantEnergy: "Constant energy",
+        stableInternet: "Stable internet",
+        dayNightMode: "Day/night mode",
+        acquisitionCosts: "Purchase costs",
+        runningCosts: "Running costs",
       },
       levels: {
         compatible: "Compatible",
@@ -48,47 +53,33 @@ function t(language: AppLanguage) {
         recommended: "Recommendation",
       },
       ratings: {
-        input: {
-          direct: "Direct",
-          app_download: "App download",
-          manual: "Manual",
-          not_possible: "Not possible",
-        },
-        simLock: {
-          without: "No",
-          with: "Yes",
-        },
-        appRequired: {
-          yes: "Yes",
-          no: "No",
-        },
-        nightShots: {
-          yes: "Yes",
-          no: "No",
-        },
-        solar: {
-          included: "Included",
-          possible: "Possible",
-          not_possible: "Not possible",
-        },
+        yes: "Yes",
+        no: "No",
+        possible: "Possible",
+        low: "Low",
+        medium: "Medium",
+        high: "High",
       },
-      notesLabel: "Notes",
-      hideDetails: "Hide details",
-      showDetails: "Show details",
     };
   }
 
   return {
+    groups: {
+      open: "Offen",
+      autonomous: "Autonom",
+      affordable: "Günstig",
+    },
     columns: {
       camera: "Kamera",
       status: "Status",
-      input: "Input",
       simLock: "SIM-Lock",
-      appRequired: "App-Zwang",
-      nightShots: "Nachtaufnahmen",
-      solar: "Solarpanel",
-      details: "Details",
-      verdict: "Fazit",
+      appCloudRequired: "Pflicht-App/Cloud",
+      directTransfer: "Direkter Bildtransfer",
+      constantEnergy: "Konstante Energie",
+      stableInternet: "Stabiles Internet",
+      dayNightMode: "Tag-/Nacht-Modus",
+      acquisitionCosts: "Anschaffungs-Kosten",
+      runningCosts: "Laufende Kosten",
     },
     levels: {
       compatible: "Kompatibel",
@@ -97,33 +88,13 @@ function t(language: AppLanguage) {
       recommended: "Empfehlung",
     },
     ratings: {
-      input: {
-        direct: "Direkt",
-        app_download: "App-Download",
-        manual: "Manuell",
-        not_possible: "Nicht möglich",
-      },
-      simLock: {
-        without: "Ohne",
-        with: "Mit",
-      },
-      appRequired: {
-        yes: "Ja",
-        no: "Nein",
-      },
-      nightShots: {
-        yes: "Ja",
-        no: "Nein",
-      },
-      solar: {
-        included: "Inklusive",
-        possible: "Möglich",
-        not_possible: "Nicht möglich",
-      },
+      yes: "Ja",
+      no: "Nein",
+      possible: "Möglich",
+      low: "Niedrig",
+      medium: "Mittel",
+      high: "Hoch",
     },
-    notesLabel: "Hinweise",
-    hideDetails: "Details ausblenden",
-    showDetails: "Details anzeigen",
   };
 }
 
@@ -155,32 +126,16 @@ function ratingBadgeClass(tone: "good" | "warning" | "bad") {
   return "border-red-300/25 bg-red-300/10 text-red-200";
 }
 
-function inputTone(value: InputRating) {
-  if (value === "direct") {
-    return "good";
-  }
-
-  if (value === "app_download" || value === "manual") {
-    return "warning";
-  }
-
-  return "bad";
-}
-
-function simLockTone(value: SimLockRating) {
-  return value === "without" ? "good" : "bad";
-}
-
-function appRequiredTone(value: BinaryRating) {
-  return value === "no" ? "good" : "bad";
-}
-
-function nightShotsTone(value: BinaryRating) {
+function positiveYesNoTone(value: YesNoRating) {
   return value === "yes" ? "good" : "bad";
 }
 
-function solarTone(value: SolarRating) {
-  if (value === "included") {
+function negativeYesNoTone(value: YesNoRating) {
+  return value === "no" ? "good" : "bad";
+}
+
+function availabilityTone(value: AvailabilityRating) {
+  if (value === "yes") {
     return "good";
   }
 
@@ -191,44 +146,28 @@ function solarTone(value: SolarRating) {
   return "bad";
 }
 
-function EyeIcon() {
-  return (
-    <svg
-      aria-hidden="true"
-      viewBox="0 0 24 24"
-      className="h-4 w-4"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-    >
-      <path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6-10-6-10-6z" />
-      <circle cx="12" cy="12" r="3" />
-    </svg>
-  );
+function costTone(value: CostRating) {
+  if (value === "low") {
+    return "good";
+  }
+
+  if (value === "medium") {
+    return "warning";
+  }
+
+  return "bad";
 }
 
-function EyeOffIcon() {
-  return (
-    <svg
-      aria-hidden="true"
-      viewBox="0 0 24 24"
-      className="h-4 w-4"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-    >
-      <path d="M3 3l18 18" />
-      <path d="M10.6 10.7a3 3 0 0 0 4.2 4.2" />
-      <path d="M9.9 5.1A10.9 10.9 0 0 1 12 5c6.5 0 10 7 10 7a18.2 18.2 0 0 1-4.1 4.8" />
-      <path d="M6.6 6.7C3.6 8.5 2 12 2 12s3.5 6 10 6c1.8 0 3.3-.4 4.6-1" />
-    </svg>
-  );
-}
-
-function RatingBadge({ label, tone }: { label: string; tone: "good" | "warning" | "bad" }) {
+function RatingBadge({
+  label,
+  tone,
+}: {
+  label: string;
+  tone: "good" | "warning" | "bad";
+}) {
   return (
     <span
-      className={`inline-flex rounded-full border px-2.5 py-0.5 text-xs font-medium ${ratingBadgeClass(
+      className={`inline-flex rounded-full border px-2 py-0.5 text-[11px] font-medium ${ratingBadgeClass(
         tone
       )}`}
     >
@@ -248,23 +187,12 @@ function StatusBadge({
 
   return (
     <span
-      className={`inline-flex rounded-full border px-2.5 py-0.5 text-xs font-medium ${statusBadgeClass(
+      className={`inline-flex rounded-full border px-2 py-0.5 text-[11px] font-medium ${statusBadgeClass(
         status
       )}`}
     >
       {text.levels[status]}
     </span>
-  );
-}
-
-function DetailValue({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="space-y-1">
-      <dt className="text-[11px] font-medium uppercase tracking-wide text-white/45">
-        {label}
-      </dt>
-      <dd className="break-words text-sm leading-6 text-white/82">{value}</dd>
-    </div>
   );
 }
 
@@ -276,85 +204,67 @@ function CameraTipsTableRow({
   language: AppLanguage;
 }) {
   const text = t(language);
-  const [open, setOpen] = useState(false);
 
   return (
-    <>
-      <tr className="border-t border-white/8 align-middle transition-colors hover:bg-white/[0.025]">
-        <td className="whitespace-nowrap px-6 py-4 font-medium text-white">
-          {row.name}
-        </td>
-        <td className="whitespace-nowrap px-6 py-4">
-          <StatusBadge status={row.status} language={language} />
-        </td>
-        <td className="whitespace-nowrap px-4 py-4 text-center">
-          <RatingBadge
-            label={text.ratings.input[row.input]}
-            tone={inputTone(row.input)}
-          />
-        </td>
-        <td className="whitespace-nowrap px-4 py-4 text-center">
-          <RatingBadge
-            label={text.ratings.simLock[row.simLock]}
-            tone={simLockTone(row.simLock)}
-          />
-        </td>
-        <td className="whitespace-nowrap px-4 py-4 text-center">
-          <RatingBadge
-            label={text.ratings.appRequired[row.appRequired]}
-            tone={appRequiredTone(row.appRequired)}
-          />
-        </td>
-        <td className="whitespace-nowrap px-4 py-4 text-center">
-          <RatingBadge
-            label={text.ratings.nightShots[row.nightShots]}
-            tone={nightShotsTone(row.nightShots)}
-          />
-        </td>
-        <td className="whitespace-nowrap px-4 py-4 text-center">
-          <RatingBadge
-            label={text.ratings.solar[row.solar]}
-            tone={solarTone(row.solar)}
-          />
-        </td>
-        <td className="whitespace-nowrap px-6 py-4 text-right">
-          <button
-            type="button"
-            onClick={() => setOpen((current) => !current)}
-            className="inline-flex h-8 w-8 items-center justify-center rounded-[10px] border border-white/10 bg-white/5 text-white/72 transition hover:border-white/15 hover:bg-white/8 hover:text-white"
-            aria-label={open ? text.hideDetails : text.showDetails}
-            title={open ? text.hideDetails : text.showDetails}
-          >
-            {open ? <EyeOffIcon /> : <EyeIcon />}
-          </button>
-        </td>
-      </tr>
+    <tr className="border-t border-white/8 align-middle transition-colors hover:bg-white/[0.025]">
+      <td className="whitespace-nowrap px-4 py-3 text-xs font-medium text-white">
+        {row.name}
+      </td>
+      <td className="whitespace-nowrap px-3 py-3 text-center">
+        <StatusBadge status={row.status} language={language} />
+      </td>
 
-      {open ? (
-        <tr className="border-t border-white/6 bg-black/10">
-          <td colSpan={8} className="px-6 py-5">
-            <div className="rounded-[18px] border border-white/8 bg-white/[0.03] p-5">
-              <div className="mb-4 flex justify-end">
-                <button
-                  type="button"
-                  onClick={() => setOpen(false)}
-                  className="inline-flex h-8 w-8 items-center justify-center rounded-[10px] border border-white/10 bg-white/5 text-white/72 transition hover:border-white/15 hover:bg-white/8 hover:text-white"
-                  aria-label={text.hideDetails}
-                  title={text.hideDetails}
-                >
-                  <EyeOffIcon />
-                </button>
-              </div>
+      <td className="whitespace-nowrap border-l border-white/8 px-2 py-3 text-center">
+        <RatingBadge
+          label={text.ratings[row.simLock]}
+          tone={negativeYesNoTone(row.simLock)}
+        />
+      </td>
+      <td className="whitespace-nowrap px-2 py-3 text-center">
+        <RatingBadge
+          label={text.ratings[row.appCloudRequired]}
+          tone={negativeYesNoTone(row.appCloudRequired)}
+        />
+      </td>
+      <td className="whitespace-nowrap px-2 py-3 text-center">
+        <RatingBadge
+          label={text.ratings[row.directTransfer]}
+          tone={positiveYesNoTone(row.directTransfer)}
+        />
+      </td>
 
-              <dl className="grid gap-4 md:grid-cols-2">
-                <DetailValue label={text.columns.verdict} value={row.verdict} />
-                <DetailValue label={text.notesLabel} value={row.comment} />
-              </dl>
-            </div>
-          </td>
-        </tr>
-      ) : null}
-    </>
+      <td className="whitespace-nowrap border-l border-white/8 px-2 py-3 text-center">
+        <RatingBadge
+          label={text.ratings[row.constantEnergy]}
+          tone={availabilityTone(row.constantEnergy)}
+        />
+      </td>
+      <td className="whitespace-nowrap px-2 py-3 text-center">
+        <RatingBadge
+          label={text.ratings[row.stableInternet]}
+          tone={positiveYesNoTone(row.stableInternet)}
+        />
+      </td>
+      <td className="whitespace-nowrap px-2 py-3 text-center">
+        <RatingBadge
+          label={text.ratings[row.dayNightMode]}
+          tone={positiveYesNoTone(row.dayNightMode)}
+        />
+      </td>
+
+      <td className="whitespace-nowrap border-l border-white/8 px-2 py-3 text-center">
+        <RatingBadge
+          label={text.ratings[row.acquisitionCosts]}
+          tone={costTone(row.acquisitionCosts)}
+        />
+      </td>
+      <td className="whitespace-nowrap px-2 py-3 text-center">
+        <RatingBadge
+          label={text.ratings[row.runningCosts]}
+          tone={costTone(row.runningCosts)}
+        />
+      </td>
+    </tr>
   );
 }
 
@@ -368,44 +278,75 @@ export default function CameraTipsTable({
   const text = t(language);
 
   return (
-    <div className="overflow-x-auto">
-      <table className="min-w-[980px] table-fixed text-sm">
+    <div className="w-full overflow-x-auto">
+      <table className="w-full min-w-[1048px] table-fixed text-xs">
         <colgroup>
-          <col className="w-[210px]" />
-          <col className="w-[150px]" />
-          <col className="w-[128px]" />
-          <col className="w-[128px]" />
-          <col className="w-[128px]" />
-          <col className="w-[128px]" />
-          <col className="w-[128px]" />
-          <col className="w-[90px]" />
+          <col className="w-[172px]" />
+          <col className="w-[124px]" />
+          <col className="w-[94px]" />
+          <col className="w-[94px]" />
+          <col className="w-[94px]" />
+          <col className="w-[94px]" />
+          <col className="w-[94px]" />
+          <col className="w-[94px]" />
+          <col className="w-[94px]" />
+          <col className="w-[94px]" />
         </colgroup>
 
-        <thead className="bg-white/5 text-left text-white/55">
+        <thead className="bg-white/5 text-white/55">
+          <tr className="border-b border-white/8">
+            <th className="px-4 py-2 text-left font-medium" />
+            <th className="px-3 py-2 text-left font-medium" />
+            <th
+              colSpan={3}
+              className="border-l border-white/8 px-2 py-2 text-center text-[10px] font-semibold uppercase tracking-[0.14em] text-amber-200/80"
+            >
+              {text.groups.open}
+            </th>
+            <th
+              colSpan={3}
+              className="border-l border-white/8 px-2 py-2 text-center text-[10px] font-semibold uppercase tracking-[0.14em] text-amber-200/80"
+            >
+              {text.groups.autonomous}
+            </th>
+            <th
+              colSpan={2}
+              className="border-l border-white/8 px-2 py-2 text-center text-[10px] font-semibold uppercase tracking-[0.14em] text-amber-200/80"
+            >
+              {text.groups.affordable}
+            </th>
+          </tr>
+
           <tr>
-            <th className="whitespace-nowrap px-6 py-3 font-medium">
+            <th className="whitespace-nowrap px-4 py-3 text-left font-medium">
               {text.columns.camera}
             </th>
-            <th className="whitespace-nowrap px-6 py-3 font-medium">
+            <th className="whitespace-nowrap px-3 py-3 text-center font-medium">
               {text.columns.status}
             </th>
-            <th className="whitespace-nowrap px-4 py-3 text-center font-medium">
-              {text.columns.input}
-            </th>
-            <th className="whitespace-nowrap px-4 py-3 text-center font-medium">
+            <th className="border-l border-white/8 px-2 py-3 text-center font-medium leading-tight">
               {text.columns.simLock}
             </th>
-            <th className="whitespace-nowrap px-4 py-3 text-center font-medium">
-              {text.columns.appRequired}
+            <th className="px-2 py-3 text-center font-medium leading-tight">
+              {text.columns.appCloudRequired}
             </th>
-            <th className="whitespace-nowrap px-4 py-3 text-center font-medium">
-              {text.columns.nightShots}
+            <th className="px-2 py-3 text-center font-medium leading-tight">
+              {text.columns.directTransfer}
             </th>
-            <th className="whitespace-nowrap px-4 py-3 text-center font-medium">
-              {text.columns.solar}
+            <th className="border-l border-white/8 px-2 py-3 text-center font-medium leading-tight">
+              {text.columns.constantEnergy}
             </th>
-            <th className="whitespace-nowrap px-6 py-3 text-right font-medium">
-              {text.columns.details}
+            <th className="px-2 py-3 text-center font-medium leading-tight">
+              {text.columns.stableInternet}
+            </th>
+            <th className="px-2 py-3 text-center font-medium leading-tight">
+              {text.columns.dayNightMode}
+            </th>
+            <th className="border-l border-white/8 px-2 py-3 text-center font-medium leading-tight">
+              {text.columns.acquisitionCosts}
+            </th>
+            <th className="px-2 py-3 text-center font-medium leading-tight">
+              {text.columns.runningCosts}
             </th>
           </tr>
         </thead>
