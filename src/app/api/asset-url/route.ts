@@ -36,6 +36,10 @@ function t(language: AppLanguage) {
       };
 }
 
+function getErrorMessage(error: unknown) {
+  return error instanceof Error ? error.message : String(error);
+}
+
 export async function GET(req: NextRequest) {
   const language = getLanguageFromRequest(req);
   const text = t(language);
@@ -108,8 +112,9 @@ export async function GET(req: NextRequest) {
     }
 
     return NextResponse.json({ url });
-  } catch (e: any) {
-    const message = e?.message ?? String(e);
+
+  } catch (error: unknown) {
+    const message = getErrorMessage(error);
 
     if (isStorageObjectMissing(message)) {
       return NextResponse.json(
@@ -123,4 +128,7 @@ export async function GET(req: NextRequest) {
       { status: 500 }
     );
   }
+
+
+
 }

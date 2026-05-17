@@ -2,7 +2,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { createPortal } from "react-dom";
 import type { AppLanguage } from "@/lib/i18n";
 
@@ -91,11 +91,6 @@ export default function RevierRowActions({
   const text = t(language);
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
   const [isReadOnlyModalOpen, setIsReadOnlyModalOpen] = useState(false);
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
 
   return (
     <>
@@ -136,7 +131,7 @@ export default function RevierRowActions({
         </div>
       </td>
 
-      {mounted && isDeleteConfirmOpen
+      {isDeleteConfirmOpen
         ? createPortal(
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
               <div className="w-full max-w-md rounded-[20px] border border-white/10 bg-[#102018] p-6 shadow-2xl">
@@ -172,7 +167,7 @@ export default function RevierRowActions({
           )
         : null}
 
-      {mounted && isReadOnlyModalOpen
+      {isReadOnlyModalOpen
         ? createPortal(
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
               <div className="w-full max-w-md rounded-[20px] border border-white/10 bg-[#102018] p-6 shadow-2xl">

@@ -23,6 +23,14 @@ type RevierBoundaryRow = {
 
 type CameraHealthStatus = "online" | "stale" | "offline" | "unknown";
 
+type CameraHealthRow = {
+  id: string;
+  name?: string | null;
+  last_seen_at: string | null;
+  [key: string]: unknown;
+};
+
+
 const HEALTH_STALE_AFTER_MINUTES = 12 * 60;
 const HEALTH_OFFLINE_AFTER_MINUTES = 24 * 60;
 
@@ -70,6 +78,11 @@ function buildBoundaryGeoJson(boundaries: RevierBoundaryRow[]) {
     ),
   };
 }
+
+function getErrorMessage(error: unknown) {
+  return error instanceof Error ? error.message : String(error);
+}
+
 
 export async function GET(req: Request) {
   try {
@@ -190,7 +203,7 @@ export async function GET(req: Request) {
       );
     }
 
-    const items = (data ?? []).map((row: any) => {
+    const items = ((data ?? []) as CameraHealthRow[]).map((row) => {
       const geo = cameraGeoById.get(row.id);
 
       return {
@@ -206,10 +219,12 @@ export async function GET(req: Request) {
     });
 
     return NextResponse.json({ items, boundaryGeoJson });
-  } catch (err: any) {
+
+  } catch (error: unknown) {
     return NextResponse.json(
-      { error: err?.message ?? "camera health failed" },
+      { error: getErrorMessage(error) || "camera health failed" },
       { status: 500 }
     );
   }
+
 }

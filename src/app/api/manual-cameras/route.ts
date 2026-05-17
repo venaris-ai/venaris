@@ -5,6 +5,22 @@ import { NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabaseServer";
 import { requireOrganizationRole } from "@/lib/auth";
 
+type ManualCameraRow = {
+  id: string;
+  name: string;
+  location_name: string | null;
+  technical_name: string | null;
+  camera_ingest_configs:
+    | {
+        manual_label: string | null;
+      }[]
+    | null;
+};
+
+function getErrorMessage(error: unknown) {
+  return error instanceof Error ? error.message : String(error);
+}
+
 export async function GET(req: Request) {
   try {
     const { activeMembership } = await requireOrganizationRole(["owner", "admin", "member"]);
@@ -52,8 +68,7 @@ location_name,
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-
-const items = (data ?? []).map((row: any) => ({
+const items = ((data ?? []) as ManualCameraRow[]).map((row) => ({
   id: row.id,
   name: row.name,
   locationName: row.location_name ?? null,
@@ -64,10 +79,11 @@ const items = (data ?? []).map((row: any) => ({
 
 
     return NextResponse.json({ items });
-  } catch (err: any) {
+  } catch (error: unknown) {
     return NextResponse.json(
-      { error: err?.message ?? "manual cameras failed" },
+      { error: getErrorMessage(error) || "manual cameras failed" },
       { status: 500 }
     );
   }
+
 }

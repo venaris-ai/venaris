@@ -9,6 +9,10 @@ import {
   type RevierOption,
 } from "@/lib/intelligence/revierScope";
 
+function getErrorMessage(error: unknown) {
+  return error instanceof Error ? error.message : String(error);
+}
+
 export async function GET(req: Request) {
   try {
     const { activeMembership } = await requireOrganizationRole(["owner", "admin", "member"]);
@@ -104,10 +108,17 @@ const { data: cameras, error: camerasError } = await camerasQuery;
     }
 
     return NextResponse.json({ assets: data ?? [] });
-  } catch (e: any) {
+
+  } catch (error: unknown) {
     return NextResponse.json(
-      { error: "assets_api_crashed", details: e?.message ?? String(e) },
+      {
+        error: "assets_api_crashed",
+        details: getErrorMessage(error),
+      },
       { status: 500 }
     );
   }
+
+
+
 }

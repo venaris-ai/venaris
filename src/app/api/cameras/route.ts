@@ -5,6 +5,10 @@ import { NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabaseServer";
 import { requireOrganizationRole } from "@/lib/auth";
 
+function getErrorMessage(error: unknown) {
+  return error instanceof Error ? error.message : String(error);
+}
+
 export async function GET() {
   try {
     const { activeMembership } = await requireOrganizationRole(["owner", "admin", "member"]);
@@ -30,10 +34,13 @@ export async function GET() {
     }
 
     return NextResponse.json({ cameras: data ?? [] });
-  } catch (e: any) {
+
+  } catch (error: unknown) {
     return NextResponse.json(
-      { error: e?.message ?? "cameras_api_failed" },
+      { error: getErrorMessage(error) || "cameras_api_failed" },
       { status: 500 }
     );
   }
+
+
 }

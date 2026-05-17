@@ -120,8 +120,6 @@ function formatMethod(value: string | null, language: AppLanguage) {
 }
 
 function formatAgo(value: string | null, language: AppLanguage) {
-  const text = t(language);
-
   if (!value) return "—";
 
   const ts = new Date(value).getTime();

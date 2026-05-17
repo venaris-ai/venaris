@@ -8,6 +8,11 @@ import {
   type RevierOption,
 } from "@/lib/intelligence/revierScope";
 
+function getErrorMessage(error: unknown) {
+  return error instanceof Error ? error.message : String(error);
+}
+
+
 export const dynamic = "force-dynamic";
 
 export async function GET(req: Request) {
@@ -78,12 +83,6 @@ camerasQuery =
 const { data: cameras, error: camerasError } = await camerasQuery;
 
 
-
-
-
-
-
-
     if (camerasError) {
       return NextResponse.json(
         { error: "camera_lookup_failed", details: camerasError.message },
@@ -132,10 +131,16 @@ const { data: cameras, error: camerasError } = await camerasQuery;
     }
 
     return NextResponse.json({ ok: true, items: data ?? [] });
-  } catch (e: any) {
+
+  } catch (error: unknown) {
     return NextResponse.json(
-      { error: "ingest_batches_api_crashed", details: e?.message || String(e) },
+      {
+        error: "ingest_batches_api_crashed",
+        details: getErrorMessage(error),
+      },
       { status: 500 }
     );
   }
+
+
 }

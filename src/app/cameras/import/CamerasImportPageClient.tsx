@@ -99,6 +99,10 @@ async function parseApiResponse(res: Response) {
   }
 }
 
+function getErrorMessage(error: unknown) {
+  return error instanceof Error ? error.message : String(error);
+}
+
 function alertTone(tone: MessageTone) {
   if (tone === "success") {
     return {
@@ -256,10 +260,13 @@ export default function CamerasImportPageClient({
       setFiles([]);
       setMsgTone("success");
       setMsg(text.successText);
-    } catch (error: any) {
-      setMsgTone("error");
-      setMsg(normalizeApiErrorMessage(error.message, language));
-    } finally {
+
+} catch (error: unknown) {
+  setMsgTone("error");
+  setMsg(normalizeApiErrorMessage(getErrorMessage(error), language));
+} finally {
+
+
       setBusy(false);
       setDragOver(false);
     }

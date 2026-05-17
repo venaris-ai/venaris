@@ -1,7 +1,7 @@
 // src/components/TimeZoneSelect.tsx #1
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 
 const DEFAULT_TIME_ZONE = "Europe/Berlin";
 
@@ -71,22 +71,18 @@ export default function TimeZoneSelect({
   initialValue = null,
 }: Props) {
   const timeZones = useMemo(() => getSupportedTimeZones(), []);
-  const safeInitialValue =
-    initialValue && timeZones.includes(initialValue)
-      ? initialValue
+  
+const clientTimeZone = getClientTimeZone();
+
+const safeInitialValue =
+  initialValue && timeZones.includes(initialValue)
+    ? initialValue
+    : timeZones.includes(clientTimeZone)
+      ? clientTimeZone
       : DEFAULT_TIME_ZONE;
 
-  const [value, setValue] = useState(safeInitialValue);
+const [value, setValue] = useState(safeInitialValue);
 
-  useEffect(() => {
-    if (initialValue && timeZones.includes(initialValue)) return;
-
-    const clientTimeZone = getClientTimeZone();
-
-    if (timeZones.includes(clientTimeZone)) {
-      setValue(clientTimeZone);
-    }
-  }, [initialValue, timeZones]);
 
   return (
     <div>

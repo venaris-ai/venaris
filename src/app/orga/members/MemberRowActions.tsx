@@ -99,14 +99,9 @@ export default function MemberRowActions({
   const [isDirty, setIsDirty] = useState(false);
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
   const [isReadOnlyModalOpen, setIsReadOnlyModalOpen] = useState(false);
-  const [mounted, setMounted] = useState(false);
   const formId = useMemo(() => `member-controls-${userId}`, [userId]);
   const canEverSave = canEditRole || canEditStatus || canEditLanguage;
   const canSave = canEverSave && isDirty;
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
 
   useEffect(() => {
     const handler = (event: Event) => {
@@ -173,7 +168,7 @@ export default function MemberRowActions({
                 <TrashIcon />
               </button>
 
-              {mounted && isDeleteConfirmOpen
+              {isDeleteConfirmOpen
                 ? createPortal(
                     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
                       <div className="w-full max-w-md rounded-[20px] border border-white/10 bg-[#102018] p-6 shadow-2xl">
@@ -209,7 +204,7 @@ export default function MemberRowActions({
                   )
                 : null}
 
-              {mounted && isReadOnlyModalOpen
+              {isReadOnlyModalOpen
                 ? createPortal(
                     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
                       <div className="w-full max-w-md rounded-[20px] border border-white/10 bg-[#102018] p-6 shadow-2xl">

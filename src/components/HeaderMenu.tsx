@@ -40,10 +40,6 @@ export default function HeaderMenu({ role, email, isDemo, language }: Props) {
   const sectionItems = getSectionNavItems(language);
 
   useEffect(() => {
-    setOpen(false);
-  }, [pathname]);
-
-  useEffect(() => {
     function handleOutsideInteraction(event: MouseEvent | TouchEvent) {
       if (!menuRef.current) return;
 

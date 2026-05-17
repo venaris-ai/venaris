@@ -56,6 +56,12 @@ function isZipFile(f: File) {
   return n.endsWith(".zip") || ct.includes("zip");
 }
 
+
+function getErrorMessage(error: unknown) {
+  return error instanceof Error ? error.message : String(error);
+}
+
+
 /**
  * IMPORTANT:
  * - JSZip returns Buffer/Uint8Array depending on output mode.
@@ -142,10 +148,14 @@ export async function POST(req: NextRequest) {
     const multi = formData.getAll("files");
     const multiAlt = formData.getAll("files[]");
 
-    const raw = ([...(single ? [single] : []), ...multi, ...multiAlt] as any[]).filter(
-      Boolean
-    );
-    const incomingFiles = raw.filter((v): v is File => v instanceof File);
+const raw = [
+  ...(single ? [single] : []),
+  ...multi,
+  ...multiAlt,
+].filter(Boolean);
+
+const incomingFiles = raw.filter((value): value is File => value instanceof File);
+
 
     if (incomingFiles.length === 0) {
       return NextResponse.json({ error: text.fileOrFilesRequired }, { status: 400 });
@@ -197,19 +207,26 @@ export async function POST(req: NextRequest) {
       channel,
     });
 
+  } catch (error: unknown) {
+    const message = getErrorMessage(error);
 
-  } catch (err: any) {
-    if (err?.message === "Demo mode is read-only") {
+    if (message === "Demo mode is read-only") {
       return NextResponse.json(
         { error: "Demo mode is read-only" },
         { status: 403 }
       );
     }
 
-    console.error("UPLOAD crashed:", err);
+    console.error("UPLOAD crashed:", error);
     return NextResponse.json(
-      { error: text.uploadRouteCrashed, details: err?.message ?? String(err) },
+      {
+        error: text.uploadRouteCrashed,
+        details: message,
+      },
       { status: 500 }
     );
   }
+
+
+
 }

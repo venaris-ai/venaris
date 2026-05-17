@@ -32,6 +32,10 @@ function getStorageDeleteAfterIso() {
   return new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
 }
 
+function getErrorMessage(error: unknown) {
+  return error instanceof Error ? error.message : String(error);
+}
+
 export async function POST(req: NextRequest) {
   const language = getLanguageFromRequest(req);
   const text = t(language);
@@ -168,10 +172,18 @@ export async function POST(req: NextRequest) {
       storageDeleteReason:
         relevant === false ? assetUpdate.storage_delete_reason : null,
     });
-  } catch (e: any) {
+
+  } catch (error: unknown) {
     return NextResponse.json(
-      { error: "asset_relevant_api_crashed", details: e?.message ?? String(e) },
+      {
+        error: "asset_relevant_api_crashed",
+        details: getErrorMessage(error),
+      },
       { status: 500 }
     );
   }
+
+
+
+
 }

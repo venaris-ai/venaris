@@ -22,6 +22,10 @@ function t(language: AppLanguage) {
       };
 }
 
+function getErrorMessage(error: unknown) {
+  return error instanceof Error ? error.message : String(error);
+}
+
 export async function POST(req: NextRequest) {
   const language = getLanguageFromRequest(req);
   const text = t(language);
@@ -52,10 +56,16 @@ export async function POST(req: NextRequest) {
     const multi = formData.getAll("files");
     const multiAlt = formData.getAll("files[]");
 
-    const filesRaw = ([...(single ? [single] : []), ...multi, ...multiAlt] as any[]).filter(
-      Boolean
-    );
-    const files = filesRaw.filter((v): v is File => v instanceof File);
+
+const filesRaw = [
+  ...(single ? [single] : []),
+  ...multi,
+  ...multiAlt,
+].filter(Boolean);
+
+const files = filesRaw.filter((value): value is File => value instanceof File);
+
+
 
     if (files.length === 0) {
       return NextResponse.json(
@@ -76,11 +86,16 @@ export async function POST(req: NextRequest) {
     });
 
     return NextResponse.json(result);
-  } catch (err: any) {
-    console.error("INGEST crashed:", err);
+
+  } catch (error: unknown) {
+    console.error("INGEST crashed:", error);
     return NextResponse.json(
-      { error: text.ingestCrashed, details: err?.message ?? String(err) },
+      {
+        error: text.ingestCrashed,
+        details: getErrorMessage(error),
+      },
       { status: 500 }
     );
   }
+
 }

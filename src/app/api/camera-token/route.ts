@@ -16,6 +16,11 @@ function t(language: AppLanguage) {
       };
 }
 
+function getErrorMessage(error: unknown) {
+  return error instanceof Error ? error.message : String(error);
+}
+
+
 export async function GET(req: NextRequest) {
   const language = getLanguageFromRequest(req);
   const text = t(language);
@@ -73,12 +78,18 @@ export async function GET(req: NextRequest) {
       ok: true,
       ingest_token: data.ingest_token ?? null,
     });
-  } catch (e: any) {
+
+  } catch (error: unknown) {
     return NextResponse.json(
-      { error: "camera_token_api_crashed", details: e?.message || String(e) },
+      {
+        error: "camera_token_api_crashed",
+        details: getErrorMessage(error),
+      },
       { status: 500 }
     );
   }
+
+
 }
 
 export async function POST(req: NextRequest) {
@@ -155,10 +166,17 @@ export async function POST(req: NextRequest) {
       ok: true,
       ingest_token: row?.ingest_token ?? null,
     });
-  } catch (e: any) {
+
+  } catch (error: unknown) {
     return NextResponse.json(
-      { error: "camera_token_post_crashed", details: e?.message || String(e) },
+      {
+        error: "camera_token_post_crashed",
+        details: getErrorMessage(error),
+      },
       { status: 500 }
     );
   }
+
+
+
 }

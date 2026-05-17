@@ -634,7 +634,7 @@ supabase
     );
 
     let assetsById = new Map<string, AssetPreviewRow>();
-    let bestAnimalScoreByAssetId = new Map<string, number>();
+const bestAnimalScoreByAssetId = new Map<string, number>();
 
     if (assetIds.length > 0) {
       const [assetsDataResult, detectionsDataResult] = await Promise.all([

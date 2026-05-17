@@ -1,7 +1,21 @@
 // src/lib/ingestCore.ts
 import crypto from "crypto";
 
-export type IngestMetadata = Record<string, any>;
+export type IngestMetadata = Record<string, unknown>;
+
+type SupabaseClientLike = ReturnType<
+  typeof import("@/lib/supabaseServer").supabaseServer
+>;
+
+type AssetInsertPayload = {
+  camera_id: string;
+  storage_path: string;
+  file_hash: string;
+  status: "queued";
+  relevant: boolean;
+  ingest_batch_id: string;
+  captured_at?: string;
+};
 
 export function safeJsonParse(input: string | null): IngestMetadata | null {
   if (!input) return null;
@@ -28,6 +42,12 @@ export function normalizeSource(metadata: IngestMetadata | null): string {
   return "token";
 }
 
+function getMetadataDeviceTime(metadata: IngestMetadata | null) {
+  return metadata && typeof metadata.device_time === "string"
+    ? metadata.device_time
+    : null;
+}
+
 /**
  * Core ingest pipeline used by BOTH:
  * - /api/ingest (token-auth, workers)
@@ -43,7 +63,7 @@ export function normalizeSource(metadata: IngestMetadata | null): string {
  * - batch status completed/failed + summary
  */
 export async function ingestFiles(params: {
-  supabase: any;
+  supabase: SupabaseClientLike;
   cameraId: string;
   files: File[];
   metadata: IngestMetadata | null;
@@ -75,7 +95,6 @@ export async function ingestFiles(params: {
   let accepted = 0;
   let skippedDuplicates = 0;
 
-
   // 2) Process each file
   for (const file of files) {
     const bytes = Buffer.from(await file.arrayBuffer());
@@ -94,10 +113,7 @@ export async function ingestFiles(params: {
       skippedDuplicates++;
 
       // captured_at backfill if we now have a better time
-      const deviceTime =
-        metadata && typeof (metadata as any).device_time === "string"
-          ? String((metadata as any).device_time)
-          : null;
+      const deviceTime = getMetadataDeviceTime(metadata);
 
       const capturedAt = capturedAtOverride ?? deviceTime;
 
@@ -129,7 +145,7 @@ export async function ingestFiles(params: {
     }
 
     // 2c) Insert asset
-    const insertPayload: any = {
+    const insertPayload: AssetInsertPayload = {
       camera_id: cameraId,
       storage_path: storagePath,
       file_hash: hash,
@@ -142,10 +158,7 @@ export async function ingestFiles(params: {
     // 1) capturedAt (FormData)
     // 2) metadata.device_time (ISO string)
     // 3) else none -> DB created_at
-    const deviceTime =
-      metadata && typeof (metadata as any).device_time === "string"
-        ? String((metadata as any).device_time)
-        : null;
+    const deviceTime = getMetadataDeviceTime(metadata);
 
     const capturedAt = capturedAtOverride ?? deviceTime;
     if (capturedAt) insertPayload.captured_at = capturedAt;
@@ -184,7 +197,9 @@ export async function ingestFiles(params: {
 
   // 4) Batch final status + summary
   const summaryParts: string[] = [];
-  if (skippedDuplicates > 0) summaryParts.push(`skipped duplicates: ${skippedDuplicates}`);
+  if (skippedDuplicates > 0) {
+    summaryParts.push(`skipped duplicates: ${skippedDuplicates}`);
+  }
 
   await supabase
     .from("ingest_batches")

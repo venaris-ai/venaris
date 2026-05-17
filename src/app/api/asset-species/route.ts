@@ -50,6 +50,11 @@ function t(language: AppLanguage) {
       };
 }
 
+function getErrorMessage(error: unknown) {
+  return error instanceof Error ? error.message : String(error);
+}
+
+
 export async function POST(req: NextRequest) {
   const language = getLanguageFromRequest(req);
   const text = t(language);
@@ -210,10 +215,16 @@ if (species !== null) {
       eventId: reclusterEventId ?? null,
       manualDetectionCreated: detectionIds.length === 0 && species !== null,
     });
-  } catch (e: any) {
+
+  } catch (error: unknown) {
     return NextResponse.json(
-      { error: "asset_species_api_crashed", details: e?.message ?? String(e) },
+      {
+        error: "asset_species_api_crashed",
+        details: getErrorMessage(error),
+      },
       { status: 500 }
     );
   }
+
+
 }

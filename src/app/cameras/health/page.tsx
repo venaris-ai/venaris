@@ -297,15 +297,6 @@ function formatRuleDuration(minutes: number, language: AppLanguage) {
   return `${minutes} ${text.min}`;
 }
 
-function formatMethod(value: string | null, language: AppLanguage) {
-  const text = t(language);
-
-  if (!value) return "—";
-  if (value === "smtp") return "SMTP";
-  if (value === "ftp") return "FTP";
-  if (value === "manual") return text.manual;
-  return value;
-}
 
 function extractRevierName(
   value: { name: string } | { name: string }[] | null
