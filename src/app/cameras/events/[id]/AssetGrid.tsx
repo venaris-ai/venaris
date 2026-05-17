@@ -76,19 +76,24 @@ export default function AssetGrid({
               ) : null}
             </div>
 
-            <div className="mt-2 aspect-video w-full overflow-hidden rounded-[16px] bg-white/5">
-              {asset.previewUrl ? (
-                <img
-                  src={asset.previewUrl}
-                  alt={text.previewAlt}
-                  className="h-full w-full object-cover"
-                />
-              ) : (
-                <div className="flex h-full items-center justify-center text-sm text-white/45">
-                  {text.previewMissing}
-                </div>
-              )}
-            </div>
+<div className="mt-2 aspect-video w-full overflow-hidden rounded-[16px] bg-white/5">
+  {asset.previewUrl ? (
+    <>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={asset.previewUrl}
+        alt={text.previewAlt}
+        className="h-full w-full object-cover"
+      />
+    </>
+  ) : (
+    <div className="flex h-full items-center justify-center text-sm text-white/45">
+      {text.previewMissing}
+    </div>
+  )}
+</div>
+
+
           </button>
         );
       })}

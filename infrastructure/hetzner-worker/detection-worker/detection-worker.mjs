@@ -785,7 +785,7 @@ const { error: upErr } = await supabase
             speciesUpdated++;
           }
         }
-      } catch (e) {
+      } catch {
         // species failure should not fail the whole asset; we still mark processed
         speciesFailures++;
       }

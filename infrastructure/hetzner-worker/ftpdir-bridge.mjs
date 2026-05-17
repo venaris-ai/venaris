@@ -32,8 +32,6 @@ const ERROR_RETENTION_HOURS = Number(
   process.env.ERROR_RETENTION_HOURS || "336"
 );
 
-const ROOT = "/data/ftp-ingest";
-
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));

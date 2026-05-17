@@ -5,7 +5,6 @@ import { supabaseServer } from "@/lib/supabaseServer";
 import type {
   BillingCycle,
   BillingPlanKey,
-  SelfServeBillingPlanKey,
 } from "@/lib/billing/plans";
 import {
   getBillingCycleFromStripePriceId,

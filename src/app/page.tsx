@@ -414,17 +414,24 @@ function EventGalleryCard({
               className="group rounded-[24px] border border-white/10 bg-white/5 p-3 backdrop-blur-sm transition hover:border-amber-300/25 hover:bg-white/8"
             >
               <div className="aspect-video w-full overflow-hidden rounded-[16px] bg-white/5">
-                {previewUrl ? (
-                  <img
-                    src={previewUrl}
-                    alt={text.previewAlt}
-                    className="h-full w-full object-cover transition duration-200 group-hover:scale-[1.02]"
-                  />
-                ) : (
-                  <div className="flex h-full items-center justify-center text-sm text-white/45">
-                    {text.noPreview}
-                  </div>
-                )}
+
+{previewUrl ? (
+  <>
+    {/* eslint-disable-next-line @next/next/no-img-element */}
+    <img
+      src={previewUrl}
+      alt={text.previewAlt}
+      className="h-full w-full object-cover transition duration-200 group-hover:scale-[1.02]"
+    />
+  </>
+) : (
+  <div className="flex h-full items-center justify-center text-sm text-white/45">
+    {text.noPreview}
+  </div>
+)}
+
+
+
               </div>
 
               <div className="mt-3 flex items-center justify-between gap-3 text-xs">

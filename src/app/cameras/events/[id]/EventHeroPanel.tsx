@@ -62,17 +62,23 @@ export default function EventHeroPanel({
   return (
     <div className="rounded-[28px] border border-white/10 bg-white/5 p-4 backdrop-blur-sm">
       <div className="aspect-[4/3] w-full overflow-hidden rounded-[22px] bg-white/5">
-        {asset.previewUrl ? (
-          <img
-            src={asset.previewUrl}
-            alt={text.previewAlt}
-            className="h-full w-full object-cover"
-          />
-        ) : (
-          <div className="flex h-full items-center justify-center text-sm text-white/45">
-            {text.noPreview}
-          </div>
-        )}
+
+{asset.previewUrl ? (
+  <>
+    {/* eslint-disable-next-line @next/next/no-img-element */}
+    <img
+      src={asset.previewUrl}
+      alt={text.previewAlt}
+      className="h-full w-full object-cover"
+    />
+  </>
+) : (
+  <div className="flex h-full items-center justify-center text-sm text-white/45">
+    {text.noPreview}
+  </div>
+)}
+
+
       </div>
 
       <div className="mt-3 text-sm text-white/68">

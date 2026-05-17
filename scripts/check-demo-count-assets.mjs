@@ -110,7 +110,7 @@ for (const [folder, filename] of EXPECTED) {
       ok += 1;
       console.log(`OK    ${storagePath} :: ${meta.width}x${meta.height}, ${(stat.size / 1024).toFixed(0)} KB`);
     }
-  } catch (err) {
+  } catch {
     errors += 1;
     console.log(`MISS  ${storagePath}`);
   }

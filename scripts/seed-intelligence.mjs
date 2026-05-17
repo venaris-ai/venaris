@@ -22,26 +22,7 @@ const SEED_AREA_HA = 450;
 
 const DAYS_BACK = 365;
 const EVENTS_PER_CAMERA = 260; // 5 cams -> ~1300 events
-const MAX_ASSETS_PER_EVENT = 4;
 const RESET = process.argv.includes("--reset");
-
-const SPECIES = [
-  "roe_deer",
-  "wild_boar",
-  "red_deer",
-  "fallow_deer",
-  "mouflon",
-  "fox",
-  "wolf",
-  "badger",
-  "raccoon",
-  "raccoon_dog",
-  "hare",
-  "rabbit",
-  "pheasant",
-  "crow",
-  "other",
-];
 
 const CAMERA_PROFILES = [
   {
@@ -197,10 +178,6 @@ function clamp(v, min, max) {
 
 function toIso(dt) {
   return dt.toISOString();
-}
-
-function addMinutes(dt, minutes) {
-  return new Date(dt.getTime() + minutes * 60_000);
 }
 
 function addSeconds(dt, seconds) {

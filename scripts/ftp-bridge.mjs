@@ -40,9 +40,9 @@ function tryParseCapturedAt(filename) {
   // tolerant: YYYYMMDD_HHMMSS or YYYYMMDDHHMMSS
   const m = filename.match(/(20\d{2})(\d{2})(\d{2})[_-]?(\d{2})(\d{2})(\d{2})/);
   if (!m) return null;
-  const [_, y, mo, d, h, mi, s] = m;
-  // keep Z so it is clearly UTC
-  return `${y}-${mo}-${d}T${h}:${mi}:${s}Z`;
+const [, y, mo, d, h, mi, s] = m;
+// keep Z so it is clearly UTC
+return `${y}-${mo}-${d}T${h}:${mi}:${s}Z`;
 }
 
 async function postFile(fullPath) {
