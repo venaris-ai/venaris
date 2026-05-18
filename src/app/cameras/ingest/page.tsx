@@ -42,6 +42,19 @@ function t(language: AppLanguage) {
       unnamedCamera: "Unnamed camera",
       showDetails: "Show details",
       apiError: "API error",
+      filterTitle: "Filter events",
+      filterIntro: "Find older or imported events by camera and recording date.",
+      allCameras: "All cameras",
+      fromDate: "From",
+      toDate: "To",
+      applyFilters: "Apply",
+      resetFilters: "Reset",
+      page: "Page",
+      previousPage: "Previous",
+      nextPage: "Next",
+      paginationSummary: "Showing {from}–{to} of {total} events",
+      paginationSummaryCapped: "Showing {from}–{to} of the latest {total}+ events",
+      cappedHint: "The overview is limited to the latest 300 events. Use filters to narrow down older manual imports.",
     };
   }
 
@@ -64,11 +77,28 @@ function t(language: AppLanguage) {
     unnamedCamera: "Unbenannte Kamera",
     showDetails: "Details anzeigen",
     apiError: "API Fehler",
+    filterTitle: "Ereignisse eingrenzen",
+    filterIntro: "Finde ältere oder importierte Ereignisse gezielt nach Kamera und Aufnahmezeitraum.",
+    allCameras: "Alle Kameras",
+    fromDate: "Von",
+    toDate: "Bis",
+    applyFilters: "Anwenden",
+    resetFilters: "Zurücksetzen",
+    page: "Seite",
+    previousPage: "Zurück",
+    nextPage: "Weiter",
+    paginationSummary: "Zeige {from}–{to} von {total} Ereignissen",
+    paginationSummaryCapped: "Zeige {from}–{to} der neuesten {total}+ Ereignisse",
+    cappedHint: "Die Übersicht ist auf die neuesten 300 Ereignisse begrenzt. Nutze Filter, um ältere manuelle Importe gezielt einzugrenzen.",
   };
 }
 
 type SearchParams = {
   revier?: string;
+  page?: string;
+  camera?: string;
+  from?: string;
+  to?: string;
 };
 
 type RevierRow = {
@@ -335,6 +365,78 @@ function formatProbability(value?: number | null) {
   return `${Math.round(value * 100)}%`;
 }
 
+const EVENTS_PER_PAGE = 30;
+const MAX_PAGINATED_EVENTS = 300;
+
+function parsePageParam(value?: string) {
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < 1) return 1;
+  return parsed;
+}
+
+function parseDateParam(value?: string) {
+  if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return undefined;
+  return value;
+}
+
+function formatDateInputValue(value?: string | null) {
+  if (!value) return undefined;
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return undefined;
+
+  return date.toLocaleDateString("en-CA", {
+    timeZone: "Europe/Berlin",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
+}
+
+function getTodayDateInputValue() {
+  return formatDateInputValue(new Date().toISOString());
+}
+
+function clampPage(page: number, totalPages: number) {
+  return Math.min(Math.max(page, 1), Math.max(totalPages, 1));
+}
+
+function buildIngestPageHref(params: {
+  page: number;
+  revier?: string;
+  camera?: string;
+  from?: string;
+  to?: string;
+}) {
+  const search = new URLSearchParams();
+
+  if (params.revier) search.set("revier", params.revier);
+  if (params.camera) search.set("camera", params.camera);
+  if (params.from) search.set("from", params.from);
+  if (params.to) search.set("to", params.to);
+  if (params.page > 1) search.set("page", String(params.page));
+
+  const query = search.toString();
+  return query ? `/cameras/ingest?${query}` : "/cameras/ingest";
+}
+
+function buildResetFilterHref(params: { revier?: string }) {
+  if (!params.revier) return "/cameras/ingest";
+
+  const search = new URLSearchParams({ revier: params.revier });
+  return `/cameras/ingest?${search.toString()}`;
+}
+
+function formatPaginationSummary(
+  template: string,
+  values: { from: number; to: number; total: number }
+) {
+  return template
+    .replace("{from}", String(values.from))
+    .replace("{to}", String(values.to))
+    .replace("{total}", String(values.total));
+}
+
 function sortRows(rows: IngestEventRow[]) {
   return [...rows].sort((a, b) => {
     const aTs = new Date(a.endAt ?? a.startAt ?? a.receivedAt ?? 0).getTime();
@@ -384,9 +486,23 @@ export default async function CamerasIngestPage(props: {
     ? await Promise.resolve(props.searchParams)
     : undefined;
   const rawRevier = searchParams?.revier;
+  const rawCamera = searchParams?.camera;
+  const requestedFromDate = parseDateParam(searchParams?.from);
+  const requestedToDate = parseDateParam(searchParams?.to);
+  const defaultToDate = getTodayDateInputValue();
+  const requestedPage = parsePageParam(searchParams?.page);
 
   let items: IngestEventRow[] = [];
   let apiError: string | null = null;
+  let currentPage = 1;
+  let totalEvents = 0;
+  let totalPages = 1;
+  let hasMoreThanMaxEvents = false;
+  let cameraOptions: CameraScopeRow[] = [];
+  let selectedCameraId: string | undefined;
+  let oldestEventDate: string | undefined;
+  let fromDate = requestedFromDate;
+  let toDate = requestedToDate ?? defaultToDate;
 
   const { data: reviersData, error: reviersError } = await supabase
     .from("reviers")
@@ -427,7 +543,15 @@ export default async function CamerasIngestPage(props: {
         apiError = camerasError.message;
       } else {
         const cameraRows = (cameras ?? []) as CameraScopeRow[];
+        cameraOptions = [...cameraRows].sort((a, b) =>
+          (a.name ?? "").localeCompare(b.name ?? "")
+        );
         const allowedCameraIds = cameraRows.map((camera) => camera.id);
+        selectedCameraId =
+          rawCamera && allowedCameraIds.includes(rawCamera) ? rawCamera : undefined;
+        const filteredCameraIds = selectedCameraId
+          ? [selectedCameraId]
+          : allowedCameraIds;
         const revierIdByCameraId = new Map(
           cameraRows.map((camera) => [camera.id, camera.revier_id] as const)
         );
@@ -436,14 +560,84 @@ export default async function CamerasIngestPage(props: {
         );
 
         if (allowedCameraIds.length > 0) {
-          const { data: eventsData, error: eventsError } = await supabase
+          const oldestEventQuery = supabase
             .from("event_feed")
-            .select(
-              "id,camera_id,start_at,end_at,asset_count,top_species,top_count,relevance_score"
-            )
-            .in("camera_id", allowedCameraIds)
-            .order("start_at", { ascending: false, nullsFirst: false })
-            .limit(50);
+            .select("start_at")
+            .in("camera_id", filteredCameraIds)
+            .not("start_at", "is", null)
+            .order("start_at", { ascending: true, nullsFirst: false })
+            .limit(1);
+
+          const { data: oldestEventData, error: oldestEventError } =
+            await oldestEventQuery;
+
+          if (oldestEventError) {
+            apiError = oldestEventError.message;
+          } else {
+            oldestEventDate = formatDateInputValue(
+              ((oldestEventData ?? []) as Pick<EventFeedRow, "start_at">[])[0]
+                ?.start_at
+            );
+
+            fromDate = requestedFromDate ?? oldestEventDate;
+
+            if (fromDate && toDate && fromDate > toDate) {
+              const normalizedFromDate = toDate;
+              toDate = fromDate;
+              fromDate = normalizedFromDate;
+            }
+          }
+        }
+
+        if (!apiError && allowedCameraIds.length > 0) {
+          let eventCountQuery = supabase
+            .from("event_feed")
+            .select("id", { count: "exact", head: true })
+            .in("camera_id", filteredCameraIds);
+
+          if (fromDate) {
+            eventCountQuery = eventCountQuery.gte("start_at", `${fromDate}T00:00:00`);
+          }
+
+          if (toDate) {
+            eventCountQuery = eventCountQuery.lte("start_at", `${toDate}T23:59:59.999`);
+          }
+
+          const { count: eventCount, error: eventCountError } =
+            await eventCountQuery;
+
+          if (eventCountError) {
+            apiError = eventCountError.message;
+          } else {
+            hasMoreThanMaxEvents = (eventCount ?? 0) > MAX_PAGINATED_EVENTS;
+            totalEvents = Math.min(eventCount ?? 0, MAX_PAGINATED_EVENTS);
+            totalPages = Math.max(1, Math.ceil(totalEvents / EVENTS_PER_PAGE));
+            currentPage = clampPage(requestedPage, totalPages);
+
+            const from = (currentPage - 1) * EVENTS_PER_PAGE;
+            const to = Math.min(
+              from + EVENTS_PER_PAGE - 1,
+              MAX_PAGINATED_EVENTS - 1
+            );
+
+            let eventsQuery = supabase
+              .from("event_feed")
+              .select(
+                "id,camera_id,start_at,end_at,asset_count,top_species,top_count,relevance_score"
+              )
+              .in("camera_id", filteredCameraIds);
+
+            if (fromDate) {
+              eventsQuery = eventsQuery.gte("start_at", `${fromDate}T00:00:00`);
+            }
+
+            if (toDate) {
+              eventsQuery = eventsQuery.lte("start_at", `${toDate}T23:59:59.999`);
+            }
+
+            const { data: eventsData, error: eventsError } = await eventsQuery
+              .order("start_at", { ascending: false, nullsFirst: false })
+              .range(from, to);
 
           if (eventsError) {
             apiError = eventsError.message;
@@ -602,10 +796,29 @@ export default async function CamerasIngestPage(props: {
               }
             }
           }
+          }
         }
       }
     }
   }
+
+  const paginationFrom =
+    totalEvents === 0 ? 0 : (currentPage - 1) * EVENTS_PER_PAGE + 1;
+  const paginationTo = Math.min(currentPage * EVENTS_PER_PAGE, totalEvents);
+  const paginationSummary = formatPaginationSummary(
+    hasMoreThanMaxEvents
+      ? text.paginationSummaryCapped
+      : text.paginationSummary,
+    {
+      from: paginationFrom,
+      to: paginationTo,
+      total: totalEvents,
+    }
+  );
+  const paginationPages = Array.from(
+    { length: totalPages },
+    (_, index) => index + 1
+  );
 
   return (
     <main className="space-y-8">
@@ -619,6 +832,81 @@ export default async function CamerasIngestPage(props: {
           </h1>
           <p className="mt-2 text-sm text-white/68">{text.intro}</p>
         </div>
+      </section>
+
+      <section className="rounded-[28px] border border-white/10 bg-white/5 p-4 backdrop-blur-sm">
+        <div className="mb-4">
+          <h2 className="text-sm font-semibold text-white">{text.filterTitle}</h2>
+          <p className="mt-1 text-sm text-white/55">{text.filterIntro}</p>
+        </div>
+
+        <form
+          key={`${selectedCameraId ?? "all"}-${fromDate ?? ""}-${toDate ?? ""}`}
+          className="grid gap-3 md:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,1fr)_auto] md:items-end"
+        >
+          {rawRevier ? <input type="hidden" name="revier" value={rawRevier} /> : null}
+
+          <label className="block">
+            <span className="mb-1 block text-xs font-medium uppercase tracking-[0.16em] text-white/45">
+              {text.camera}
+            </span>
+            <select
+              name="camera"
+              defaultValue={selectedCameraId ?? ""}
+              className="w-full rounded-2xl border border-white/10 bg-[#12251d] px-3 py-2 text-sm text-white outline-none focus:border-amber-300/40"
+            >
+              <option value="">{text.allCameras}</option>
+              {cameraOptions.map((camera) => (
+                <option key={camera.id} value={camera.id}>
+                  {camera.name?.trim() || text.unnamedCamera}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="block">
+            <span className="mb-1 block text-xs font-medium uppercase tracking-[0.16em] text-white/45">
+              {text.fromDate}
+            </span>
+            <input
+              type="date"
+              name="from"
+              defaultValue={fromDate ?? ""}
+              min={oldestEventDate}
+              max={toDate}
+              className="w-full rounded-2xl border border-white/10 bg-[#12251d] px-3 py-2 text-sm text-white outline-none focus:border-amber-300/40"
+            />
+          </label>
+
+          <label className="block">
+            <span className="mb-1 block text-xs font-medium uppercase tracking-[0.16em] text-white/45">
+              {text.toDate}
+            </span>
+            <input
+              type="date"
+              name="to"
+              defaultValue={toDate ?? ""}
+              min={fromDate}
+              max={defaultToDate}
+              className="w-full rounded-2xl border border-white/10 bg-[#12251d] px-3 py-2 text-sm text-white outline-none focus:border-amber-300/40"
+            />
+          </label>
+
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="submit"
+              className="rounded-full border border-amber-300/30 bg-amber-300/15 px-4 py-2 text-sm font-medium text-amber-100 hover:bg-amber-300/20"
+            >
+              {text.applyFilters}
+            </button>
+            <Link
+              href={buildResetFilterHref({ revier: rawRevier })}
+              className="rounded-full border border-white/10 px-4 py-2 text-sm font-medium text-white/65 hover:border-amber-300/30 hover:text-amber-100"
+            >
+              {text.resetFilters}
+            </Link>
+          </div>
+        </form>
       </section>
 
       <section className="overflow-hidden rounded-[28px] border border-white/10 bg-white/5 backdrop-blur-sm">
@@ -666,12 +954,6 @@ export default async function CamerasIngestPage(props: {
                           row.timeZone
                         )}
                       </div>
-                      {row.endAt && row.endAt !== row.startAt ? (
-                        <div className="text-xs text-white/45">
-                          {text.until}{" "}
-                          {formatAppDateTime(row.endAt, language, row.timeZone)}
-                        </div>
-                      ) : null}
                     </td>
 
                     <td className="px-3 py-3 text-white">
@@ -714,6 +996,90 @@ export default async function CamerasIngestPage(props: {
             )}
           </tbody>
         </table>
+
+        {totalEvents > 0 ? (
+          <div className="flex flex-col gap-3 border-t border-white/8 px-3 py-3 text-sm text-white/60 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <div>{paginationSummary}</div>
+              {hasMoreThanMaxEvents ? (
+                <div className="mt-1 text-xs text-white/45">
+                  {text.cappedHint}
+                </div>
+              ) : null}
+            </div>
+
+            <nav
+              className="flex flex-wrap items-center gap-1"
+              aria-label={text.page}
+            >
+              {currentPage > 1 ? (
+                <Link
+                  href={buildIngestPageHref({
+                    page: currentPage - 1,
+                    revier: rawRevier,
+                    camera: selectedCameraId,
+                    from: fromDate,
+                    to: toDate,
+                  })}
+                  className="rounded-full border border-white/10 px-3 py-1 text-white/70 hover:border-amber-300/30 hover:text-amber-100"
+                >
+                  {text.previousPage}
+                </Link>
+              ) : (
+                <span className="rounded-full border border-white/8 px-3 py-1 text-white/25">
+                  {text.previousPage}
+                </span>
+              )}
+
+              {paginationPages.map((pageNumber) => {
+                const isCurrentPage = pageNumber === currentPage;
+
+                return isCurrentPage ? (
+                  <span
+                    key={pageNumber}
+                    className="rounded-full border border-amber-300/35 bg-amber-300/15 px-3 py-1 font-medium text-amber-100"
+                    aria-current="page"
+                  >
+                    {pageNumber}
+                  </span>
+                ) : (
+                  <Link
+                    key={pageNumber}
+                    href={buildIngestPageHref({
+                      page: pageNumber,
+                      revier: rawRevier,
+                      camera: selectedCameraId,
+                      from: fromDate,
+                      to: toDate,
+                    })}
+                    className="rounded-full border border-white/10 px-3 py-1 text-white/70 hover:border-amber-300/30 hover:text-amber-100"
+                  >
+                    {pageNumber}
+                  </Link>
+                );
+              })}
+
+              {currentPage < totalPages ? (
+                <Link
+                  href={buildIngestPageHref({
+                    page: currentPage + 1,
+                    revier: rawRevier,
+                    camera: selectedCameraId,
+                    from: fromDate,
+                    to: toDate,
+                  })}
+                  className="rounded-full border border-white/10 px-3 py-1 text-white/70 hover:border-amber-300/30 hover:text-amber-100"
+                >
+                  {text.nextPage}
+                </Link>
+              ) : (
+                <span className="rounded-full border border-white/8 px-3 py-1 text-white/25">
+                  {text.nextPage}
+                </span>
+              )}
+            </nav>
+          </div>
+        ) : null}
       </section>
 
       {apiError ? (
