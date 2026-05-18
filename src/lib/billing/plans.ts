@@ -24,7 +24,7 @@ export const BILLING_PLANS: Record<BillingPlanKey, BillingPlanDefinition> = {
     label: "Starter",
     description:
       "Für kleine Reviere und erste Teams mit klar begrenzter Kamera- und Mitglieder-Zahl.",
-    maxCameras: 5,
+    maxCameras: 3,
     maxMembers: 5,
     monthlyPriceCents: 995,
     yearlyPriceCents: 9900,
@@ -34,7 +34,7 @@ export const BILLING_PLANS: Record<BillingPlanKey, BillingPlanDefinition> = {
     label: "Pro",
     description:
       "Für professionelle Nutzung mit mehr Kameras, mehr Mitgliedern und operativem Ausbau.",
-    maxCameras: 25,
+    maxCameras: 15,
     maxMembers: 25,
     monthlyPriceCents: 2995,
     yearlyPriceCents: 29900,
