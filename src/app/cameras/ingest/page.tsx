@@ -2,6 +2,7 @@
 export const dynamic = "force-dynamic";
 
 import Link from "next/link";
+import IngestFilterBlock from "./IngestFilterBlock";
 import { cookies } from "next/headers";
 import { requirePathAccess } from "@/lib/authz";
 import { supabaseServer } from "@/lib/supabaseServer";
@@ -834,80 +835,17 @@ export default async function CamerasIngestPage(props: {
         </div>
       </section>
 
-      <section className="rounded-[28px] border border-white/10 bg-white/5 p-4 backdrop-blur-sm">
-        <div className="mb-4">
-          <h2 className="text-sm font-semibold text-white">{text.filterTitle}</h2>
-          <p className="mt-1 text-sm text-white/55">{text.filterIntro}</p>
-        </div>
-
-        <form
-          key={`${selectedCameraId ?? "all"}-${fromDate ?? ""}-${toDate ?? ""}`}
-          className="grid gap-3 md:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,1fr)_auto] md:items-end"
-        >
-          {rawRevier ? <input type="hidden" name="revier" value={rawRevier} /> : null}
-
-          <label className="block">
-            <span className="mb-1 block text-xs font-medium uppercase tracking-[0.16em] text-white/45">
-              {text.camera}
-            </span>
-            <select
-              name="camera"
-              defaultValue={selectedCameraId ?? ""}
-              className="w-full rounded-2xl border border-white/10 bg-[#12251d] px-3 py-2 text-sm text-white outline-none focus:border-amber-300/40"
-            >
-              <option value="">{text.allCameras}</option>
-              {cameraOptions.map((camera) => (
-                <option key={camera.id} value={camera.id}>
-                  {camera.name?.trim() || text.unnamedCamera}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <label className="block">
-            <span className="mb-1 block text-xs font-medium uppercase tracking-[0.16em] text-white/45">
-              {text.fromDate}
-            </span>
-            <input
-              type="date"
-              name="from"
-              defaultValue={fromDate ?? ""}
-              min={oldestEventDate}
-              max={toDate}
-              className="w-full rounded-2xl border border-white/10 bg-[#12251d] px-3 py-2 text-sm text-white outline-none focus:border-amber-300/40"
-            />
-          </label>
-
-          <label className="block">
-            <span className="mb-1 block text-xs font-medium uppercase tracking-[0.16em] text-white/45">
-              {text.toDate}
-            </span>
-            <input
-              type="date"
-              name="to"
-              defaultValue={toDate ?? ""}
-              min={fromDate}
-              max={defaultToDate}
-              className="w-full rounded-2xl border border-white/10 bg-[#12251d] px-3 py-2 text-sm text-white outline-none focus:border-amber-300/40"
-            />
-          </label>
-
-          <div className="flex flex-wrap gap-2">
-            <button
-              type="submit"
-              className="rounded-full border border-amber-300/30 bg-amber-300/15 px-4 py-2 text-sm font-medium text-amber-100 hover:bg-amber-300/20"
-            >
-              {text.applyFilters}
-            </button>
-            <Link
-              href={buildResetFilterHref({ revier: rawRevier })}
-              className="rounded-full border border-white/10 px-4 py-2 text-sm font-medium text-white/65 hover:border-amber-300/30 hover:text-amber-100"
-            >
-              {text.resetFilters}
-            </Link>
-          </div>
-        </form>
-      </section>
+      <IngestFilterBlock
+        text={text}
+        rawRevier={rawRevier}
+        selectedCameraId={selectedCameraId}
+        fromDate={fromDate}
+        toDate={toDate}
+        oldestEventDate={oldestEventDate}
+        defaultToDate={defaultToDate}
+        cameraOptions={cameraOptions}
+        resetHref={buildResetFilterHref({ revier: rawRevier })}
+      />
 
       <section className="overflow-hidden rounded-[28px] border border-white/10 bg-white/5 backdrop-blur-sm">
         <table className="w-full text-sm">
