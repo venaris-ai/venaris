@@ -428,6 +428,26 @@ function buildResetFilterHref(params: { revier?: string }) {
   return `/cameras/ingest?${search.toString()}`;
 }
 
+function buildEventDetailHref(params: {
+  eventId: string;
+  revier?: string;
+  camera?: string;
+  from?: string;
+  to?: string;
+}) {
+  const search = new URLSearchParams();
+
+  if (params.revier) search.set("revier", params.revier);
+  if (params.camera) search.set("camera", params.camera);
+  if (params.from) search.set("from", params.from);
+  if (params.to) search.set("to", params.to);
+
+  const query = search.toString();
+  return query
+    ? `/cameras/events/${params.eventId}?${query}`
+    : `/cameras/events/${params.eventId}`;
+}
+
 function formatPaginationSummary(
   template: string,
   values: { from: number; to: number; total: number }
@@ -873,11 +893,13 @@ export default async function CamerasIngestPage(props: {
                 const stTone = statusTone(row.ingestStatus);
                 const srcTone = sourceTone(row.source);
 
-                const eventHref = rawRevier
-                  ? `/cameras/events/${row.eventId}?${new URLSearchParams({
-                      revier: rawRevier,
-                    }).toString()}`
-                  : `/cameras/events/${row.eventId}`;
+                const eventHref = buildEventDetailHref({
+                  eventId: row.eventId,
+                  revier: rawRevier,
+                  camera: selectedCameraId,
+                  from: fromDate,
+                  to: toDate,
+                });
 
                 return (
                   <tr

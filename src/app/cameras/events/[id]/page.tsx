@@ -26,6 +26,9 @@ import {
 
 type SearchParams = {
   revier?: string;
+  camera?: string;
+  from?: string;
+  to?: string;
 };
 
 type RevierRow = {
@@ -70,22 +73,47 @@ function readSpeciesScore(meta: unknown): number | null {
 
 
 
-function buildBackHref(revier?: string) {
-  if (!revier) return "/cameras/ingest";
-  const params = new URLSearchParams({ revier });
-  return `/cameras/ingest?${params.toString()}`;
+type EventListContext = {
+  revier?: string;
+  camera?: string;
+  from?: string;
+  to?: string;
+};
+
+function parseDateParam(value?: string) {
+  if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return undefined;
+  return value;
 }
 
-function buildEventHref(eventId: string, revier?: string) {
-  if (!revier) return `/cameras/events/${eventId}`;
-  const params = new URLSearchParams({ revier });
-  return `/cameras/events/${eventId}?${params.toString()}`;
+function buildEventListSearchParams(context: EventListContext) {
+  const params = new URLSearchParams();
+
+  if (context.revier) params.set("revier", context.revier);
+  if (context.camera) params.set("camera", context.camera);
+  if (context.from) params.set("from", context.from);
+  if (context.to) params.set("to", context.to);
+
+  return params;
 }
 
-function buildEventQuerySuffix(revier?: string) {
-  if (!revier) return "";
-  const params = new URLSearchParams({ revier });
-  return `?${params.toString()}`;
+function buildBackHref(context: EventListContext) {
+  const params = buildEventListSearchParams(context);
+  const query = params.toString();
+  return query ? `/cameras/ingest?${query}` : "/cameras/ingest";
+}
+
+function buildEventHref(eventId: string, context: EventListContext) {
+  const params = buildEventListSearchParams(context);
+  const query = params.toString();
+  return query
+    ? `/cameras/events/${eventId}?${query}`
+    : `/cameras/events/${eventId}`;
+}
+
+function buildEventQuerySuffix(context: EventListContext) {
+  const params = buildEventListSearchParams(context);
+  const query = params.toString();
+  return query ? `?${query}` : "";
 }
 
 function t(language: AppLanguage) {
@@ -172,8 +200,17 @@ export default async function CameraEventDetailPage(props: {
 
   const eventId: string | undefined = params?.id;
   const rawRevier = searchParams?.revier;
-  const backHref = buildBackHref(rawRevier);
-  const eventQuerySuffix = buildEventQuerySuffix(rawRevier);
+  const rawCamera = searchParams?.camera;
+  const requestedFromDate = parseDateParam(searchParams?.from);
+  const requestedToDate = parseDateParam(searchParams?.to);
+  let eventListContext: EventListContext = {
+    revier: rawRevier,
+    camera: rawCamera,
+    from: requestedFromDate,
+    to: requestedToDate,
+  };
+  let backHref = buildBackHref(eventListContext);
+  let eventQuerySuffix = buildEventQuerySuffix(eventListContext);
   const cookieStore = await cookies();
 
   if (!eventId) {
@@ -448,39 +485,71 @@ const speciesOptions = getSpeciesOptions(speciesMetaRows, language).sort(
   let olderEventHref: string | null = null;
   let newerEventHref: string | null = null;
 
-  if (scopeCameraIds.length > 0) {
-    const { data: olderEvent } = await supabase
+  const selectedNavigationCameraIds =
+    rawCamera && scopeCameraIds.includes(rawCamera) ? [rawCamera] : scopeCameraIds;
+
+  eventListContext = {
+    revier: rawRevier,
+    camera: rawCamera && scopeCameraIds.includes(rawCamera) ? rawCamera : undefined,
+    from: requestedFromDate,
+    to: requestedToDate,
+  };
+  backHref = buildBackHref(eventListContext);
+  eventQuerySuffix = buildEventQuerySuffix(eventListContext);
+
+  if (selectedNavigationCameraIds.length > 0) {
+    let olderEventQuery = supabase
       .from("event_feed")
       .select("id,start_at")
-      .in("camera_id", scopeCameraIds)
+      .in("camera_id", selectedNavigationCameraIds)
       .neq("id", eventId)
       .lt("start_at", event.start_at)
       .gt("asset_count", 0)
       .gt("relevance_score", 0)
-      .not("top_species", "is", null)
+      .not("top_species", "is", null);
+
+    if (requestedFromDate) {
+      olderEventQuery = olderEventQuery.gte("start_at", `${requestedFromDate}T00:00:00`);
+    }
+
+    if (requestedToDate) {
+      olderEventQuery = olderEventQuery.lte("start_at", `${requestedToDate}T23:59:59.999`);
+    }
+
+    const { data: olderEvent } = await olderEventQuery
       .order("start_at", { ascending: false })
       .limit(1)
       .maybeSingle();
 
-    const { data: newerEvent } = await supabase
+    let newerEventQuery = supabase
       .from("event_feed")
       .select("id,start_at")
-      .in("camera_id", scopeCameraIds)
+      .in("camera_id", selectedNavigationCameraIds)
       .neq("id", eventId)
       .gt("start_at", event.start_at)
       .gt("asset_count", 0)
       .gt("relevance_score", 0)
-      .not("top_species", "is", null)
+      .not("top_species", "is", null);
+
+    if (requestedFromDate) {
+      newerEventQuery = newerEventQuery.gte("start_at", `${requestedFromDate}T00:00:00`);
+    }
+
+    if (requestedToDate) {
+      newerEventQuery = newerEventQuery.lte("start_at", `${requestedToDate}T23:59:59.999`);
+    }
+
+    const { data: newerEvent } = await newerEventQuery
       .order("start_at", { ascending: true })
       .limit(1)
       .maybeSingle();
 
     if (olderEvent?.id) {
-      olderEventHref = buildEventHref(olderEvent.id, rawRevier);
+      olderEventHref = buildEventHref(olderEvent.id, eventListContext);
     }
 
     if (newerEvent?.id) {
-      newerEventHref = buildEventHref(newerEvent.id, rawRevier);
+      newerEventHref = buildEventHref(newerEvent.id, eventListContext);
     }
   }
 
