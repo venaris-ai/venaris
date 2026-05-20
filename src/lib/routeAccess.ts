@@ -53,6 +53,7 @@ export const ROUTE_ACCESS_RULES: RouteAccessRule[] = [
   { path: "/orga/subscription", allowedRoles: ["owner"] },
 
   { path: "/admin/subscriptions", allowedEmails: ["dev@venaris.io"] },
+{ path: "/admin/growth", allowedEmails: ["dev@venaris.io"] },
 ];
 
 export const MAIN_NAV_ITEMS: NavItem[] = [
