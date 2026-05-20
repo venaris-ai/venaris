@@ -242,6 +242,11 @@ export function getSectionNavItems(language: AppLanguage) {
           { href: "/orga/members", label: "Members", match: "exact" },
           { href: "/orga/subscription", label: "Subscription", match: "exact" },
         ] satisfies NavItem[],
+
+        admin: [
+          { href: "/admin/subscriptions", label: "Subscriptions", match: "exact" },
+          { href: "/admin/growth", label: "Growth", match: "exact" },
+        ] satisfies NavItem[],
       }
     : {
         wildlife: [
@@ -264,6 +269,11 @@ export function getSectionNavItems(language: AppLanguage) {
           { href: "/orga/reviere", label: "Reviere", match: "exact" },
           { href: "/orga/members", label: "Mitglieder", match: "exact" },
           { href: "/orga/subscription", label: "Abo", match: "exact" },
+        ] satisfies NavItem[],
+
+        admin: [
+          { href: "/admin/subscriptions", label: "Abo-Anfragen", match: "exact" },
+          { href: "/admin/growth", label: "Growth", match: "exact" },
         ] satisfies NavItem[],
       };
 }

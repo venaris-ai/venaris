@@ -22,7 +22,7 @@ type Props = {
 };
 
 type MenuGroup = {
-  key: "wildlife" | "cameras" | "orga";
+  key: "wildlife" | "cameras" | "orga" | "admin";
   label: string;
   items: NavItem[];
 };
@@ -30,7 +30,8 @@ type MenuGroup = {
 function groupLabel(key: MenuGroup["key"], language: AppLanguage) {
   if (key === "wildlife") return "Wildlife";
   if (key === "cameras") return language === "en" ? "Cameras" : "Kameras";
-  return language === "en" ? "Organization" : "Organisation";
+  if (key === "orga") return language === "en" ? "Organization" : "Organisation";
+  return "Admin";
 }
 
 export default function HeaderMenu({ role, email, isDemo, language }: Props) {
@@ -80,6 +81,11 @@ export default function HeaderMenu({ role, email, isDemo, language }: Props) {
       key: "orga",
       label: groupLabel("orga", language),
       items: sectionItems.orga,
+    },
+    {
+      key: "admin",
+      label: groupLabel("admin", language),
+      items: sectionItems.admin,
     },
   ];
 
