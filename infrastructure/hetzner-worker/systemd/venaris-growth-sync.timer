@@ -1,0 +1,10 @@
+[Unit]
+Description=Run Venaris growth analytics daily sync
+
+[Timer]
+OnCalendar=*-*-* 04:05:00
+Persistent=true
+Unit=venaris-growth-sync.service
+
+[Install]
+WantedBy=timers.target

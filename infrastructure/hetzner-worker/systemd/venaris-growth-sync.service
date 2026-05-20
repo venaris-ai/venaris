@@ -1,0 +1,11 @@
+[Unit]
+Description=Venaris growth analytics daily sync
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=venaris
+WorkingDirectory=/opt/venaris-worker
+EnvironmentFile=/opt/venaris-worker/.env.growth
+ExecStart=/usr/bin/node /opt/venaris-worker/sync-umami-growth-daily.mjs
