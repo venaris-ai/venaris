@@ -1,4 +1,4 @@
-// src/lib/demoAssetResolver.ts #3
+// src/lib/demoAssetResolver.ts #4
 import { supabaseServer } from "@/lib/supabaseServer";
 
 type AssetRow = {
@@ -463,6 +463,20 @@ async function createSignedUrlFromCandidates(candidates: string[], seed: string)
   return null;
 }
 
+async function createSignedUrlFromTrustedCandidates(candidates: string[], seed: string) {
+  if (candidates.length === 0) return null;
+
+  const startIndex = pickDeterministicIndex(seed, candidates.length);
+
+  for (let offset = 0; offset < candidates.length; offset += 1) {
+    const index = (startIndex + offset) % candidates.length;
+    const url = await createSignedUrl(candidates[index]);
+    if (url) return url;
+  }
+
+  return null;
+}
+
 async function resolveTopSpecies(assetId: string) {
   const supabase = supabaseServer();
   const { data, error } = await supabase
@@ -531,15 +545,9 @@ export async function resolveAssetPreviewUrl(args: {
 }) {
   const { asset, isDemo } = args;
 
-  if (!asset.storage_path) return null;
-
-  const originalUrl = await createSignedUrlIfExists(asset.storage_path);
-  if (originalUrl) {
-    return originalUrl;
-  }
-
   if (!isDemo) {
-    return null;
+    if (!asset.storage_path) return null;
+    return createSignedUrlIfExists(asset.storage_path);
   }
 
   const eventContext = await resolveDemoEventContext(asset.id);
@@ -549,12 +557,29 @@ export async function resolveAssetPreviewUrl(args: {
     return null;
   }
 
-  const seed = eventContext?.eventId ?? asset.id ?? asset.storage_path;
+  const seed = eventContext?.eventId ?? asset.id ?? asset.storage_path ?? species;
 
-  const countAwareCandidates = getCountAwareCandidates(species, eventContext?.count ?? null);
+  const countAwareCandidates = getCountAwareCandidates(
+    species,
+    eventContext?.count ?? null,
+  );
+
   if (countAwareCandidates?.length) {
-    const countAwareUrl = await createSignedUrlFromCandidates(countAwareCandidates, seed);
-    if (countAwareUrl) return countAwareUrl;
+    // Robust demo rule:
+    // If species + top_count is explicitly mapped, use only that mapping.
+    // Do not check Storage via list(), because list() can lag/cached after upload.
+    // Do not fall back to generic species images, because that creates wrong counts.
+    return createSignedUrlFromTrustedCandidates(countAwareCandidates, seed);
+  }
+
+  // Only if no explicit species+count mapping exists:
+  // 1) Try the asset's original storage path.
+  // 2) Then use old species fallback.
+  if (asset.storage_path) {
+    const originalUrl = await createSignedUrlIfExists(asset.storage_path);
+    if (originalUrl) {
+      return originalUrl;
+    }
   }
 
   const speciesFallbackCandidates = getSpeciesFallbackCandidates(species);
