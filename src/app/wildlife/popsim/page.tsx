@@ -106,7 +106,7 @@ function t(language: AppLanguage) {
       eyebrow: "PopSim",
       title: "PopSim",
       intro:
-        "Model-based population estimate for stock, target values and potential removal recommendation.",
+        "Model-based population estimate for stock, target values and potential harvest recommendation.",
       activeOrganizationNotFound: "Active organization not found.",
       reviersLoadFailed: "Failed to load grounds:",
       noActiveGroundForPopSim:
@@ -129,7 +129,7 @@ function t(language: AppLanguage) {
       withCurrentSnapshot: "with current snapshot",
       estimatedTotal: "Estimated Total",
       acrossAllSpecies: "across all species",
-      harvestSurplus: "Removal Recommendation",
+      harvestSurplus: "Harvest Recommendation",
       speciesGreaterThanZero: (count: string) => `Sum across ${count} species`,
       noSnapshotTitle: "No PopSim snapshot available",
       noSnapshotTextA: "No PopSim results were found in",
@@ -144,7 +144,7 @@ function t(language: AppLanguage) {
       per100ha: "Per 100 ha",
       targetTotal: "Target Total",
       targetPer100ha: "Per 100 ha",
-      harvestSurplusCol: "Removal Recommendation",
+      harvestSurplusCol: "Harvest Recommendation",
       noSpeciesRows: "No species rows are available for the newest snapshot.",
       classification: "Classification",
       classificationText:
