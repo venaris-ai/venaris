@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabaseServer";
 import { resolvePeriodRange, type PeriodKey } from "@/lib/intelligence/period";
 import { getLanguageFromRequest, type AppLanguage } from "@/lib/i18n";
+import { requirePathAccess } from "@/lib/authz";
 
 function t(language: AppLanguage) {
   return language === "en"
@@ -17,6 +18,8 @@ function t(language: AppLanguage) {
 export async function GET(req: NextRequest) {
   const language = getLanguageFromRequest(req);
   const text = t(language);
+
+await requirePathAccess("/wildlife");
 
   const { searchParams } = new URL(req.url);
 
