@@ -15,6 +15,12 @@ type CameraRow = {
 
 type MessageTone = "success" | "error" | "info";
 
+const MAX_IMPORT_BYTES = 100 * 1024 * 1024;
+
+function formatMb(bytes: number) {
+  return `${Math.round((bytes / 1024 / 1024) * 10) / 10} MB`;
+}
+
 function t(language: AppLanguage) {
   if (language === "en") {
     return {
@@ -45,7 +51,9 @@ function t(language: AppLanguage) {
       errorTitle: "Import could not be completed",
       successTitle: "Import completed",
       successText: "The selected files have been processed successfully.",
-    };
+maxImportSize: "Max. 100 MB per import",
+importTooLarge:
+  "The import is larger than 100 MB. Please split the selection into multiple imports.",    };
   }
 
   return {
@@ -76,6 +84,9 @@ function t(language: AppLanguage) {
     errorTitle: "Import konnte nicht abgeschlossen werden",
     successTitle: "Import abgeschlossen",
     successText: "Die ausgewählten Dateien wurden erfolgreich verarbeitet.",
+maxImportSize: "Max. 100 MB pro Import",
+importTooLarge:
+  "Der Import ist größer als 100 MB. Bitte die Auswahl auf mehrere Importvorgänge aufteilen.",
   };
 }
 
@@ -147,6 +158,10 @@ export default function CamerasImportPageClient({
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const text = t(language);
+
+  const selectedBytes = files.reduce((sum, file) => sum + file.size, 0);
+  const selectedMb = formatMb(selectedBytes);
+  const importTooLarge = selectedBytes > MAX_IMPORT_BYTES;
 
   async function loadCameras() {
     const params = new URLSearchParams();
@@ -230,6 +245,12 @@ export default function CamerasImportPageClient({
       return;
     }
 
+if (importTooLarge) {
+  setMsgTone("error");
+  setMsg(text.importTooLarge);
+  return;
+}
+
     setBusy(true);
 
     try {
@@ -288,7 +309,8 @@ export default function CamerasImportPageClient({
     }
   }
 
-  const canImport = !!cameraId && files.length > 0 && !busy && !isDemo;
+  const canImport =
+  !!cameraId && files.length > 0 && !busy && !isDemo && !importTooLarge;
   const messageTone = alertTone(msgTone);
   const messageTitle =
     msgTone === "success"
@@ -432,17 +454,31 @@ export default function CamerasImportPageClient({
 </div>
 
 <div className="flex items-center justify-between gap-3">
-  <div className="text-sm text-white/72">
-    {files.length > 0 ? (
-      <>
+
+<div className="min-w-0 flex-1">
+  {busy ? (
+    <div className="space-y-2">
+      <div className="text-sm text-white/72">{text.running}</div>
+      <div className="h-1.5 overflow-hidden rounded-full bg-white/10">
+        <div className="h-full w-1/3 animate-pulse rounded-full bg-[#c9952e]" />
+      </div>
+    </div>
+  ) : files.length > 0 ? (
+    <div className="space-y-1 text-sm text-white/72">
+      <div>
         {text.selected}{" "}
         <span className="font-medium text-white">{files.length}</span>{" "}
-        {text.files}
-      </>
-    ) : (
-      <span className="text-white/45">{text.noneSelected}</span>
-    )}
-  </div>
+        {text.files} ·{" "}
+        <span className="font-medium text-white">{selectedMb}</span>
+      </div>
+      <div className={importTooLarge ? "text-rose-200" : "text-white/45"}>
+        {text.maxImportSize}
+      </div>
+    </div>
+  ) : (
+    <span className="text-sm text-white/45">{text.noneSelected}</span>
+  )}
+</div>
 
 
 
