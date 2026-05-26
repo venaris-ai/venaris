@@ -17,6 +17,9 @@ const POLL_SECONDS = Number(process.env.POLL_SECONDS || 5);
 const BATCH_SIZE = Number(process.env.BATCH_SIZE || 10);
 const MAX_ATTEMPTS = Number(process.env.MAX_ATTEMPTS || 5);
 const STUCK_MINUTES = Number(process.env.STUCK_MINUTES || 30);
+const STORAGE_DELETE_AFTER_HOURS = Number(
+  process.env.STORAGE_DELETE_AFTER_HOURS || 24
+);
 
 const STORAGE_DOWNLOAD_ENABLED =
   (process.env.STORAGE_DOWNLOAD_ENABLED ?? "1") !== "0";
@@ -92,6 +95,12 @@ function isValidTimeZone(value) {
 function normalizeTimeZone(value) {
   const trimmed = typeof value === "string" ? value.trim() : "";
   return isValidTimeZone(trimmed) ? trimmed : DEFAULT_TIME_ZONE;
+}
+
+function getStorageDeleteAfterIso() {
+  return new Date(
+    Date.now() + STORAGE_DELETE_AFTER_HOURS * 60 * 60 * 1000
+  ).toISOString();
 }
 
 function parseNaiveExifString(value) {
@@ -797,12 +806,22 @@ const { error: upErr } = await supabase
     fs.unlinkSync(tmpFile);
   } catch {}
 
-  // 4) Empty/relevance patch (system decision)
-  patch.empty = emptyInfo.empty;
-  patch.empty_confidence = emptyInfo.empty_confidence;
-  patch.relevant = !emptyInfo.empty;
+// 4) Empty/relevance patch (system decision)
+patch.empty = emptyInfo.empty;
+patch.empty_confidence = emptyInfo.empty_confidence;
+patch.relevant = !emptyInfo.empty;
 
-  await markProcessed(core.id, patch);
+const shouldScheduleStorageDelete =
+  patch.empty === true || patch.relevant === false;
+
+if (shouldScheduleStorageDelete) {
+  patch.storage_delete_after = getStorageDeleteAfterIso();
+  patch.storage_delete_reason =
+    patch.empty === true ? "auto_empty" : "auto_irrelevant";
+  patch.storage_delete_error = null;
+}
+
+await markProcessed(core.id, patch);
 
   // 5) event layer
   // Only non-empty assets are event-eligible.
