@@ -594,7 +594,7 @@ const cameraIds = scopedCameras.map((camera) => camera.id);
         .returns<EventRow[]>(),
 
 supabase
-  .from("event_feed")
+  .from("events")
   .select("id", { count: "exact", head: true })
   .in("camera_id", cameraIds)
   .gte("start_at", recentWindowIso)
