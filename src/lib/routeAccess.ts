@@ -75,7 +75,6 @@ export const SECTION_NAV_ITEMS = {
     { href: "/cameras/health", label: "Status", match: "exact" },
     { href: "/cameras/ingest", label: "Ingest", match: "exact" },
     { href: "/cameras/import", label: "Import", match: "exact" },
-    { href: "/cameras/new", label: "New", match: "exact" },
     { href: "/cameras/tipps", label: "Tips", match: "exact" },
   ] satisfies NavItem[],
 
@@ -232,7 +231,6 @@ export function getSectionNavItems(language: AppLanguage) {
           { href: "/cameras/health", label: "Status", match: "exact" },
           { href: "/cameras/ingest", label: "Ingest", match: "exact" },
           { href: "/cameras/import", label: "Import", match: "exact" },
-          { href: "/cameras/new", label: "New", match: "exact" },
           { href: "/cameras/tipps", label: "Tips", match: "exact" },
         ] satisfies NavItem[],
 
@@ -260,7 +258,6 @@ export function getSectionNavItems(language: AppLanguage) {
           { href: "/cameras/health", label: "Status", match: "exact" },
           { href: "/cameras/ingest", label: "Ingest", match: "exact" },
           { href: "/cameras/import", label: "Import", match: "exact" },
-          { href: "/cameras/new", label: "Neu", match: "exact" },
           { href: "/cameras/tipps", label: "Tipps", match: "exact" },
         ] satisfies NavItem[],
 
@@ -277,3 +274,4 @@ export function getSectionNavItems(language: AppLanguage) {
         ] satisfies NavItem[],
       };
 }
+
