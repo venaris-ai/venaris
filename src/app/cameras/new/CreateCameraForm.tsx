@@ -150,7 +150,9 @@ function t(language: AppLanguage) {
       coreProvisioningLabel: "Core provisioning",
       ftpSetupLabel: "FTP setup",
       smtpSetupLabel: "SMTP setup",
-      manualSetupLabel: "Manual import setup",
+manualSetupLabel: "Manual import setup",
+successCreated:
+  "The camera has been created successfully. Scroll down to find the configuration parameters.",
     };
   }
 
@@ -238,7 +240,9 @@ function t(language: AppLanguage) {
     coreProvisioningLabel: "Core Provisioning",
     ftpSetupLabel: "FTP-Setup",
     smtpSetupLabel: "SMTP-Setup",
-    manualSetupLabel: "Setup manueller Import",
+manualSetupLabel: "Setup manueller Import",
+successCreated:
+  "Die Kamera wurde erfolgreich angelegt. Scrolle nach unten, um die Konfigurationsparameter zu finden.",
   };
 }
 
@@ -755,6 +759,12 @@ export default function CreateCameraForm({
             {error}
           </div>
         ) : null}
+
+{result ? (
+  <div className="mt-4 rounded-[24px] border border-emerald-300/20 bg-emerald-300/10 p-4 text-sm text-emerald-100">
+    {text.successCreated}
+  </div>
+) : null}
 
         <div className="mt-6 flex items-center gap-3">
           <button
