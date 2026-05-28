@@ -124,9 +124,7 @@ function t(language: AppLanguage) {
       ingestToken: "Ingest token",
       ftpSetup: "FTP setup",
       ftpSetupText:
-        "Enter these values into the camera now. The password is shown only once.",
-      important:
-        "Important: store the FTP password now. It will not be shown again after this page.",
+        "Enter these values into the camera.",
       ftpServer: "FTP server",
       ftpPort: "FTP port",
       ftpUsername: "FTP username",
@@ -213,9 +211,7 @@ function t(language: AppLanguage) {
     ingestToken: "Ingest-Token",
     ftpSetup: "FTP-Setup",
     ftpSetupText:
-      "Bitte diese Werte jetzt direkt in der Kamera eintragen. Das Passwort wird nur einmal angezeigt.",
-    important:
-      "Wichtig: Bitte das FTP-Passwort jetzt sichern. Nach Verlassen der Seite wird es nicht erneut angezeigt.",
+      "Bitte diese Werte in der Kamera eintragen.",
     ftpServer: "FTP-Server",
     ftpPort: "FTP-Port",
     ftpUsername: "FTP-Benutzername",
@@ -390,7 +386,7 @@ export default function CreateCameraForm({
 
   const [revierId, setRevierId] = useState(defaultRevierId);
   const [cameraName, setCameraName] = useState("");
-  const [method, setMethod] = useState<"smtp" | "ftp" | "manual">("smtp");
+  const [method, setMethod] = useState<"smtp" | "ftp" | "manual">("manual");
   const [vendor, setVendor] = useState<string>(vendors[0]?.key ?? "");
   const [locationName, setLocationName] = useState("");
   const [latitude, setLatitude] = useState("");
@@ -886,10 +882,6 @@ export default function CreateCameraForm({
                 </button>
               </div>
 
-              <div className="rounded-[14px] border border-amber-300/20 bg-amber-300/10 px-3 py-2 text-sm text-amber-100">
-                {text.important}
-              </div>
-
               <div className="grid gap-2 text-sm text-white/78">
                 <div>
                   <span className="font-medium text-white">
@@ -909,8 +901,10 @@ export default function CreateCameraForm({
                   </span>{" "}
                   {ftpProvisioning.username}
                 </div>
-                <div className="rounded-[14px] border border-white/10 bg-white/5 px-3 py-3 text-white">
-                  <span className="font-medium">{text.ftpPassword}:</span>{" "}
+                <div>
+                  <span className="font-medium text-white">
+                    {text.ftpPassword}:
+                  </span>{" "}
                   {ftpProvisioning.password}
                 </div>
                 <div>
@@ -1013,3 +1007,4 @@ export default function CreateCameraForm({
     </div>
   );
 }
+
