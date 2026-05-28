@@ -25,6 +25,7 @@ export const ROUTE_ACCESS_RULES: RouteAccessRule[] = [
   { path: "/register", public: true },
   { path: "/reset-password", public: true },
   { path: "/invite/accept", match: "startsWith", public: true },
+{ path: "/demo/start", public: true },
 
   { path: "/", allowedRoles: ["owner", "admin", "member", "viewer"] },
 

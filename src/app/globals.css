@@ -67,3 +67,13 @@ textarea {
   outline: none;
   box-shadow: 0 0 0 4px var(--ring);
 }
+
+@keyframes venaris-demo-progress {
+  0% {
+    transform: translateX(-100%);
+  }
+
+  100% {
+    transform: translateX(160%);
+  }
+}
