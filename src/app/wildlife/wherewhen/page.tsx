@@ -1,4 +1,4 @@
-// src/app/wildlife/wherewhen/page.tsx #7
+// src/app/wildlife/wherewhen/page.tsx #9
 export const runtime = "nodejs";
 
 import Link from "next/link";
@@ -30,6 +30,7 @@ type SearchParams = {
   period?: string;
   revier?: string;
   species?: string;
+  cameraPage?: string;
 };
 
 type EventFeedRow = {
@@ -127,6 +128,63 @@ function buildHref(
   return `/wildlife/wherewhen?${params.toString()}`;
 }
 
+const CAMERAS_PER_MATRIX_PAGE = 10;
+
+function parsePageParam(value?: string) {
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < 1) return 1;
+  return parsed;
+}
+
+function clampPage(page: number, totalPages: number) {
+  return Math.min(Math.max(page, 1), Math.max(totalPages, 1));
+}
+
+function buildBalancedGroups<T>(items: T[], maxPerGroup: number) {
+  if (items.length <= maxPerGroup) return [items];
+
+  const groupCount = Math.ceil(items.length / maxPerGroup);
+  const baseSize = Math.floor(items.length / groupCount);
+  const remainder = items.length % groupCount;
+
+  const groups: T[][] = [];
+  let start = 0;
+
+  for (let index = 0; index < groupCount; index += 1) {
+    const size = baseSize + (index < remainder ? 1 : 0);
+    groups.push(items.slice(start, start + size));
+    start += size;
+  }
+
+  return groups;
+}
+
+function buildCameraPageHref(params: {
+  period: PeriodKey;
+  revierValue: string;
+  selectedSpecies?: string | null;
+  cameraPage: number;
+}) {
+  const search = new URLSearchParams();
+
+  search.set("period", params.period);
+  search.set("revier", params.revierValue);
+  if (params.selectedSpecies) search.set("species", params.selectedSpecies);
+  if (params.cameraPage > 1) search.set("cameraPage", String(params.cameraPage));
+
+  return `/wildlife/wherewhen?${search.toString()}`;
+}
+
+function formatCameraPaginationSummary(
+  template: string,
+  values: { from: number; to: number; total: number }
+) {
+  return template
+    .replace("{from}", String(values.from))
+    .replace("{to}", String(values.to))
+    .replace("{total}", String(values.total));
+}
+
 function bucket2h(hour: number) {
   return Math.floor(hour / 2) * 2;
 }
@@ -163,6 +221,10 @@ function t(language: AppLanguage) {
         "Bright cells show the strongest combinations of camera and time window based on the primary event species.",
       camera: "Camera",
       timeWindow: "Time Window",
+      cameraPaginationSummary: "Cameras {from}–{to} of {total}",
+      page: "Page",
+      previousPage: "Previous",
+      nextPage: "Next",
     };
   }
 
@@ -196,6 +258,10 @@ function t(language: AppLanguage) {
       "Helle Felder zeigen die stärksten Kombinationen aus Kamera und Zeitfenster auf Basis der Hauptart eines Ereignisses.",
     camera: "Kamera",
     timeWindow: "Zeitfenster",
+    cameraPaginationSummary: "Kameras {from}–{to} von {total}",
+    page: "Seite",
+    previousPage: "Zurück",
+    nextPage: "Weiter",
   };
 }
 
@@ -296,6 +362,7 @@ export default async function WildlifeWhereWhenPage(props: {
 
   const rawPeriod = searchParams?.period;
   const rawRevier = searchParams?.revier;
+  const requestedCameraPage = parsePageParam(searchParams?.cameraPage);
 
   const period: PeriodKey =
     rawPeriod === "30d" || rawPeriod === "90d" || rawPeriod === "365d"
@@ -501,10 +568,24 @@ export default async function WildlifeWhereWhenPage(props: {
     .map(([window2h, count]) => ({ window2h, count }))
     .sort((a, b) => b.count - a.count)[0] ?? null;
 
-  const timeWindows = Array.from({ length: 12 }, (_, index) => index * 2);
+const cameraGroups = buildBalancedGroups(cameraList, CAMERAS_PER_MATRIX_PAGE);
+const totalCameraPages = cameraGroups.length;
+const currentCameraPage = clampPage(requestedCameraPage, totalCameraPages);
+const visibleCameras =
+  cameraGroups[currentCameraPage - 1] ?? cameraGroups[0] ?? [];
+
+const visibleCameraStartIndex = cameraGroups
+  .slice(0, currentCameraPage - 1)
+  .reduce((sum, group) => sum + group.length, 0);
+
+const firstVisibleCameraNumber = visibleCameraStartIndex + 1;
+const lastVisibleCameraNumber = visibleCameraStartIndex + visibleCameras.length;
+
+const timeWindows = Array.from({ length: 12 }, (_, index) => index * 2); 
+
   const heatmapRows = timeWindows.map((window2h) => ({
     window2h,
-    cells: cameraList.map((camera) => {
+    cells: visibleCameras.map((camera) => {
       const count = comboCounts.get(`${camera.id}__${window2h}`) ?? 0;
       return {
         cameraId: camera.id,
@@ -512,10 +593,7 @@ export default async function WildlifeWhereWhenPage(props: {
       };
     }),
   }));
-  const maxCellCount = Math.max(
-    1,
-    ...heatmapRows.flatMap((row) => row.cells.map((cell) => cell.count))
-  );
+  const maxCellCount = Math.max(1, ...Array.from(comboCounts.values()));
   const selectedSpeciesLabel = selectedSpecies
     ? getSpeciesLabel(selectedSpecies, language, speciesMetaMap)
     : "—";
@@ -599,24 +677,104 @@ export default async function WildlifeWhereWhenPage(props: {
           </section>
 
           <section className="rounded-[28px] border border-white/10 bg-white/5 p-5 backdrop-blur-sm">
-            <div className="mb-5">
-              <h2 className="text-lg font-medium text-white">{text.matrix}</h2>
-              <p className="text-sm text-white/65">{text.matrixText}</p>
+            <div className="mb-5 flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+              <div>
+                <h2 className="text-lg font-medium text-white">{text.matrix}</h2>
+                <p className="text-sm text-white/65">{text.matrixText}</p>
+              </div>
+
+              {totalCameraPages > 1 ? (
+                <div className="flex flex-col gap-2 md:items-end">
+                  <div className="text-xs text-white/55">
+                    {formatCameraPaginationSummary(text.cameraPaginationSummary, {
+                      from: firstVisibleCameraNumber,
+                      to: lastVisibleCameraNumber,
+                      total: cameraList.length,
+                    })}
+                  </div>
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    {currentCameraPage > 1 ? (
+                      <Link
+                        href={buildCameraPageHref({
+                          period,
+                          revierValue: currentRevierValue,
+                          selectedSpecies,
+                          cameraPage: currentCameraPage - 1,
+                        })}
+                        className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-white/72 hover:bg-white/8"
+                      >
+                        {text.previousPage}
+                      </Link>
+                    ) : (
+                      <span className="rounded-full border border-white/5 bg-white/[0.03] px-3 py-1.5 text-xs text-white/30">
+                        {text.previousPage}
+                      </span>
+                    )}
+
+                    {Array.from({ length: totalCameraPages }, (_, index) => index + 1).map(
+                      (pageNumber) => {
+                        const active = pageNumber === currentCameraPage;
+                        return (
+                          <Link
+                            key={pageNumber}
+                            href={buildCameraPageHref({
+                              period,
+                              revierValue: currentRevierValue,
+                              selectedSpecies,
+                              cameraPage: pageNumber,
+                            })}
+                            aria-label={`${text.page} ${pageNumber}`}
+                            className={`rounded-full border px-3 py-1.5 text-xs ${
+                              active
+                                ? "border-amber-300/30 bg-amber-300/15 text-amber-100"
+                                : "border-white/10 bg-white/5 text-white/72 hover:bg-white/8"
+                            }`}
+                          >
+                            {pageNumber}
+                          </Link>
+                        );
+                      }
+                    )}
+
+                    {currentCameraPage < totalCameraPages ? (
+                      <Link
+                        href={buildCameraPageHref({
+                          period,
+                          revierValue: currentRevierValue,
+                          selectedSpecies,
+                          cameraPage: currentCameraPage + 1,
+                        })}
+                        className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-white/72 hover:bg-white/8"
+                      >
+                        {text.nextPage}
+                      </Link>
+                    ) : (
+                      <span className="rounded-full border border-white/5 bg-white/[0.03] px-3 py-1.5 text-xs text-white/30">
+                        {text.nextPage}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              ) : null}
             </div>
 
             <div className="overflow-x-auto">
               <div
-                className="grid min-w-[760px] gap-2"
-                style={{ gridTemplateColumns: `96px repeat(${cameraList.length}, minmax(88px, 1fr))` }}
+                className="grid min-w-[980px] gap-2"
+                style={{ gridTemplateColumns: `96px repeat(${visibleCameras.length}, minmax(88px, 1fr))` }}
               >
                 <div className="text-xs uppercase tracking-wide text-white/45">
                   {text.timeWindow}
                 </div>
-                {cameraList.map((camera) => (
-                  <div key={camera.id} className="truncate text-xs uppercase tracking-wide text-white/45">
-                    {camera.location_name ? `${camera.name} (${camera.location_name})` : camera.name}
-                  </div>
-                ))}
+{visibleCameras.map((camera) => (
+  <div
+    key={camera.id}
+    className="truncate text-xs uppercase tracking-wide text-white/45"
+    title={cameraLabelById[camera.id] ?? camera.name}
+  >
+    {camera.name}
+  </div>
+))}
 
                 {heatmapRows.map((row) => (
                   <div key={row.window2h} className="contents">
