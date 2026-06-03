@@ -1,4 +1,4 @@
-// src/app/cameras/CameraMap.tsx #4
+// src/app/cameras/CameraMap.tsx #6
 "use client";
 
 import { useEffect, useMemo, useRef } from "react";
@@ -9,6 +9,7 @@ import maplibregl, {
   type Marker,
 } from "maplibre-gl";
 import type { AppLanguage } from "@/lib/i18n";
+import { getMapObjectIconDataUri } from "./mapObjectIcons";
 
 export type CameraMapItem = {
   id: string;
@@ -26,6 +27,28 @@ type LocatedCamera = CameraMapItem & {
   longitude: number;
 };
 
+export type CameraMapObjectItem = {
+  id: string;
+  type:
+    | "high_seat"
+    | "ladder"
+    | "feeding_place"
+    | "salt_lick"
+    | "trap"
+    | "other"
+    | string;
+  name: string;
+  description: string | null;
+  status: "active" | "inactive" | string;
+  latitude: number;
+  longitude: number;
+};
+
+type LocatedMapObject = CameraMapObjectItem & {
+  latitude: number;
+  longitude: number;
+};
+
 export type BoundaryGeoJson = Exclude<
   Parameters<GeoJSONSource["setData"]>[0],
   string
@@ -34,6 +57,9 @@ export type BoundaryGeoJson = Exclude<
 const DEFAULT_STYLE_URL =
   process.env.NEXT_PUBLIC_OPENFREEMAP_STYLE_URL ||
   "https://tiles.openfreemap.org/styles/liberty";
+
+const DEFAULT_MAP_CENTER: LngLatLike = [10.4515, 51.1657];
+const DEFAULT_MAP_ZOOM = 5;
 
 const DIRECTION_SOURCE_ID = "camera-directions";
 const DIRECTION_LAYER_ID = "camera-directions-layer";
@@ -46,13 +72,16 @@ function t(language: AppLanguage) {
   if (language === "en") {
     return {
       title: "Camera map",
-      text: "Camera positions and viewing directions in the current scope.",
-      noLocatedCameras: "No cameras with location data in the current scope.",
+      text: "Camera positions, viewing directions and ground infrastructure in the current scope.",
+      noLocatedCameras: "No cameras or map objects with location data in the current scope.",
       noCoordinatesTitle: "Enter map coordinates to use the camera map.",
       noCoordinatesCta: "Edit coordinates in the table above",
       partialCoordinates:
         "Only cameras with coordinates are shown on the map.",
       location: "Location",
+      type: "Type",
+      camera: "Camera",
+      description: "Description",
       direction: "Direction",
       status: "Status",
       coordinates: "Coordinates",
@@ -61,19 +90,31 @@ function t(language: AppLanguage) {
       stale: "Stale",
       offline: "Offline",
       noDirection: "not set",
+      highSeat: "High seat",
+      ladder: "Ladder",
+      feedingPlace: "Bait site",
+      saltLick: "Salt lick",
+      trap: "Trap",
+      other: "Other",
+      active: "Active",
+      inactive: "Inactive",
     };
   }
 
   return {
     title: "Kamerakarte",
-    text: "Kamerapositionen und Blickrichtungen im aktuellen Scope.",
-    noLocatedCameras: "Keine Kameras mit Standortdaten im aktuellen Scope.",
+    text: "Kamerapositionen, Blickrichtungen und Reviereinrichtungen im aktuellen Scope.",
+    noLocatedCameras:
+      "Keine Kameras oder Kartenobjekte mit Standortdaten im aktuellen Scope.",
     noCoordinatesTitle:
       "Bitte Kartenkoordinaten eingeben, um die Kartenansicht zu genießen.",
     noCoordinatesCta: "Koordinaten oben in der Tabelle bearbeiten",
     partialCoordinates:
       "Es werden nur die Kameras mit Koordinaten gezeigt.",
     location: "Standort",
+    type: "Typ",
+    camera: "Kamera",
+    description: "Beschreibung",
     direction: "Richtung",
     status: "Status",
     coordinates: "Koordinaten",
@@ -82,6 +123,14 @@ function t(language: AppLanguage) {
     stale: "Veraltet",
     offline: "Offline",
     noDirection: "nicht gesetzt",
+    highSeat: "Hochsitz",
+    ladder: "Leiter",
+    feedingPlace: "Kirrung",
+    saltLick: "Salzlecke",
+    trap: "Falle",
+    other: "Sonstiges",
+    active: "Aktiv",
+    inactive: "Inaktiv",
   };
 }
 
@@ -105,6 +154,29 @@ function statusLabel(status: string | null | undefined, language: AppLanguage) {
   if (normalized === "online") return text.online;
   if (normalized === "stale") return text.stale;
   if (normalized === "offline") return text.offline;
+  return status || text.unknown;
+}
+
+function mapObjectTypeLabel(type: string, language: AppLanguage) {
+  const text = t(language);
+
+  if (type === "high_seat") return text.highSeat;
+  if (type === "ladder") return text.ladder;
+  if (type === "feeding_place") return text.feedingPlace;
+  if (type === "salt_lick") return text.saltLick;
+  if (type === "trap") return text.trap;
+  return text.other;
+}
+
+function mapObjectStatusLabel(
+  status: string | null | undefined,
+  language: AppLanguage
+) {
+  const text = t(language);
+  const normalized = (status ?? "").toLowerCase();
+
+  if (normalized === "active") return text.active;
+  if (normalized === "inactive") return text.inactive;
   return status || text.unknown;
 }
 
@@ -432,6 +504,34 @@ function createMarkerElement(camera: LocatedCamera) {
   return el;
 }
 
+function createMapObjectMarkerElement(object: LocatedMapObject) {
+  const el = document.createElement("div");
+  el.setAttribute("aria-label", object.name);
+  el.style.width = "30px";
+  el.style.height = "30px";
+  el.style.borderRadius = object.type === "trap" ? "9px" : "999px";
+  el.style.border = "2px solid rgba(253, 230, 138, 0.95)";
+  el.style.background =
+    object.status === "inactive"
+      ? "rgba(100, 116, 139, 0.92)"
+      : "rgba(201, 149, 46, 0.96)";
+  el.style.boxShadow = "0 12px 30px rgba(201, 149, 46, 0.28)";
+  el.style.display = "flex";
+  el.style.alignItems = "center";
+  el.style.justifyContent = "center";
+
+  const icon = document.createElement("img");
+  icon.src = getMapObjectIconDataUri(object.type);
+  icon.alt = "";
+  icon.setAttribute("aria-hidden", "true");
+  icon.style.width = "20px";
+  icon.style.height = "20px";
+  icon.style.display = "block";
+
+  el.appendChild(icon);
+  return el;
+}
+
 function createPopupHtml(camera: LocatedCamera, language: AppLanguage) {
   const text = t(language);
   const direction = normalizeDirection(camera.direction_deg);
@@ -444,7 +544,12 @@ function createPopupHtml(camera: LocatedCamera, language: AppLanguage) {
 
       <div style="font-size: 12px; line-height: 1.6; color: #334155;">
         <div>
-          <strong style="color: #0f172a;">${escapeHtml(text.location)}:</strong>
+          <strong style="color: #0f172a;">${escapeHtml(text.type)}:</strong>
+          ${escapeHtml(text.camera)}
+        </div>
+
+        <div>
+          <strong style="color: #0f172a;">${escapeHtml(text.description)}:</strong>
           ${escapeHtml(camera.location_name || text.unknown)}
         </div>
 
@@ -467,16 +572,51 @@ function createPopupHtml(camera: LocatedCamera, language: AppLanguage) {
   `;
 }
 
+function createMapObjectPopupHtml(
+  object: LocatedMapObject,
+  language: AppLanguage
+) {
+  const text = t(language);
+
+  return `
+    <div style="min-width: 240px; color: #0f172a; font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;">
+      <div style="font-weight: 800; font-size: 14px; margin-bottom: 4px; color: #0f172a;">
+        ${escapeHtml(object.name)}
+      </div>
+
+      <div style="font-size: 12px; line-height: 1.6; color: #334155;">
+        <div>
+          <strong style="color: #0f172a;">${escapeHtml(text.type)}:</strong>
+          ${escapeHtml(mapObjectTypeLabel(object.type, language))}
+        </div>
+
+        <div>
+          <strong style="color: #0f172a;">${escapeHtml(text.coordinates)}:</strong>
+          ${formatCoordinate(object.latitude)}, ${formatCoordinate(object.longitude)}
+        </div>
+
+        <div>
+          <strong style="color: #0f172a;">${escapeHtml(text.status)}:</strong>
+          ${escapeHtml(mapObjectStatusLabel(object.status, language))}
+        </div>
+      </div>
+    </div>
+  `;
+}
+
 export default function CameraMap({
   cameras,
   language,
   boundaryGeoJson = null,
+  mapObjects = [],
 }: {
   cameras: CameraMapItem[];
   language: AppLanguage;
   boundaryGeoJson?: BoundaryGeoJson | null;
+  mapObjects?: CameraMapObjectItem[];
 }) {
   const text = t(language);
+
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
   const markersRef = useRef<Marker[]>([]);
@@ -486,6 +626,12 @@ export default function CameraMap({
       isValidCoordinate(camera.latitude, camera.longitude)
     );
   }, [cameras]);
+
+  const locatedMapObjects = useMemo<LocatedMapObject[]>(() => {
+    return mapObjects.filter((object): object is LocatedMapObject =>
+      isValidCoordinate(object.latitude, object.longitude)
+    );
+  }, [mapObjects]);
 
   const boundaryCoordinates = useMemo(() => {
     return getBoundaryCoordinates(boundaryGeoJson);
@@ -498,25 +644,24 @@ export default function CameraMap({
   }, [cameras]);
 
   const hasNoCameraCoordinates =
-    cameras.length > 0 && locatedCameras.length === 0;
+    cameras.length > 0 &&
+    locatedCameras.length === 0 &&
+    locatedMapObjects.length === 0;
   const hasPartialCameraCoordinates =
     locatedCameras.length > 0 && missingLocationCameras.length > 0;
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
 
-    const initialCenter: LngLatLike =
-      locatedCameras.length > 0
-        ? [locatedCameras[0].longitude, locatedCameras[0].latitude]
-        : [10.4515, 51.1657];
 
-    const map = new maplibregl.Map({
-      container: containerRef.current,
-      style: DEFAULT_STYLE_URL,
-      center: initialCenter,
-      zoom: locatedCameras.length > 0 ? 12 : 5,
-      attributionControl: false,
-    });
+const map = new maplibregl.Map({
+  container: containerRef.current,
+  style: DEFAULT_STYLE_URL,
+  center: DEFAULT_MAP_CENTER,
+  zoom: DEFAULT_MAP_ZOOM,
+  attributionControl: false,
+});
+
 
     map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }));
 
@@ -534,7 +679,7 @@ export default function CameraMap({
       map.remove();
       mapRef.current = null;
     };
-  }, [locatedCameras.length]);
+  }, [locatedCameras, locatedMapObjects]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -552,6 +697,22 @@ export default function CameraMap({
         .setPopup(
           new maplibregl.Popup({ offset: 22 }).setHTML(
             createPopupHtml(camera, language)
+          )
+        )
+        .addTo(map);
+
+      markersRef.current.push(marker);
+    }
+
+    for (const object of locatedMapObjects) {
+      const marker = new maplibregl.Marker({
+        element: createMapObjectMarkerElement(object),
+        anchor: "center",
+      })
+        .setLngLat([object.longitude, object.latitude])
+        .setPopup(
+          new maplibregl.Popup({ offset: 22 }).setHTML(
+            createMapObjectPopupHtml(object, language)
           )
         )
         .addTo(map);
@@ -580,20 +741,33 @@ export default function CameraMap({
       bounds.extend([camera.longitude, camera.latitude]);
     }
 
+    for (const object of locatedMapObjects) {
+      bounds.extend([object.longitude, object.latitude]);
+    }
+
     const hasBounds =
-      boundaryCoordinates.length > 0 || locatedCameras.length > 0;
+      boundaryCoordinates.length > 0 ||
+      locatedCameras.length > 0 ||
+      locatedMapObjects.length > 0;
 
     if (hasBounds) {
       map.fitBounds(bounds, {
         padding: 72,
         maxZoom:
-          locatedCameras.length === 1 && boundaryCoordinates.length === 0
+          locatedCameras.length + locatedMapObjects.length === 1 &&
+          boundaryCoordinates.length === 0
             ? 14
             : 15,
         duration: 600,
       });
     }
-  }, [language, locatedCameras, boundaryGeoJson, boundaryCoordinates]);
+  }, [
+    language,
+    locatedCameras,
+    locatedMapObjects,
+    boundaryGeoJson,
+    boundaryCoordinates,
+  ]);
 
   return (
     <section className="rounded-[28px] border border-white/10 bg-white/5 p-6 backdrop-blur-sm">
@@ -604,11 +778,12 @@ export default function CameraMap({
         </div>
 
         <div className="text-xs text-white/45">
-          {locatedCameras.length} / {cameras.length}
+          {locatedCameras.length + locatedMapObjects.length} /{" "}
+          {cameras.length + mapObjects.length}
         </div>
       </div>
 
-      {locatedCameras.length > 0 ? (
+      {locatedCameras.length > 0 || locatedMapObjects.length > 0 ? (
         <div
           ref={containerRef}
           className="h-[520px] overflow-hidden rounded-[24px] border border-white/10 bg-[#10141c]"

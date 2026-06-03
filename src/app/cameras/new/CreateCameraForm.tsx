@@ -1,4 +1,4 @@
-// src/app/cameras/new/CreateCameraForm.tsx #14
+// src/app/cameras/new/CreateCameraForm.tsx #15
 "use client";
 
 import { useMemo, useState } from "react";
@@ -8,6 +8,11 @@ import type {
   SubscriptionActionPolicy,
   SubscriptionStatus,
 } from "@/lib/billing/subscriptionPolicy";
+import {
+  parseLatitude,
+  parseLongitude,
+  parseOptionalNumber,
+} from "@/lib/coordinates";
 
 type Organization = {
   id: string;
@@ -314,42 +319,6 @@ function buildManualProvisioningCopy(
   return [text.manualSetupLabel, `${text.manualLabel}: ${manualLabel}`].join(
     "\n",
   );
-}
-
-function parseOptionalNumber(value: string) {
-  const normalized = value.trim().replace(",", ".");
-  if (!normalized) return null;
-
-  const parsed = Number(normalized);
-  return Number.isFinite(parsed) ? parsed : Number.NaN;
-}
-
-function parseLatitude(value: string) {
-  const normalized = value.trim().replace(",", ".");
-  if (!normalized) return null;
-
-  const prefixedMatch = normalized.match(/^([NS])\s*(.+)$/i);
-  if (!prefixedMatch) return parseOptionalNumber(normalized);
-
-  const hemisphere = prefixedMatch[1].toUpperCase();
-  const parsed = parseOptionalNumber(prefixedMatch[2]);
-
-  if (parsed === null || Number.isNaN(parsed)) return parsed;
-  return hemisphere === "S" ? -Math.abs(parsed) : Math.abs(parsed);
-}
-
-function parseLongitude(value: string) {
-  const normalized = value.trim().replace(",", ".");
-  if (!normalized) return null;
-
-  const prefixedMatch = normalized.match(/^([EOW])\s*(.+)$/i);
-  if (!prefixedMatch) return parseOptionalNumber(normalized);
-
-  const hemisphere = prefixedMatch[1].toUpperCase();
-  const parsed = parseOptionalNumber(prefixedMatch[2]);
-
-  if (parsed === null || Number.isNaN(parsed)) return parsed;
-  return hemisphere === "W" ? -Math.abs(parsed) : Math.abs(parsed);
 }
 
 function formatRevierLabel(revier: Revier, language: AppLanguage) {

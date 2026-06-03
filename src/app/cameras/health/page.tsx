@@ -1,4 +1,4 @@
-// src/app/cameras/health/page.tsx #15
+// src/app/cameras/health/page.tsx #16
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
@@ -18,7 +18,7 @@ import {
 } from "@/lib/i18n";
 import CameraTableRow from "./CameraTableRow";
 import CameraHealthMap from "./CameraHealthMap";
-import type { BoundaryGeoJson } from "../CameraMap";
+import type { BoundaryGeoJson, CameraMapObjectItem } from "../CameraMap";
 
 type SearchParams = {
   revier?: string;
@@ -121,6 +121,10 @@ type HealthRuleRow = {
 
 type RevierBoundaryRow = {
   geometry: unknown;
+};
+
+type RevierMapObjectRow = CameraMapObjectItem & {
+  revier_id: string;
 };
 
 type CameraMutationRow = {
@@ -940,6 +944,26 @@ export default async function CamerasHealthPage(props: {
     (boundariesData ?? []) as RevierBoundaryRow[]
   );
 
+  const { data: mapObjectsData, error: mapObjectsError } = await supabase
+    .from("revier_map_objects")
+    .select("id,revier_id,type,name,description,latitude,longitude,status")
+    .eq("organization_id", activeOrganization.id)
+    .in("revier_id", scopedRevierIds)
+    .order("name", { ascending: true });
+
+  if (mapObjectsError) {
+    return (
+      <main className="space-y-8">
+        <PageHeader text={text} />
+        <div className="rounded-[24px] border border-rose-300/20 bg-rose-300/10 p-4 text-sm text-rose-100">
+          {mapObjectsError.message}
+        </div>
+      </main>
+    );
+  }
+
+  const mapObjects = (mapObjectsData ?? []) as RevierMapObjectRow[];
+
   const onlineCount = rows.filter((row) => row.health_status === "online").length;
   const staleCount = rows.filter((row) => row.health_status === "stale").length;
   const offlineCount = rows.filter((row) => row.health_status === "offline").length;
@@ -1064,6 +1088,7 @@ export default async function CamerasHealthPage(props: {
         cameras={rows}
         language={language}
         boundaryGeoJson={boundaryGeoJson}
+        mapObjects={mapObjects}
       />
     </main>
   );

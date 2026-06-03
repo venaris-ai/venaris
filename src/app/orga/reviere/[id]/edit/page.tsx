@@ -1,4 +1,4 @@
-// src/app/orga/reviere/[id]/edit/page.tsx #13
+// src/app/orga/reviere/[id]/edit/page.tsx #14
 import Link from "next/link";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
@@ -6,9 +6,13 @@ import { revalidatePath } from "next/cache";
 import { redirectIfDemoWrite } from "@/lib/auth";
 import { requirePathAccess } from "@/lib/authz";
 import { supabaseServer } from "@/lib/supabaseServer";
+import { parseLatitude, parseLongitude } from "@/lib/coordinates";
 import SubmitButton from "@/components/SubmitButton";
 import TimeZoneSelect from "@/components/TimeZoneSelect";
 import RevierBoundaryUploadForm from "./RevierBoundaryUploadForm";
+import RevierMapObjectsForm, {
+  type RevierMapObjectFormRow,
+} from "./RevierMapObjectsForm";
 import RevierSpeciesTargetsForm, {
   type SpeciesTargetFormRow,
 } from "./RevierSpeciesTargetsForm";
@@ -50,6 +54,16 @@ type RevierBoundaryRow = {
 type RevierSpeciesTargetRow = {
   species: string;
   target_per_100ha: number | string;
+};
+
+type RevierMapObjectRow = {
+  id: string;
+  type: RevierMapObjectFormRow["type"];
+  name: string;
+  description: string | null;
+  latitude: number;
+  longitude: number;
+  status: RevierMapObjectFormRow["status"];
 };
 
 async function resolveUiLanguageForProtectedPath(pathname: string) {
@@ -99,6 +113,19 @@ function t(language: AppLanguage) {
           "The GeoJSON must contain at least one Polygon or MultiPolygon.",
         boundaryTargetNotFound: "Ground not found.",
         boundarySaveFailedPrefix: "Failed to save ground boundary:",
+        mapObjectsUpdated: "Ground infrastructure was saved successfully.",
+        mapObjectDeleted: "Ground infrastructure was deleted successfully.",
+        mapObjectsLoadFailedPrefix: "Failed to load ground infrastructure:",
+        mapObjectNameRequired: "Name is required.",
+        mapObjectTypeInvalid: "Invalid type.",
+        mapObjectStatusInvalid: "Invalid status.",
+        mapObjectLatitudeRequired: "Latitude is required.",
+        mapObjectLongitudeRequired: "Longitude is required.",
+        mapObjectLatitudeInvalid: "Latitude must be between -90 and 90.",
+        mapObjectLongitudeInvalid: "Longitude must be between -180 and 180.",
+        mapObjectTargetNotFound: "Ground infrastructure object not found.",
+        mapObjectSaveFailedPrefix: "Failed to save ground infrastructure:",
+        mapObjectDeleteFailedPrefix: "Failed to delete ground infrastructure:",
         eyebrow: "Edit ground",
         title: "Edit ground",
         intro: "Edit the master data and status of the selected ground here.",
@@ -162,6 +189,22 @@ function t(language: AppLanguage) {
           "Das GeoJSON muss mindestens ein Polygon oder MultiPolygon enthalten.",
         boundaryTargetNotFound: "Revier wurde nicht gefunden.",
         boundarySaveFailedPrefix: "Fehler beim Speichern der Revierkontur:",
+        mapObjectsUpdated: "Reviereinrichtung wurde erfolgreich gespeichert.",
+        mapObjectDeleted: "Reviereinrichtung wurde erfolgreich gelöscht.",
+        mapObjectsLoadFailedPrefix: "Fehler beim Laden der Reviereinrichtungen:",
+        mapObjectNameRequired: "Name ist erforderlich.",
+        mapObjectTypeInvalid: "Ungültiger Typ.",
+        mapObjectStatusInvalid: "Ungültiger Status.",
+        mapObjectLatitudeRequired: "Breitengrad ist erforderlich.",
+        mapObjectLongitudeRequired: "Längengrad ist erforderlich.",
+        mapObjectLatitudeInvalid: "Breitengrad muss zwischen -90 und 90 liegen.",
+        mapObjectLongitudeInvalid:
+          "Längengrad muss zwischen -180 und 180 liegen.",
+        mapObjectTargetNotFound: "Reviereinrichtung wurde nicht gefunden.",
+        mapObjectSaveFailedPrefix:
+          "Fehler beim Speichern der Reviereinrichtung:",
+        mapObjectDeleteFailedPrefix:
+          "Fehler beim Löschen der Reviereinrichtung:",
         eyebrow: "Revier bearbeiten",
         title: "Revier bearbeiten",
         intro:
@@ -366,6 +409,63 @@ function parseTargetValue(value: FormDataEntryValue | null) {
   return parsed;
 }
 
+const REVIER_MAP_OBJECT_TYPES = [
+  "high_seat",
+  "ladder",
+  "feeding_place",
+  "salt_lick",
+  "trap",
+  "other",
+] as const;
+
+const REVIER_MAP_OBJECT_STATUSES = ["active", "inactive"] as const;
+
+function isRevierMapObjectType(
+  value: string
+): value is RevierMapObjectFormRow["type"] {
+  return REVIER_MAP_OBJECT_TYPES.includes(
+    value as RevierMapObjectFormRow["type"]
+  );
+}
+
+function isRevierMapObjectStatus(
+  value: string
+): value is RevierMapObjectFormRow["status"] {
+  return REVIER_MAP_OBJECT_STATUSES.includes(
+    value as RevierMapObjectFormRow["status"]
+  );
+}
+
+function parseRequiredLatitude(value: string, language: AppLanguage) {
+  const text = t(language);
+  const parsed = parseLatitude(value);
+
+  if (parsed === null) {
+    throw new Error(text.mapObjectLatitudeRequired);
+  }
+
+  if (!Number.isFinite(parsed) || parsed < -90 || parsed > 90) {
+    throw new Error(text.mapObjectLatitudeInvalid);
+  }
+
+  return parsed;
+}
+
+function parseRequiredLongitude(value: string, language: AppLanguage) {
+  const text = t(language);
+  const parsed = parseLongitude(value);
+
+  if (parsed === null) {
+    throw new Error(text.mapObjectLongitudeRequired);
+  }
+
+  if (!Number.isFinite(parsed) || parsed < -180 || parsed > 180) {
+    throw new Error(text.mapObjectLongitudeInvalid);
+  }
+
+  return parsed;
+}
+
 function toNumber(value: number | string | null | undefined) {
   if (typeof value === "number") return value;
 
@@ -459,6 +559,234 @@ async function updateRevier(revierId: string, formData: FormData) {
   revalidatePath("/orga/reviere");
   revalidatePath("/", "layout");
   redirect("/orga/reviere?updated=1");
+}
+
+async function createRevierMapObject(revierId: string, formData: FormData) {
+  "use server";
+
+  const { ctx, supabase, language } = await resolveUiLanguageForProtectedPath(
+    `/orga/reviere/${revierId}/edit`
+  );
+  redirectIfDemoWrite(ctx, `/orga/reviere/${revierId}/edit?demo_read_only=1`);
+
+  if (!ctx.activeMembership) {
+    throw new Error("Active organization context required");
+  }
+
+  const organization = ctx.activeMembership.organizations;
+  const text = t(language);
+
+  if (!organization) {
+    throw new Error("Active organization not found");
+  }
+
+  const { data: revierData, error: revierError } = await supabase
+    .from("reviers")
+    .select("id")
+    .eq("id", revierId)
+    .eq("organization_id", organization.id)
+    .maybeSingle();
+
+  if (revierError) {
+    throw new Error(`${text.mapObjectSaveFailedPrefix} ${revierError.message}`);
+  }
+
+  if (!revierData) {
+    throw new Error(text.boundaryTargetNotFound);
+  }
+
+  const name = String(formData.get("name") ?? "").trim();
+  const type = String(formData.get("type") ?? "").trim();
+  const description = String(formData.get("description") ?? "").trim();
+  const latitudeRaw = String(formData.get("latitude") ?? "").trim();
+  const longitudeRaw = String(formData.get("longitude") ?? "").trim();
+  const status = String(formData.get("status") ?? "active").trim();
+
+  if (!name) {
+    throw new Error(text.mapObjectNameRequired);
+  }
+
+  if (!isRevierMapObjectType(type)) {
+    throw new Error(text.mapObjectTypeInvalid);
+  }
+
+  if (!isRevierMapObjectStatus(status)) {
+    throw new Error(text.mapObjectStatusInvalid);
+  }
+
+  const latitude = parseRequiredLatitude(latitudeRaw, language);
+  const longitude = parseRequiredLongitude(longitudeRaw, language);
+
+  const { error } = await supabase.from("revier_map_objects").insert({
+    organization_id: organization.id,
+    revier_id: revierId,
+    type,
+    name,
+    description: description || null,
+    latitude,
+    longitude,
+    status,
+    created_by: ctx.user?.id ?? null,
+  });
+
+  if (error) {
+    throw new Error(`${text.mapObjectSaveFailedPrefix} ${error.message}`);
+  }
+
+  revalidatePath(`/orga/reviere/${revierId}/edit`);
+  revalidatePath("/cameras/health");
+  revalidatePath("/cameras");
+  revalidatePath("/", "layout");
+  redirect(`/orga/reviere/${revierId}/edit?map_objects_updated=1`);
+}
+
+async function updateRevierMapObject(revierId: string, formData: FormData) {
+  "use server";
+
+  const { ctx, supabase, language } = await resolveUiLanguageForProtectedPath(
+    `/orga/reviere/${revierId}/edit`
+  );
+  redirectIfDemoWrite(ctx, `/orga/reviere/${revierId}/edit?demo_read_only=1`);
+
+  if (!ctx.activeMembership) {
+    throw new Error("Active organization context required");
+  }
+
+  const organization = ctx.activeMembership.organizations;
+  const text = t(language);
+
+  if (!organization) {
+    throw new Error("Active organization not found");
+  }
+
+  const objectId = String(formData.get("object_id") ?? "").trim();
+  const name = String(formData.get("name") ?? "").trim();
+  const type = String(formData.get("type") ?? "").trim();
+  const description = String(formData.get("description") ?? "").trim();
+  const latitudeRaw = String(formData.get("latitude") ?? "").trim();
+  const longitudeRaw = String(formData.get("longitude") ?? "").trim();
+  const status = String(formData.get("status") ?? "active").trim();
+
+  if (!objectId) {
+    throw new Error(text.mapObjectTargetNotFound);
+  }
+
+  if (!name) {
+    throw new Error(text.mapObjectNameRequired);
+  }
+
+  if (!isRevierMapObjectType(type)) {
+    throw new Error(text.mapObjectTypeInvalid);
+  }
+
+  if (!isRevierMapObjectStatus(status)) {
+    throw new Error(text.mapObjectStatusInvalid);
+  }
+
+  const latitude = parseRequiredLatitude(latitudeRaw, language);
+  const longitude = parseRequiredLongitude(longitudeRaw, language);
+
+  const { data: existing, error: existingError } = await supabase
+    .from("revier_map_objects")
+    .select("id")
+    .eq("id", objectId)
+    .eq("revier_id", revierId)
+    .eq("organization_id", organization.id)
+    .maybeSingle();
+
+  if (existingError) {
+    throw new Error(`${text.mapObjectSaveFailedPrefix} ${existingError.message}`);
+  }
+
+  if (!existing) {
+    throw new Error(text.mapObjectTargetNotFound);
+  }
+
+  const { error } = await supabase
+    .from("revier_map_objects")
+    .update({
+      type,
+      name,
+      description: description || null,
+      latitude,
+      longitude,
+      status,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", objectId)
+    .eq("revier_id", revierId)
+    .eq("organization_id", organization.id);
+
+  if (error) {
+    throw new Error(`${text.mapObjectSaveFailedPrefix} ${error.message}`);
+  }
+
+  revalidatePath(`/orga/reviere/${revierId}/edit`);
+  revalidatePath("/cameras/health");
+  revalidatePath("/cameras");
+  revalidatePath("/", "layout");
+  redirect(`/orga/reviere/${revierId}/edit?map_objects_updated=1`);
+}
+
+async function deleteRevierMapObject(revierId: string, formData: FormData) {
+  "use server";
+
+  const { ctx, supabase, language } = await resolveUiLanguageForProtectedPath(
+    `/orga/reviere/${revierId}/edit`
+  );
+  redirectIfDemoWrite(ctx, `/orga/reviere/${revierId}/edit?demo_read_only=1`);
+
+  if (!ctx.activeMembership) {
+    throw new Error("Active organization context required");
+  }
+
+  const organization = ctx.activeMembership.organizations;
+  const text = t(language);
+
+  if (!organization) {
+    throw new Error("Active organization not found");
+  }
+
+  const objectId = String(formData.get("object_id") ?? "").trim();
+
+  if (!objectId) {
+    throw new Error(text.mapObjectTargetNotFound);
+  }
+
+  const { data: existing, error: existingError } = await supabase
+    .from("revier_map_objects")
+    .select("id")
+    .eq("id", objectId)
+    .eq("revier_id", revierId)
+    .eq("organization_id", organization.id)
+    .maybeSingle();
+
+  if (existingError) {
+    throw new Error(
+      `${text.mapObjectDeleteFailedPrefix} ${existingError.message}`
+    );
+  }
+
+  if (!existing) {
+    throw new Error(text.mapObjectTargetNotFound);
+  }
+
+  const { error } = await supabase
+    .from("revier_map_objects")
+    .delete()
+    .eq("id", objectId)
+    .eq("revier_id", revierId)
+    .eq("organization_id", organization.id);
+
+  if (error) {
+    throw new Error(`${text.mapObjectDeleteFailedPrefix} ${error.message}`);
+  }
+
+  revalidatePath(`/orga/reviere/${revierId}/edit`);
+  revalidatePath("/cameras/health");
+  revalidatePath("/cameras");
+  revalidatePath("/", "layout");
+  redirect(`/orga/reviere/${revierId}/edit?map_object_deleted=1`);
 }
 
 async function updateRevierSpeciesTargets(
@@ -656,6 +984,8 @@ export default async function EditRevierPage({
     demo_read_only?: string;
     boundary_updated?: string;
     targets_updated?: string;
+    map_objects_updated?: string;
+    map_object_deleted?: string;
   }>;
 }) {
   const { id } = await params;
@@ -663,6 +993,8 @@ export default async function EditRevierPage({
   const demoReadOnly = search.demo_read_only === "1";
   const boundaryUpdated = search.boundary_updated === "1";
   const targetsUpdated = search.targets_updated === "1";
+  const mapObjectsUpdated = search.map_objects_updated === "1";
+  const mapObjectDeleted = search.map_object_deleted === "1";
 
   const { ctx, supabase, language } = await resolveUiLanguageForProtectedPath(
     `/orga/reviere/${id}/edit`
@@ -739,6 +1071,21 @@ export default async function EditRevierPage({
     : 0;
   const boundaryPointCount = boundary ? extractPointCount(boundary.geometry) : 0;
 
+  const { data: mapObjectsData, error: mapObjectsError } = await supabase
+    .from("revier_map_objects")
+    .select("id,type,name,description,latitude,longitude,status")
+    .eq("revier_id", revier.id)
+    .eq("organization_id", organization.id)
+    .order("name", { ascending: true });
+
+  if (mapObjectsError) {
+    throw new Error(
+      `${text.mapObjectsLoadFailedPrefix} ${mapObjectsError.message}`
+    );
+  }
+
+  const mapObjects = (mapObjectsData ?? []) as RevierMapObjectRow[];
+
   return (
     <main className="space-y-8">
       <section className="rounded-[32px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(201,149,46,0.16),transparent_24%),linear-gradient(135deg,rgba(255,255,255,0.06),rgba(255,255,255,0.03))] p-6 backdrop-blur-sm">
@@ -770,6 +1117,22 @@ export default async function EditRevierPage({
       {targetsUpdated ? (
         <section className="rounded-[24px] border border-emerald-300/20 bg-emerald-300/10 p-4">
           <p className="text-sm text-emerald-100">{text.targetsSaved}</p>
+        </section>
+      ) : null}
+
+      {mapObjectsUpdated ? (
+        <section className="rounded-[24px] border border-emerald-300/20 bg-emerald-300/10 p-4">
+          <p className="text-sm text-emerald-100">
+            {text.mapObjectsUpdated}
+          </p>
+        </section>
+      ) : null}
+
+      {mapObjectDeleted ? (
+        <section className="rounded-[24px] border border-emerald-300/20 bg-emerald-300/10 p-4">
+          <p className="text-sm text-emerald-100">
+            {text.mapObjectDeleted}
+          </p>
         </section>
       ) : null}
 
@@ -921,6 +1284,15 @@ export default async function EditRevierPage({
           </div>
         </form>
       </section>
+
+      <RevierMapObjectsForm
+        rows={mapObjects}
+        createAction={createRevierMapObject.bind(null, revier.id)}
+        updateAction={updateRevierMapObject.bind(null, revier.id)}
+        deleteAction={deleteRevierMapObject.bind(null, revier.id)}
+        isDemo={isDemo}
+        language={language}
+      />
 
       <section className="rounded-[28px] border border-white/10 bg-white/5 p-6 backdrop-blur-sm">
         <div>

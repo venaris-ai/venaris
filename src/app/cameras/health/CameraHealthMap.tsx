@@ -3,7 +3,11 @@
 
 import dynamic from "next/dynamic";
 import type { AppLanguage } from "@/lib/i18n";
-import type { BoundaryGeoJson, CameraMapItem } from "../CameraMap";
+import type {
+  BoundaryGeoJson,
+  CameraMapItem,
+  CameraMapObjectItem,
+} from "../CameraMap";
 
 const CameraMap = dynamic(() => import("../CameraMap"), {
   ssr: false,
@@ -18,16 +22,20 @@ export default function CameraHealthMap({
   cameras,
   language,
   boundaryGeoJson,
+  mapObjects = [],
 }: {
   cameras: CameraMapItem[];
   language: AppLanguage;
   boundaryGeoJson?: BoundaryGeoJson | null;
+  mapObjects?: CameraMapObjectItem[];
 }) {
+
   return (
     <CameraMap
       cameras={cameras}
       language={language}
       boundaryGeoJson={boundaryGeoJson}
+      mapObjects={mapObjects}
     />
   );
 }
