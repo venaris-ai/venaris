@@ -20,6 +20,9 @@ const STUCK_MINUTES = Number(process.env.STUCK_MINUTES || 30);
 const STORAGE_DELETE_AFTER_HOURS = Number(
   process.env.STORAGE_DELETE_AFTER_HOURS || 24
 );
+const SECURITY_DELETE_AFTER_DAYS = Number(
+  process.env.SECURITY_DELETE_AFTER_DAYS || 30
+);
 
 const STORAGE_DOWNLOAD_ENABLED =
   (process.env.STORAGE_DOWNLOAD_ENABLED ?? "1") !== "0";
@@ -100,6 +103,12 @@ function normalizeTimeZone(value) {
 function getStorageDeleteAfterIso() {
   return new Date(
     Date.now() + STORAGE_DELETE_AFTER_HOURS * 60 * 60 * 1000
+  ).toISOString();
+}
+
+function getSecurityDeleteAfterIso() {
+  return new Date(
+    Date.now() + SECURITY_DELETE_AFTER_DAYS * 24 * 60 * 60 * 1000
   ).toISOString();
 }
 
@@ -356,7 +365,7 @@ async function fetchAssetCore(assetId) {
 async function fetchCameraContext(cameraId) {
   const { data: camera, error } = await supabase
     .from("cameras")
-    .select("id,import_method,name,revier_id,clock_offset_minutes")
+    .select("id,organization_id,import_method,name,revier_id,clock_offset_minutes")
     .eq("id", cameraId)
     .single();
 
@@ -378,9 +387,27 @@ async function fetchCameraContext(cameraId) {
     timezone = normalizeTimeZone(revier?.timezone);
   }
 
+  let securityDetectionsEnabled = false;
+
+  if (camera?.organization_id) {
+    const { data: organization, error: organizationError } = await supabase
+      .from("organizations")
+      .select("security_detections_enabled")
+      .eq("id", camera.organization_id)
+      .maybeSingle();
+
+    if (organizationError) {
+      throw new Error(`organization_fetch_failed:${organizationError.message}`);
+    }
+
+    securityDetectionsEnabled =
+      organization?.security_detections_enabled === true;
+  }
+
   return {
     ...camera,
     timezone,
+    security_detections_enabled: securityDetectionsEnabled,
     clock_offset_minutes: Number(camera?.clock_offset_minutes || 0),
   };
 }
@@ -583,6 +610,49 @@ function computeEmptyFromBestAnimal(bestAnimal) {
   };
 }
 
+async function upsertSecurityDetections({ core, cam, mdSummary, capturedAt, deleteAfter }) {
+  if (!cam?.security_detections_enabled) return 0;
+
+  const rows = [];
+
+  if (mdSummary.counts.human > 0) {
+    rows.push({
+      organization_id: cam.organization_id,
+      revier_id: cam.revier_id ?? null,
+      camera_id: core.camera_id,
+      asset_id: core.id,
+      detected_class: "human",
+      score: mdSummary.bestHuman,
+      captured_at: capturedAt,
+      delete_after: deleteAfter,
+    });
+  }
+
+  if (mdSummary.counts.vehicle > 0) {
+    rows.push({
+      organization_id: cam.organization_id,
+      revier_id: cam.revier_id ?? null,
+      camera_id: core.camera_id,
+      asset_id: core.id,
+      detected_class: "vehicle",
+      score: mdSummary.bestVehicle,
+      captured_at: capturedAt,
+      delete_after: deleteAfter,
+    });
+  }
+
+  if (rows.length === 0) return 0;
+
+  const { error } = await supabase
+    .from("security_detections")
+    .upsert(rows, { onConflict: "asset_id,detected_class" });
+
+  if (error) throw new Error(`security_detections_upsert_failed ${error.message}`);
+
+  return rows.length;
+}
+
+
 async function resolveCapturedAt(core, cam, buf) {
   if (core.captured_at) {
     return {
@@ -696,7 +766,20 @@ async function processAsset(assetFromBatch) {
 
   const mdDets = md?.detections || [];
   const mdSummary = summarizeDetections(mdDets);
-  const emptyInfo = computeEmptyFromBestAnimal(mdSummary.bestAnimal);
+  const hasSecurityDetection =
+    mdSummary.counts.human > 0 || mdSummary.counts.vehicle > 0;
+  const emptyInfo = hasSecurityDetection
+    ? {
+        empty: false,
+        empty_confidence: 0,
+        best_animal_score: mdSummary.bestAnimal,
+      }
+    : computeEmptyFromBestAnimal(mdSummary.bestAnimal);
+  const hasWildlifeDetection =
+    !hasSecurityDetection &&
+    mdSummary.counts.animal > 0 &&
+    emptyInfo.empty === false;
+
 
   // 2) Insert MD detections (with md_idx)
   let inserted = [];
@@ -727,7 +810,7 @@ async function processAsset(assetFromBatch) {
   let speciesUpdated = 0;
   let speciesFailures = 0;
 
-  if (SPECIES_ENABLED && inserted.length && mdSummary.counts.animal > 0) {
+  if (SPECIES_ENABLED && inserted.length && hasWildlifeDetection) {
     // map animal detections in insertion order by md_idx
     const animalInserted = inserted
       .map((r) => {
@@ -809,12 +892,31 @@ const { error: upErr } = await supabase
 // 4) Empty/relevance patch (system decision)
 patch.empty = emptyInfo.empty;
 patch.empty_confidence = emptyInfo.empty_confidence;
-patch.relevant = !emptyInfo.empty;
+patch.relevant = hasWildlifeDetection;
 
-const shouldScheduleStorageDelete =
-  patch.empty === true || patch.relevant === false;
+let securityRowsInserted = 0;
 
-if (shouldScheduleStorageDelete) {
+if (hasSecurityDetection) {
+  const securityDeleteAfter = getSecurityDeleteAfterIso();
+
+  if (cam.security_detections_enabled) {
+    securityRowsInserted = await upsertSecurityDetections({
+      core,
+      cam,
+      mdSummary,
+      capturedAt: patch.captured_at ?? core.captured_at ?? core.created_at,
+      deleteAfter: securityDeleteAfter,
+    });
+
+    patch.storage_delete_after = securityDeleteAfter;
+    patch.storage_delete_reason = "security_detection";
+  } else {
+    patch.storage_delete_after = getStorageDeleteAfterIso();
+    patch.storage_delete_reason = "security_detection_disabled";
+  }
+
+  patch.storage_delete_error = null;
+} else if (patch.empty === true || patch.relevant === false) {
   patch.storage_delete_after = getStorageDeleteAfterIso();
   patch.storage_delete_reason =
     patch.empty === true ? "auto_empty" : "auto_irrelevant";
@@ -824,9 +926,9 @@ if (shouldScheduleStorageDelete) {
 await markProcessed(core.id, patch);
 
   // 5) event layer
-  // Only non-empty assets are event-eligible.
-  // Empty/noisy assets must not create or extend events.
-  if (!emptyInfo.empty) {
+  // Only wildlife assets are event-eligible.
+  // Security and empty/noisy assets must not create or extend events.
+  if (hasWildlifeDetection) {
     await supabase.rpc("upsert_event_for_asset", {
       p_asset_id: core.id,
       p_window_minutes: 10,
@@ -847,6 +949,10 @@ await markProcessed(core.id, patch);
     empty_confidence: emptyInfo.empty_confidence,
 
     inserted: inserted.length,
+    security_detection: hasSecurityDetection,
+    security_enabled: cam.security_detections_enabled,
+    security_rows_inserted: securityRowsInserted,
+
     species_enabled: SPECIES_ENABLED,
     species_updated: speciesUpdated,
     species_failures: speciesFailures,
