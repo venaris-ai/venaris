@@ -1,4 +1,4 @@
-// src/app/layout.tsx #16
+// src/app/layout.tsx #17
 import "./globals.css";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { cookies } from "next/headers";
@@ -303,6 +303,9 @@ export default async function RootLayout({
               role={role}
               email={email}
               isDemo={isDemo}
+              securityDetectionsEnabled={
+                organization?.security_detections_enabled === true
+              }
               language={language}
             />
           </div>

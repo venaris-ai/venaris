@@ -1,4 +1,4 @@
-// src/components/HeaderMenu.tsx #3
+// src/components/HeaderMenu.tsx #4
 "use client";
 
 import Link from "next/link";
@@ -18,6 +18,7 @@ type Props = {
   role?: AppRole | null;
   email?: string | null;
   isDemo?: boolean;
+  securityDetectionsEnabled?: boolean;
   language: AppLanguage;
 };
 
@@ -34,7 +35,13 @@ function groupLabel(key: MenuGroup["key"], language: AppLanguage) {
   return "Admin";
 }
 
-export default function HeaderMenu({ role, email, isDemo, language }: Props) {
+export default function HeaderMenu({
+  role,
+  email,
+  isDemo,
+  securityDetectionsEnabled,
+  language,
+}: Props) {
   const pathname = usePathname();
   const menuRef = useRef<HTMLDivElement | null>(null);
   const [open, setOpen] = useState(false);
@@ -92,14 +99,21 @@ export default function HeaderMenu({ role, email, isDemo, language }: Props) {
   const visibleGroups = groups
     .map((group) => ({
       ...group,
-      items: group.items.filter((item) =>
-        canAccessPath({
+      items: group.items.filter((item) => {
+        if (
+          item.href === "/cameras/security" &&
+          securityDetectionsEnabled !== true
+        ) {
+          return false;
+        }
+
+        return canAccessPath({
           pathname: item.href,
           role,
           email,
           isDemo,
-        })
-      ),
+        });
+      }),
     }))
     .filter((group) => group.items.length > 0);
 

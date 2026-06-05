@@ -1,4 +1,4 @@
-// src/lib/auth.ts #3
+// src/lib/auth.ts #4
 import { redirect } from "next/navigation";
 import { supabaseServer } from "@/lib/supabaseServer";
 import { supabaseAuthServer } from "@/lib/supabaseAuthServer";
@@ -11,6 +11,7 @@ type OrganizationRow = {
   name: string;
   slug: string;
   is_demo: boolean;
+  security_detections_enabled: boolean;
 };
 
 type MembershipRow = {
@@ -62,7 +63,8 @@ export async function getMembershipsForUser(userId: string) {
         id,
         name,
         slug,
-        is_demo
+        is_demo,
+        security_detections_enabled
       )
     `
     )
