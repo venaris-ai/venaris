@@ -1,4 +1,4 @@
-// src/lib/routeAccess.ts #7
+// src/lib/routeAccess.ts #8
 import type { AppLanguage } from "@/lib/i18n";
 
 export type { AppLanguage } from "@/lib/i18n";
@@ -42,6 +42,7 @@ export const ROUTE_ACCESS_RULES: RouteAccessRule[] = [
   { path: "/cameras/events", match: "startsWith", allowedRoles: ["owner", "admin", "member"] },
   { path: "/cameras/import", allowedRoles: ["owner", "admin", "member"] },
   { path: "/cameras/ingest", allowedRoles: ["owner", "admin", "member"] },
+  { path: "/cameras/security", allowedRoles: ["owner", "admin"] },
   { path: "/cameras/", match: "startsWith", allowedRoles: ["owner", "admin"] },
 
   { path: "/orga", allowedRoles: ["owner", "admin"] },
@@ -77,6 +78,7 @@ export const SECTION_NAV_ITEMS = {
     { href: "/cameras/ingest", label: "Ingest", match: "exact" },
     { href: "/cameras/import", label: "Import", match: "exact" },
     { href: "/cameras/tipps", label: "Tips", match: "exact" },
+    { href: "/cameras/security", label: "Security", match: "exact" },
   ] satisfies NavItem[],
 
   orga: [
@@ -233,6 +235,7 @@ export function getSectionNavItems(language: AppLanguage) {
           { href: "/cameras/ingest", label: "Ingest", match: "exact" },
           { href: "/cameras/import", label: "Import", match: "exact" },
           { href: "/cameras/tipps", label: "Tips", match: "exact" },
+          { href: "/cameras/security", label: "Security", match: "exact" },
         ] satisfies NavItem[],
 
         orga: [
@@ -260,6 +263,7 @@ export function getSectionNavItems(language: AppLanguage) {
           { href: "/cameras/ingest", label: "Ingest", match: "exact" },
           { href: "/cameras/import", label: "Import", match: "exact" },
           { href: "/cameras/tipps", label: "Tipps", match: "exact" },
+          { href: "/cameras/security", label: "Sicherheit", match: "exact" },
         ] satisfies NavItem[],
 
         orga: [
