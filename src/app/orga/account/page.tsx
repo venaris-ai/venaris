@@ -1,4 +1,4 @@
-// src/app/orga/account/page.tsx #10
+// src/app/orga/account/page.tsx #11
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { redirectIfDemoWrite } from "@/lib/auth";
@@ -31,6 +31,9 @@ type OrganizationRow = {
   billing_country: string | null;
   logo_url: string | null;
   customer_reference: string | null;
+  security_detections_enabled: boolean;
+  security_detections_accepted_at: string | null;
+  security_detections_accepted_by: string | null;
 };
 
 function formatKind(kind: string) {
@@ -90,6 +93,12 @@ function t(language: AppLanguage) {
         cityLabel: "City",
         countryLabel: "Country",
         notesLabel: "Notes",
+        securityTitle: "Security",
+        securityToggleLabel: "Show person and vehicle detections",
+        securityIntro:
+          "When this feature is enabled, Venaris shows images where your cameras detected people or vehicles. These captures are not used for species identification, wildlife analytics, or PopSim. Image files are automatically removed from storage after 30 days.",
+        securityConfirmation:
+          "I confirm that I am responsible for the lawful use of my cameras. This includes suitable camera locations, required notices, and compliance with applicable local rules.",
         saveIdle: "Save changes",
         savePending: "Saving...",
         demoMode: "Demo mode",
@@ -131,6 +140,12 @@ function t(language: AppLanguage) {
         cityLabel: "Ort",
         countryLabel: "Land",
         notesLabel: "Notizen",
+        securityTitle: "Sicherheit",
+        securityToggleLabel: "Personen- und Fahrzeugerkennungen anzeigen",
+        securityIntro:
+          "Wenn diese Funktion aktiv ist, zeigt Venaris Bilder an, auf denen Deine Kameras Personen oder Fahrzeuge erkannt haben. Diese Aufnahmen werden nicht für Wildartenbestimmung, Wildlife-Auswertungen oder PopSim verwendet. Bilddateien werden nach 30 Tagen automatisch aus dem Bildspeicher gelöscht.",
+        securityConfirmation:
+          "Ich bestätige, dass ich für den rechtmäßigen Einsatz meiner Kameras verantwortlich bin. Dazu gehören geeignete Kamerastandorte, erforderliche Hinweise sowie die Einhaltung der jeweils geltenden lokalen Vorschriften.",
         saveIdle: "Änderungen speichern",
         savePending: "Speichert...",
         demoMode: "Demo-Modus",
@@ -196,6 +211,8 @@ async function saveOrganizationAccount(formData: FormData) {
     String(formData.get("billing_country") ?? "").trim().toUpperCase() || "DE";
   const customerReference = String(formData.get("customer_reference") ?? "").trim();
   const notes = String(formData.get("notes") ?? "").trim();
+  const securityDetectionsEnabled =
+    formData.get("security_detections_enabled") === "on";
 
   if (!name) {
     throw new Error(text.accountRequired);
@@ -205,20 +222,28 @@ async function saveOrganizationAccount(formData: FormData) {
     throw new Error(text.billingEmailInvalid);
   }
 
+  const organizationUpdate: Record<string, unknown> = {
+    name,
+    legal_name: legalName || null,
+    contact_person: contactPerson || null,
+    billing_email: billingEmail || null,
+    billing_street: billingStreet || null,
+    billing_postal_code: billingPostalCode || null,
+    billing_city: billingCity || null,
+    billing_country: billingCountry || null,
+    customer_reference: customerReference || null,
+    notes: notes || null,
+    security_detections_enabled: securityDetectionsEnabled,
+  };
+
+  if (securityDetectionsEnabled) {
+    organizationUpdate.security_detections_accepted_at = new Date().toISOString();
+    organizationUpdate.security_detections_accepted_by = ctx.user.id;
+  }
+
   const { error } = await supabase
     .from("organizations")
-    .update({
-      name,
-      legal_name: legalName || null,
-      contact_person: contactPerson || null,
-      billing_email: billingEmail || null,
-      billing_street: billingStreet || null,
-      billing_postal_code: billingPostalCode || null,
-      billing_city: billingCity || null,
-      billing_country: billingCountry || null,
-      customer_reference: customerReference || null,
-      notes: notes || null,
-    })
+    .update(organizationUpdate)
     .eq("id", organization.id);
 
   if (error) {
@@ -314,7 +339,10 @@ export default async function OrgaAccountPage({
       billing_city,
       billing_country,
       logo_url,
-      customer_reference
+      customer_reference,
+      security_detections_enabled,
+      security_detections_accepted_at,
+      security_detections_accepted_by
     `
     )
     .eq("id", organization.id)
@@ -552,6 +580,34 @@ export default async function OrgaAccountPage({
                 className="w-full rounded-[10px] border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none placeholder:text-white/35 disabled:bg-white/5 disabled:text-white/35"
               />
             </div>
+
+            <section className="rounded-[24px] border border-amber-300/18 bg-amber-300/8 p-4">
+              <h3 className="text-base font-medium text-white">
+                {text.securityTitle}
+              </h3>
+              <p className="mt-2 text-sm text-white/68">
+                {text.securityIntro}
+              </p>
+
+              <label className="mt-4 flex gap-3 rounded-[18px] border border-white/10 bg-white/5 p-3 text-sm text-white/78">
+                <input
+                  name="security_detections_enabled"
+                  type="checkbox"
+                  defaultChecked={org.security_detections_enabled}
+                  disabled={isDemo}
+                  title={isDemo ? text.demoReadOnly : ""}
+                  className="mt-1 h-4 w-4 rounded border-white/20 bg-white/10"
+                />
+                <span>
+                  <span className="block font-medium text-white">
+                    {text.securityToggleLabel}
+                  </span>
+                  <span className="mt-1 block text-white/62">
+                    {text.securityConfirmation}
+                  </span>
+                </span>
+              </label>
+            </section>
 
             <div className="flex flex-wrap items-center gap-3">
               <SubmitButton
