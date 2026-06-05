@@ -802,81 +802,30 @@ export default async function CamerasHealthPage(props: {
   const cameraBaseRows = (camerasData ?? []) as CameraBaseRow[];
   const cameraIds = cameraBaseRows.map((camera) => camera.id);
 
-  if (cameraIds.length === 0) {
-    return (
-      <main className="space-y-8">
-        <PageHeader text={text} />
+  let healthRows: CameraHealthRow[] = [];
 
-        {demoReadOnly ? (
-          <section className="rounded-[24px] border border-amber-300/20 bg-amber-300/10 p-4">
-            <p className="text-sm text-amber-100">{text.demoReadOnly}</p>
-          </section>
-        ) : null}
+  if (cameraIds.length > 0) {
+    const { data: healthData, error: healthError } = await supabase
+      .from("camera_health")
+      .select(
+        "id,last_seen_at,stale_after_minutes,offline_after_minutes,health_status"
+      )
+      .in("id", cameraIds);
 
-        {changed ? (
-          <section className="rounded-[24px] border border-emerald-300/20 bg-emerald-300/10 p-4">
-            <p className="text-sm text-emerald-100">{text.statusSaved}</p>
-          </section>
-        ) : null}
-
-        {removed ? (
-          <section className="rounded-[24px] border border-emerald-300/20 bg-emerald-300/10 p-4">
-            <p className="text-sm text-emerald-100">{text.cameraRemoved}</p>
-          </section>
-        ) : null}
-
-        <section className="rounded-[28px] border border-white/10 bg-white/5 backdrop-blur-sm">
-          <div className="flex items-center justify-between border-b border-white/8 px-6 py-4">
-            <div>
-              <h2 className="text-lg font-medium text-white">
-                {text.cameraListTitle}
-              </h2>
-              <p className="mt-1 text-sm text-white/65">
-                {text.cameraListText}
-              </p>
-            </div>
-            <Link
-              href="/cameras/new"
-              className="rounded-full border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/78 hover:border-amber-300/20 hover:bg-white/8 hover:text-white"
-            >
-              {text.addCamera}
-            </Link>
+    if (healthError) {
+      return (
+        <main className="space-y-8">
+          <PageHeader text={text} />
+          <div className="rounded-[24px] border border-rose-300/20 bg-rose-300/10 p-4 text-sm text-rose-100">
+            {text.loadHealthFailed} {healthError.message}
           </div>
+        </main>
+      );
+    }
 
-          <div className="px-6 py-10">
-            <div className="rounded-[24px] border border-dashed border-white/10 bg-white/5 p-8">
-              <h3 className="text-base font-medium text-white">
-                {text.noCamerasInScopeTitle}
-              </h3>
-              <p className="mt-2 max-w-2xl text-sm leading-6 text-white/68">
-                {text.noCamerasInScopeText}
-              </p>
-            </div>
-          </div>
-        </section>
-      </main>
-    );
+    healthRows = (healthData ?? []) as CameraHealthRow[];
   }
 
-  const { data: healthData, error: healthError } = await supabase
-    .from("camera_health")
-    .select(
-      "id,last_seen_at,stale_after_minutes,offline_after_minutes,health_status"
-    )
-    .in("id", cameraIds);
-
-  if (healthError) {
-    return (
-      <main className="space-y-8">
-        <PageHeader text={text} />
-        <div className="rounded-[24px] border border-rose-300/20 bg-rose-300/10 p-4 text-sm text-rose-100">
-          {text.loadHealthFailed} {healthError.message}
-        </div>
-      </main>
-    );
-  }
-
-  const healthRows = (healthData ?? []) as CameraHealthRow[];
   const healthById = new Map(healthRows.map((row) => [row.id, row]));
 
   const rows: CameraHealthListRow[] = cameraBaseRows.map((camera) => {
@@ -1026,56 +975,69 @@ export default async function CamerasHealthPage(props: {
           </Link>
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="min-w-full text-sm">
-            <thead className="bg-white/5 text-left text-white/55">
-              <tr>
-                <th className="px-6 py-3 font-medium whitespace-nowrap">
-                  {text.cameraCol}
-                </th>
-                <th className="px-6 py-3 font-medium whitespace-nowrap">
-                  {text.groundCol}
-                </th>
-                <th className="px-6 py-3 font-medium whitespace-nowrap">
-                  {text.methodCol}
-                </th>
-                <th className="px-6 py-3 font-medium whitespace-nowrap">
-                  {text.statusCol}
-                </th>
-                <th className="px-6 py-3 font-medium whitespace-nowrap">
-                  {text.healthCol}
-                </th>
-                <th className="px-6 py-3 font-medium whitespace-nowrap">
-                  {text.lastFeedCol}
-                </th>
-                <th className="px-6 py-3 font-medium whitespace-nowrap">
-                  {text.configCol}
-                </th>
-                <th className="px-6 py-3 font-medium whitespace-nowrap">
-                  {text.locationCol}
-                </th>
-                <th className="px-6 py-3 font-medium whitespace-nowrap text-right">
-                  {text.actionsCol}
-                </th>
-              </tr>
-            </thead>
+        {rows.length > 0 ? (
+          <div className="overflow-x-auto">
+            <table className="min-w-full text-sm">
+              <thead className="bg-white/5 text-left text-white/55">
+                <tr>
+                  <th className="px-6 py-3 font-medium whitespace-nowrap">
+                    {text.cameraCol}
+                  </th>
+                  <th className="px-6 py-3 font-medium whitespace-nowrap">
+                    {text.groundCol}
+                  </th>
+                  <th className="px-6 py-3 font-medium whitespace-nowrap">
+                    {text.methodCol}
+                  </th>
+                  <th className="px-6 py-3 font-medium whitespace-nowrap">
+                    {text.statusCol}
+                  </th>
+                  <th className="px-6 py-3 font-medium whitespace-nowrap">
+                    {text.healthCol}
+                  </th>
+                  <th className="px-6 py-3 font-medium whitespace-nowrap">
+                    {text.lastFeedCol}
+                  </th>
+                  <th className="px-6 py-3 font-medium whitespace-nowrap">
+                    {text.configCol}
+                  </th>
+                  <th className="px-6 py-3 font-medium whitespace-nowrap">
+                    {text.locationCol}
+                  </th>
+                  <th className="px-6 py-3 font-medium whitespace-nowrap text-right">
+                    {text.actionsCol}
+                  </th>
+                </tr>
+              </thead>
 
-            <tbody>
-              {rows.map((row) => (
-                <CameraTableRow
-                  key={row.id}
-                  row={row}
-                  canManageCameras={canManageCameras}
-                  returnRevier={rawRevier ?? ""}
-                  saveAction={saveCameraStatus}
-                  removeAction={removeCamera}
-                  isDemo={isDemo}
-                  language={language}
-                />
-              ))}
-            </tbody>
-          </table>
-        </div>
+              <tbody>
+                {rows.map((row) => (
+                  <CameraTableRow
+                    key={row.id}
+                    row={row}
+                    canManageCameras={canManageCameras}
+                    returnRevier={rawRevier ?? ""}
+                    saveAction={saveCameraStatus}
+                    removeAction={removeCamera}
+                    isDemo={isDemo}
+                    language={language}
+                  />
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <div className="px-6 py-10">
+            <div className="rounded-[24px] border border-dashed border-white/10 bg-white/5 p-8">
+              <h3 className="text-base font-medium text-white">
+                {text.noCamerasInScopeTitle}
+              </h3>
+              <p className="mt-2 max-w-2xl text-sm leading-6 text-white/68">
+                {text.noCamerasInScopeText}
+              </p>
+            </div>
+          </div>
+        )}
 
         {healthRuleHint ? (
           <div className="border-t border-white/8 px-6 py-3 text-xs text-white/45">

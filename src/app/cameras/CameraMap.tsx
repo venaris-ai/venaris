@@ -643,12 +643,19 @@ export default function CameraMap({
     );
   }, [cameras]);
 
-  const hasNoCameraCoordinates =
-    cameras.length > 0 &&
-    locatedCameras.length === 0 &&
-    locatedMapObjects.length === 0;
-  const hasPartialCameraCoordinates =
-    locatedCameras.length > 0 && missingLocationCameras.length > 0;
+const hasNoCameraCoordinates =
+  cameras.length > 0 &&
+  locatedCameras.length === 0 &&
+  locatedMapObjects.length === 0 &&
+  boundaryCoordinates.length === 0;
+
+const hasPartialCameraCoordinates =
+  locatedCameras.length > 0 && missingLocationCameras.length > 0;
+
+const hasRenderableMapContent =
+  boundaryCoordinates.length > 0 ||
+  locatedCameras.length > 0 ||
+  locatedMapObjects.length > 0;
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
@@ -783,27 +790,27 @@ const map = new maplibregl.Map({
         </div>
       </div>
 
-      {locatedCameras.length > 0 || locatedMapObjects.length > 0 ? (
-        <div
-          ref={containerRef}
-          className="h-[520px] overflow-hidden rounded-[24px] border border-white/10 bg-[#10141c]"
-        />
-      ) : (
-        <div className="rounded-[24px] border border-dashed border-white/12 bg-white/[0.03] px-4 py-10 text-center text-sm text-white/68">
-          {hasNoCameraCoordinates ? (
-            <>
-              <div className="text-base font-medium text-white">
-                {text.noCoordinatesTitle}
-              </div>
-              <p className="mt-3 text-sm text-white/60">
-                {text.noCoordinatesCta}
-              </p>
-            </>
-          ) : (
-            text.noLocatedCameras
-          )}
+{hasRenderableMapContent ? (
+  <div
+    ref={containerRef}
+    className="h-[520px] overflow-hidden rounded-[24px] border border-white/10 bg-[#10141c]"
+  />
+) : (
+  <div className="rounded-[24px] border border-dashed border-white/12 bg-white/[0.03] px-4 py-10 text-center text-sm text-white/68">
+    {hasNoCameraCoordinates ? (
+      <>
+        <div className="text-base font-medium text-white">
+          {text.noCoordinatesTitle}
         </div>
-      )}
+        <p className="mt-3 text-sm text-white/60">
+          {text.noCoordinatesCta}
+        </p>
+      </>
+    ) : (
+      text.noLocatedCameras
+    )}
+  </div>
+)}
 
       {hasPartialCameraCoordinates ? (
         <div className="mt-4 rounded-[22px] border border-amber-300/20 bg-amber-300/10 px-4 py-3 text-sm text-amber-50/90">
