@@ -211,8 +211,11 @@ def map_speciesnet_label_to_venaris(raw_label: Any) -> tuple[str, str]:
         return "rabbit", "common_name:rabbit"
 
     # Birds.
-    if "common pheasant" in common or common == "pheasant":
-        return "pheasant", "common_name:pheasant"
+    if (
+        "pheasant" in common
+        or (genus == "phasianus" and species == "colchicus")
+    ):
+        return "pheasant", "common_name_or_taxon:pheasant"
 
     if "carrion crow" in common or common == "crow":
         return "crow", "common_name:crow"

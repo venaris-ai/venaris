@@ -858,6 +858,10 @@ async function processAsset(assetFromBatch) {
               softmax: species?.payload?.prompt_mode === "softmax" ? 1 : 0,
               sim: Number.isFinite(spSim) ? spSim : null,
               score: Number.isFinite(spScore) ? spScore : null,
+              raw_label: r?.raw_label ?? null,
+              raw_common_name: r?.raw_common_name ?? null,
+              raw_taxon_id: r?.raw_taxon_id ?? null,
+              mapping_reason: r?.mapping_reason ?? null,
             },
           };
 
