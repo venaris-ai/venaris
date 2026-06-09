@@ -15,6 +15,7 @@ from PIL import Image, ImageOps
 
 from speciesnet_venaris_map import (
     best_venaris_species_from_speciesnet_classifications,
+    explain_venaris_species_candidates,
 )
 
 
@@ -201,6 +202,11 @@ def main() -> None:
                     classes=classes,
                     scores=scores,
                 )
+                top_k = explain_venaris_species_candidates(
+                    classes=classes,
+                    scores=scores,
+                    limit=5,
+                )
 
                 results.append(
                     {
@@ -214,6 +220,7 @@ def main() -> None:
                         "raw_common_name": mapped.raw_common_name,
                         "raw_taxon_id": mapped.raw_taxon_id,
                         "mapping_reason": mapped.reason,
+                        "top_k": top_k,
                     }
                 )
 

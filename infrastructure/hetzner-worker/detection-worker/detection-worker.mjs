@@ -862,6 +862,7 @@ async function processAsset(assetFromBatch) {
               raw_common_name: r?.raw_common_name ?? null,
               raw_taxon_id: r?.raw_taxon_id ?? null,
               mapping_reason: r?.mapping_reason ?? null,
+              top_k: Array.isArray(r?.top_k) ? r.top_k : [],
             },
           };
 

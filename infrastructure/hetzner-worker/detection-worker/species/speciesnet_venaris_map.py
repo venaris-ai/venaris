@@ -1,4 +1,4 @@
-# infrastructure/hetzner-worker/detection-worker/species/speciesnet_venaris_map.py #1
+# infrastructure/hetzner-worker/detection-worker/species/speciesnet_venaris_map.py #2
 
 from __future__ import annotations
 
@@ -38,6 +38,57 @@ VENARIS_SPECIES = {
     "wild_boar",
     "wolf",
     "woodcock",
+}
+
+
+# Primary, deterministic mapping based on SpeciesNet taxonomy fields:
+# taxon_id;kingdom;order;family;genus;species;common_name
+#
+# This must stay conservative: only exact genus/species pairs that map cleanly
+# to a Venaris target species belong here.
+EXACT_TAXON_TO_VENARIS = {
+    # Deer / cervids.
+    ("capreolus", "capreolus"): "roe_deer",
+    ("cervus", "elaphus"): "red_deer",
+    ("dama", "dama"): "fallow_deer",
+
+    # Suidae.
+    ("sus", "scrofa"): "wild_boar",
+
+    # Canids.
+    ("vulpes", "vulpes"): "fox",
+    ("canis", "lupus"): "wolf",
+    ("canis", "aureus"): "golden_jackal",
+    ("nyctereutes", "procyonoides"): "raccoon_dog",
+
+    # Mustelids.
+    ("meles", "meles"): "badger",
+    ("martes", "martes"): "pine_marten",
+    ("martes", "foina"): "stone_marten",
+    ("mustela", "erminea"): "stoat",
+    ("neogale", "vison"): "mink",
+    ("mustela", "lutreola"): "mink",
+
+    # Procyonids / rodents.
+    ("procyon", "lotor"): "raccoon",
+    ("myocastor", "coypus"): "nutria",
+
+    # Lagomorphs.
+    ("lepus", "europaeus"): "hare",
+    ("oryctolagus", "cuniculus"): "rabbit",
+
+    # Birds.
+    ("phasianus", "colchicus"): "pheasant",
+    ("corvus", "corone"): "crow",
+    ("pica", "pica"): "magpie",
+    ("anser", "anser"): "greylag_goose",
+    ("branta", "canadensis"): "canada_goose",
+    ("alopochen", "aegyptiaca"): "egyptian_goose",
+    ("anas", "platyrhynchos"): "mallard",
+    ("scolopax", "rusticola"): "woodcock",
+
+    # Large predators / cats.
+    ("lynx", "rufus"): "bobcat",
 }
 
 
@@ -90,6 +141,18 @@ def _contains_any(text: str, needles: tuple[str, ...]) -> bool:
     return any(needle in text for needle in needles)
 
 
+def _assert_venaris_species(species: str) -> str:
+    if species not in VENARIS_SPECIES:
+        raise ValueError(f"Mapped species is not in VENARIS_SPECIES: {species}")
+    return species
+
+
+def _score_float(raw_score: Any) -> float:
+    try:
+        return float(raw_score)
+    except Exception:
+        return 0.0
+
 def map_speciesnet_label_to_venaris(raw_label: Any) -> tuple[str, str]:
     label = parse_speciesnet_label(raw_label)
 
@@ -103,19 +166,21 @@ def map_speciesnet_label_to_venaris(raw_label: Any) -> tuple[str, str]:
     if common in {"blank", "unknown", "vehicle", "human"}:
         return "other", f"non_target_common:{common}"
 
+    # Primary mapping: exact Latin taxonomy from SpeciesNet.
+    taxon_key = (genus, species)
+    exact_species = EXACT_TAXON_TO_VENARIS.get(taxon_key)
+    if exact_species:
+        return _assert_venaris_species(exact_species), f"exact_taxon:{genus}_{species}"
+
+    # Secondary mapping: common-name fallback and carefully selected broader rules.
+
     # Deer / cervids.
-    if genus == "capreolus" and species == "capreolus":
-        return "roe_deer", "exact_taxon:capreolus_capreolus"
     if "european roe deer" in common or common == "roe deer":
         return "roe_deer", "common_name:roe_deer"
 
-    if genus == "cervus" and species == "elaphus":
-        return "red_deer", "exact_taxon:cervus_elaphus"
     if common == "red deer" or "european red deer" in common:
         return "red_deer", "common_name:red_deer"
 
-    if genus == "dama" and species == "dama":
-        return "fallow_deer", "exact_taxon:dama_dama"
     if "fallow deer" in common:
         return "fallow_deer", "common_name:fallow_deer"
 
@@ -130,74 +195,46 @@ def map_speciesnet_label_to_venaris(raw_label: Any) -> tuple[str, str]:
         return "chamois", "taxon_or_common:chamois"
 
     # Suidae.
-    if genus == "sus" and species == "scrofa":
-        return "wild_boar", "exact_taxon:sus_scrofa"
     if "wild boar" in common or "feral hog" in common or "feral pig" in common:
         return "wild_boar", "common_name:wild_boar"
 
     # Canids.
-    if genus == "vulpes" and species == "vulpes":
-        return "fox", "exact_taxon:vulpes_vulpes"
     if "red fox" in common or common == "fox":
         return "fox", "common_name:fox"
 
-    if genus == "canis" and species == "lupus":
-        return "wolf", "exact_taxon:canis_lupus"
     if common == "wolf" or "gray wolf" in common or "grey wolf" in common:
         return "wolf", "common_name:wolf"
 
-    if genus == "canis" and species == "aureus":
-        return "golden_jackal", "exact_taxon:canis_aureus"
     if "golden jackal" in common:
         return "golden_jackal", "common_name:golden_jackal"
 
-    if genus == "nyctereutes" and species == "procyonoides":
-        return "raccoon_dog", "exact_taxon:nyctereutes_procyonoides"
     if "raccoon dog" in common:
         return "raccoon_dog", "common_name:raccoon_dog"
 
     # Mustelids.
-    if genus == "meles" and species == "meles":
-        return "badger", "exact_taxon:meles_meles"
     if "european badger" in common or common == "badger":
         return "badger", "common_name:badger"
 
-    if genus == "martes" and species == "martes":
-        return "pine_marten", "exact_taxon:martes_martes"
     if "pine marten" in common:
         return "pine_marten", "common_name:pine_marten"
 
-    if genus == "martes" and species == "foina":
-        return "stone_marten", "exact_taxon:martes_foina"
     if "stone marten" in common or "beech marten" in common:
         return "stone_marten", "common_name:stone_marten"
 
-    if genus == "mustela" and species == "erminea":
-        return "stoat", "exact_taxon:mustela_erminea"
     if common in {"stoat", "ermine"} or "short-tailed weasel" in common:
         return "stoat", "common_name:stoat"
 
-    if (genus == "neogale" and species == "vison") or (
-        genus == "mustela" and species == "lutreola"
-    ):
-        return "mink", "exact_taxon:mink"
     if "american mink" in common or "european mink" in common or common == "mink":
         return "mink", "common_name:mink"
 
     # Procyonids / rodents.
-    if genus == "procyon" and species == "lotor":
-        return "raccoon", "exact_taxon:procyon_lotor"
     if common == "raccoon" or "northern raccoon" in common:
         return "raccoon", "common_name:raccoon"
 
-    if genus == "myocastor" and species == "coypus":
-        return "nutria", "exact_taxon:myocastor_coypus"
     if common in {"nutria", "coypu"} or "myocastor" in common:
         return "nutria", "common_name:nutria"
 
     # Lagomorphs.
-    if genus == "lepus" and species == "europaeus":
-        return "hare", "exact_taxon:lepus_europaeus"
     if "european hare" in common or common == "hare":
         return "hare", "common_name:hare"
 
@@ -205,17 +242,12 @@ def map_speciesnet_label_to_venaris(raw_label: Any) -> tuple[str, str]:
     if genus == "lepus" and order == "lagomorpha":
         return "hare", "genus_fallback:lepus"
 
-    if genus == "oryctolagus" and species == "cuniculus":
-        return "rabbit", "exact_taxon:oryctolagus_cuniculus"
     if "european rabbit" in common or common == "rabbit":
         return "rabbit", "common_name:rabbit"
 
     # Birds.
-    if (
-        "pheasant" in common
-        or (genus == "phasianus" and species == "colchicus")
-    ):
-        return "pheasant", "common_name_or_taxon:pheasant"
+    if "pheasant" in common:
+        return "pheasant", "common_name:pheasant"
 
     if "carrion crow" in common or common == "crow":
         return "crow", "common_name:crow"
@@ -240,20 +272,61 @@ def map_speciesnet_label_to_venaris(raw_label: Any) -> tuple[str, str]:
 
     # Generic SpeciesNet bird class: too broad for a concrete Venaris bird species.
     # Concrete bird species above still map to crow, pheasant, geese, mallard, magpie, woodcock.
-    if common == "bird" or (order == "" and family == "" and genus == "" and species == "" and common == "bird"):
+    if common == "bird" or (
+        order == ""
+        and family == ""
+        and genus == ""
+        and species == ""
+        and common == "bird"
+    ):
         return "other", "generic_common:bird"
 
     # Large predators / cats.
     if family == "ursidae" or " bear" in f" {common}" or common.endswith("bear"):
         return "bear", "family_or_common:bear"
 
-    if genus == "lynx" and species == "rufus":
-        return "bobcat", "exact_taxon:lynx_rufus"
     if "bobcat" in common:
         return "bobcat", "common_name:bobcat"
 
     return "other", "no_venaris_target_mapping"
 
+
+def explain_venaris_species_candidates(
+    classes: list[Any],
+    scores: list[Any],
+    limit: Optional[int] = 5,
+) -> list[dict[str, Any]]:
+    candidates: list[dict[str, Any]] = []
+
+    for rank, (raw_label, raw_score) in enumerate(zip(classes, scores), start=1):
+        if limit is not None and rank > limit:
+            break
+
+        score = _score_float(raw_score)
+        mapped_species, reason = map_speciesnet_label_to_venaris(raw_label)
+        parsed = parse_speciesnet_label(raw_label)
+
+        if mapped_species != "other":
+            _assert_venaris_species(mapped_species)
+
+        candidates.append(
+            {
+                "rank": rank,
+                "score": score,
+                "raw_label": parsed.raw,
+                "raw_taxon_id": parsed.taxon_id,
+                "kingdom": parsed.kingdom,
+                "order": parsed.order,
+                "family": parsed.family,
+                "genus": parsed.genus,
+                "species": parsed.species,
+                "raw_common_name": parsed.common_name,
+                "mapped_species": mapped_species,
+                "mapping_reason": reason,
+            }
+        )
+
+    return candidates
 
 def best_venaris_species_from_speciesnet_classifications(
     classes: list[Any],
@@ -269,35 +342,46 @@ def best_venaris_species_from_speciesnet_classifications(
             reason="empty_classifications",
         )
 
-    best_other: Optional[VenarisSpeciesPrediction] = None
+    # Selection policy: keep Venaris product behavior unchanged.
+    # We accept the first SpeciesNet candidate, in SpeciesNet rank order,
+    # that maps to a concrete Venaris species. Low scores remain allowed
+    # and are surfaced to the user as low probability.
+    candidates = explain_venaris_species_candidates(
+        classes=classes,
+        scores=scores,
+        limit=None,
+    )
 
-    for raw_label, raw_score in zip(classes, scores):
-        try:
-            score = float(raw_score)
-        except Exception:
-            score = 0.0
+    best_other: Optional[dict[str, Any]] = None
 
-        mapped_species, reason = map_speciesnet_label_to_venaris(raw_label)
-        parsed = parse_speciesnet_label(raw_label)
-
-        prediction = VenarisSpeciesPrediction(
-            species=mapped_species,
-            score=score,
-            raw_label=parsed.raw,
-            raw_common_name=parsed.common_name,
-            raw_taxon_id=parsed.taxon_id,
-            reason=reason,
-        )
+    for candidate in candidates:
+        mapped_species = str(candidate["mapped_species"])
 
         if mapped_species != "other":
-            if mapped_species not in VENARIS_SPECIES:
-                raise ValueError(f"Mapped species is not in VENARIS_SPECIES: {mapped_species}")
-            return prediction
+            _assert_venaris_species(mapped_species)
+            return VenarisSpeciesPrediction(
+                species=mapped_species,
+                score=float(candidate["score"]),
+                raw_label=str(candidate["raw_label"]),
+                raw_common_name=str(candidate["raw_common_name"]),
+                raw_taxon_id=str(candidate["raw_taxon_id"]),
+                reason=str(candidate["mapping_reason"]),
+            )
 
         if best_other is None:
-            best_other = prediction
+            best_other = candidate
 
-    return best_other or VenarisSpeciesPrediction(
+    if best_other is not None:
+        return VenarisSpeciesPrediction(
+            species="other",
+            score=float(best_other["score"]),
+            raw_label=str(best_other["raw_label"]),
+            raw_common_name=str(best_other["raw_common_name"]),
+            raw_taxon_id=str(best_other["raw_taxon_id"]),
+            reason=str(best_other["mapping_reason"]),
+        )
+
+    return VenarisSpeciesPrediction(
         species="other",
         score=0.0,
         raw_label="",
@@ -317,8 +401,43 @@ if __name__ == "__main__":
         "d106b2ea-7474-4da0-bb65-3345d07fdc1f;mammalia;carnivora;mustelidae;martes;martes;pine marten",
         "ac0e8ba7-7261-4d17-8645-11ed3d02165a;mammalia;carnivora;canidae;vulpes;vulpes;red fox",
         "b1352069-a39c-4a84-a949-60044271c0c1;aves;;;;;bird",
+        "9ba3565d-9934-4e74-8ef4-d110ad587014;aves;galliformes;phasianidae;phasianus;colchicus;ring-necked pheasant",
+        "427cd520-9264-420e-b1d1-6c9e6495b461;aves;anseriformes;anatidae;branta;canadensis;canada goose",
+        "dummy;aves;anseriformes;anatidae;alopochen;aegyptiaca;egyptian goose",
+        "dummy;aves;anseriformes;anatidae;anser;anser;greylag goose",
+        "dummy;aves;anseriformes;anatidae;anas;platyrhynchos;mallard",
+        "dummy;aves;charadriiformes;scolopacidae;scolopax;rusticola;eurasian woodcock",
     ]
 
+    print("Example mappings:")
     for raw in examples:
         mapped, reason = map_speciesnet_label_to_venaris(raw)
-        print(f"{mapped:14} {reason:36} {parse_speciesnet_label(raw).common_name}")
+        print(f"{mapped:16} {reason:42} {parse_speciesnet_label(raw).common_name}")
+
+    invalid_exact_targets = sorted(
+        {
+            mapped_species
+            for mapped_species in EXACT_TAXON_TO_VENARIS.values()
+            if mapped_species not in VENARIS_SPECIES
+        }
+    )
+
+    if invalid_exact_targets:
+        raise SystemExit(
+            "Invalid exact-taxonomy targets: " + ", ".join(invalid_exact_targets)
+        )
+
+    exact_species = set(EXACT_TAXON_TO_VENARIS.values())
+    venaris_without_exact_taxon = sorted(
+        VENARIS_SPECIES - exact_species - {"other"}
+    )
+
+    print()
+    print(f"VENARIS_SPECIES count: {len(VENARIS_SPECIES)}")
+    print(f"EXACT_TAXON_TO_VENARIS entries: {len(EXACT_TAXON_TO_VENARIS)}")
+    print(f"Species covered by exact taxonomy: {len(exact_species)}")
+
+    print()
+    print("Venaris species without exact taxonomy mapping:")
+    for species in venaris_without_exact_taxon:
+        print(f"- {species}")
