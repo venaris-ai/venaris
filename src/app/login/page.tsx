@@ -1,4 +1,5 @@
-// src/app/login/page.tsx #5
+// src/app/login/page.tsx #6
+import type { Metadata } from "next";
 import { cookies } from "next/headers";
 import LoginForm from "./LoginForm";
 import {
@@ -6,6 +7,13 @@ import {
   normalizeLanguage,
   type AppLanguage,
 } from "@/lib/i18n";
+
+export const metadata: Metadata = {
+  robots: {
+    index: false,
+    follow: false,
+  },
+};
 
 function t(language: AppLanguage) {
   return language === "en"
