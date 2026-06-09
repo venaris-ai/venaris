@@ -459,9 +459,9 @@ if (importTooLarge) {
   {busy ? (
     <div className="space-y-2">
       <div className="text-sm text-white/72">{text.running}</div>
-      <div className="h-1.5 overflow-hidden rounded-full bg-white/10">
-        <div className="h-full w-1/3 animate-pulse rounded-full bg-[#c9952e]" />
-      </div>
+<div className="h-1.5 overflow-hidden rounded-full bg-white/10">
+  <div className="h-full w-2/3 animate-[venaris-demo-progress_1.2s_ease-in-out_infinite] rounded-full bg-[#c9952e]" />
+</div>
     </div>
   ) : files.length > 0 ? (
     <div className="space-y-1 text-sm text-white/72">
