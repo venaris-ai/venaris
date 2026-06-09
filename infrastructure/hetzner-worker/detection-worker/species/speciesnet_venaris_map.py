@@ -1,4 +1,4 @@
-# infrastructure/hetzner-worker/detection-worker/species/speciesnet_venaris_map.py #2
+# infrastructure/hetzner-worker/detection-worker/species/speciesnet_venaris_map.py #3
 
 from __future__ import annotations
 
@@ -51,6 +51,7 @@ EXACT_TAXON_TO_VENARIS = {
     ("capreolus", "capreolus"): "roe_deer",
     ("cervus", "elaphus"): "red_deer",
     ("dama", "dama"): "fallow_deer",
+    ("alces", "alces"): "moose",
 
     # Suidae.
     ("sus", "scrofa"): "wild_boar",
@@ -137,21 +138,21 @@ def parse_speciesnet_label(raw_label: Any) -> SpeciesNetLabel:
     )
 
 
-def _contains_any(text: str, needles: tuple[str, ...]) -> bool:
-    return any(needle in text for needle in needles)
-
-
-def _assert_venaris_species(species: str) -> str:
-    if species not in VENARIS_SPECIES:
-        raise ValueError(f"Mapped species is not in VENARIS_SPECIES: {species}")
-    return species
-
-
-def _score_float(raw_score: Any) -> float:
+def _score_float(value: Any) -> float:
     try:
-        return float(raw_score)
+        return float(value)
     except Exception:
         return 0.0
+
+
+def _assert_venaris_species(species: str) -> None:
+    if species not in VENARIS_SPECIES:
+        raise ValueError(f"Mapped species is not in VENARIS_SPECIES: {species}")
+
+
+def _common_has_word(common: str, word: str) -> bool:
+    return word in common.replace("-", " ").split()
+
 
 def map_speciesnet_label_to_venaris(raw_label: Any) -> tuple[str, str]:
     label = parse_speciesnet_label(raw_label)
@@ -166,13 +167,9 @@ def map_speciesnet_label_to_venaris(raw_label: Any) -> tuple[str, str]:
     if common in {"blank", "unknown", "vehicle", "human"}:
         return "other", f"non_target_common:{common}"
 
-    # Primary mapping: exact Latin taxonomy from SpeciesNet.
-    taxon_key = (genus, species)
-    exact_species = EXACT_TAXON_TO_VENARIS.get(taxon_key)
-    if exact_species:
-        return _assert_venaris_species(exact_species), f"exact_taxon:{genus}_{species}"
-
-    # Secondary mapping: common-name fallback and carefully selected broader rules.
+    exact_taxon = EXACT_TAXON_TO_VENARIS.get((genus, species))
+    if exact_taxon:
+        return exact_taxon, f"exact_taxon:{genus}_{species}"
 
     # Deer / cervids.
     if "european roe deer" in common or common == "roe deer":
@@ -184,7 +181,9 @@ def map_speciesnet_label_to_venaris(raw_label: Any) -> tuple[str, str]:
     if "fallow deer" in common:
         return "fallow_deer", "common_name:fallow_deer"
 
-    if genus == "alces" or "moose" in common or "elk" == common:
+    # Keep this intentionally narrow:
+    # SpeciesNet uses "elk" for cervus canadensis, which must not map to Venaris moose.
+    if genus == "alces" or common == "moose":
         return "moose", "taxon_or_common:moose"
 
     # Bovids / mountain game.
@@ -212,8 +211,16 @@ def map_speciesnet_label_to_venaris(raw_label: Any) -> tuple[str, str]:
         return "raccoon_dog", "common_name:raccoon_dog"
 
     # Mustelids.
-    if "european badger" in common or common == "badger":
-        return "badger", "common_name:badger"
+    # Pragmatic Venaris grouping: clear badger species route to badger,
+    # but do not map all Mustelidae broadly.
+    if common in {
+        "badger",
+        "eurasian badger",
+        "greater hog badger",
+        "american badger",
+        "honey badger",
+    } or common.endswith(" badger"):
+        return "badger", "pragmatic_badger_group"
 
     if "pine marten" in common:
         return "pine_marten", "common_name:pine_marten"
@@ -245,15 +252,42 @@ def map_speciesnet_label_to_venaris(raw_label: Any) -> tuple[str, str]:
     if "european rabbit" in common or common == "rabbit":
         return "rabbit", "common_name:rabbit"
 
+    # Product decision: Venaris rabbit is pragmatic "Kaninchen/rabbit".
+    # Sylvilagus rabbits/cottontails should not fall to other.
+    if genus == "sylvilagus" and order == "lagomorpha":
+        return "rabbit", "pragmatic_sylvilagus_rabbit_group"
+
+    if "cottontail" in common:
+        return "rabbit", "pragmatic_cottontail_rabbit_group"
+
     # Birds.
-    if "pheasant" in common:
+    # Keep pheasant narrow. The earlier broad "* pheasant" fallback created
+    # false concrete hits for non-pheasant bird crops such as woodcock tests.
+    if common in {"pheasant", "common pheasant", "ring-necked pheasant"}:
         return "pheasant", "common_name:pheasant"
 
-    if "carrion crow" in common or common == "crow":
-        return "crow", "common_name:crow"
+    # Pica/magpie must be checked before Corvus/crow so magpies never drift to crow.
+    if genus == "pica" and family == "corvidae":
+        return "magpie", "pragmatic_pica_group"
 
-    if "eurasian magpie" in common or common == "magpie":
-        return "magpie", "common_name:magpie"
+    if common in {"magpie", "common magpie", "eurasian magpie", "black-billed magpie"}:
+        return "magpie", "pragmatic_pica_group"
+
+    # Product decision: for Venaris, clear Corvus candidates are more useful as crow
+    # than as other. Do not map generic bird or generic Corvidae family here.
+    if genus == "corvus" and family == "corvidae":
+        return "crow", "pragmatic_corvus_group"
+
+    if common in {
+        "crow",
+        "carrion crow",
+        "hooded crow",
+        "american crow",
+        "torresian crow",
+        "common raven",
+        "corvus species",
+    }:
+        return "crow", "pragmatic_corvus_group"
 
     if "greylag goose" in common:
         return "greylag_goose", "common_name:greylag_goose"
@@ -272,18 +306,23 @@ def map_speciesnet_label_to_venaris(raw_label: Any) -> tuple[str, str]:
 
     # Generic SpeciesNet bird class: too broad for a concrete Venaris bird species.
     # Concrete bird species above still map to crow, pheasant, geese, mallard, magpie, woodcock.
-    if common == "bird" or (
-        order == ""
-        and family == ""
-        and genus == ""
-        and species == ""
-        and common == "bird"
+    if (
+        common == "bird"
+        or (
+            order == ""
+            and family == ""
+            and genus == ""
+            and species == ""
+            and common == "bird"
+        )
     ):
         return "other", "generic_common:bird"
 
     # Large predators / cats.
-    if family == "ursidae" or " bear" in f" {common}" or common.endswith("bear"):
-        return "bear", "family_or_common:bear"
+    # Keep bear word matching token-based to avoid substring false positives:
+    # "bearded pig" must not map to bear.
+    if family == "ursidae" or _common_has_word(common, "bear"):
+        return "bear", "pragmatic_bear_group"
 
     if "bobcat" in common:
         return "bobcat", "common_name:bobcat"
@@ -327,6 +366,7 @@ def explain_venaris_species_candidates(
         )
 
     return candidates
+
 
 def best_venaris_species_from_speciesnet_classifications(
     classes: list[Any],
@@ -398,15 +438,24 @@ if __name__ == "__main__":
         "f1856211-cfb7-4a5b-9158-c0f72fd09ee6;;;;;;blank",
         "eb3829b0-772e-4088-ae90-f11b9fe38284;mammalia;artiodactyla;cervidae;cervus;elaphus;red deer",
         "5a565886-156e-4b19-a017-6a5bbae4df0f;mammalia;lagomorpha;leporidae;oryctolagus;cuniculus;european rabbit",
+        "dummy;mammalia;lagomorpha;leporidae;sylvilagus;floridanus;eastern cottontail",
         "d106b2ea-7474-4da0-bb65-3345d07fdc1f;mammalia;carnivora;mustelidae;martes;martes;pine marten",
         "ac0e8ba7-7261-4d17-8645-11ed3d02165a;mammalia;carnivora;canidae;vulpes;vulpes;red fox",
+        "dummy;mammalia;artiodactyla;suidae;sus;barbatus;bearded pig",
+        "dummy;mammalia;artiodactyla;cervidae;cervus;canadensis;elk",
+        "dummy;mammalia;carnivora;ursidae;ursus;arctos;brown bear",
         "b1352069-a39c-4a84-a949-60044271c0c1;aves;;;;;bird",
         "9ba3565d-9934-4e74-8ef4-d110ad587014;aves;galliformes;phasianidae;phasianus;colchicus;ring-necked pheasant",
+        "dummy;aves;galliformes;phasianidae;pucrasia;macrolopha;koklass pheasant",
         "427cd520-9264-420e-b1d1-6c9e6495b461;aves;anseriformes;anatidae;branta;canadensis;canada goose",
         "dummy;aves;anseriformes;anatidae;alopochen;aegyptiaca;egyptian goose",
         "dummy;aves;anseriformes;anatidae;anser;anser;greylag goose",
         "dummy;aves;anseriformes;anatidae;anas;platyrhynchos;mallard",
         "dummy;aves;charadriiformes;scolopacidae;scolopax;rusticola;eurasian woodcock",
+        "dummy;aves;passeriformes;corvidae;corvus;corax;common raven",
+        "dummy;aves;passeriformes;corvidae;corvus;;corvus species",
+        "dummy;aves;passeriformes;corvidae;pica;hudsonia;black-billed magpie",
+        "dummy;aves;passeriformes;corvidae;;;corvidae family",
     ]
 
     print("Example mappings:")
