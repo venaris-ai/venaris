@@ -1,3 +1,4 @@
+// infrastructure/hetzner-worker/detection-worker/detection-worker.mjs #10
 import { createClient } from "@supabase/supabase-js";
 import exifrDefault, * as exifrNS from "exifr";
 import fs from "fs";
@@ -67,6 +68,15 @@ const SPECIES_RUNNER = process.env.SPECIES_RUNNER;
 const SPECIES_SIM_THRESHOLD = process.env.SPECIES_SIM_THRESHOLD;
 const SPECIES_BBOX_PAD = process.env.SPECIES_BBOX_PAD;
 const SPECIES_SPECIES_SOFTMAX = process.env.SPECIES_SPECIES_SOFTMAX;
+const SPECIES_BLANK_GUARD_MD_MAX = Number(
+  process.env.SPECIES_BLANK_GUARD_MD_MAX ?? "0.40"
+);
+const SPECIES_BLANK_GUARD_BLANK_MIN = Number(
+  process.env.SPECIES_BLANK_GUARD_BLANK_MIN ?? "0.90"
+);
+const SPECIES_BLANK_GUARD_SPECIES_MAX = Number(
+  process.env.SPECIES_BLANK_GUARD_SPECIES_MAX ?? "0.01"
+);
 
 const SPECIES_ENABLED =
   Boolean(SPECIES_PYTHON) &&
@@ -601,6 +611,36 @@ function summarizeDetections(dets) {
   return { counts, bestAnimal, bestHuman, bestVehicle };
 }
 
+function isBlankDominantLowMdGuard({ mdScore, speciesResult }) {
+  const selectedSpecies = speciesResult?.species || null;
+  const selectedSpeciesScore = Number(speciesResult?.score ?? 0);
+  const selectedRawCommonName = String(
+    speciesResult?.raw_common_name || ""
+  ).toLowerCase();
+
+  const topK = Array.isArray(speciesResult?.top_k) ? speciesResult.top_k : [];
+  const rank1 =
+    topK.find((item) => Number(item?.rank) === 1) || topK[0] || null;
+
+  const rank1CommonName = String(rank1?.raw_common_name || "").toLowerCase();
+  const rank1Score = Number(rank1?.score ?? 0);
+
+  const isMiniConcreteSpecies =
+    selectedSpecies &&
+    selectedSpecies !== "other" &&
+    selectedSpeciesScore < SPECIES_BLANK_GUARD_SPECIES_MAX;
+
+  const isBlankOther =
+    selectedSpecies === "other" && selectedRawCommonName === "blank";
+
+  return (
+    Number(mdScore || 0) < SPECIES_BLANK_GUARD_MD_MAX &&
+    rank1CommonName === "blank" &&
+    rank1Score >= SPECIES_BLANK_GUARD_BLANK_MIN &&
+    (isMiniConcreteSpecies || isBlankOther)
+  );
+}
+
 function computeEmptyFromBestAnimal(bestAnimal) {
   const empty = bestAnimal < EMPTY_THRESHOLD;
   return {
@@ -809,6 +849,10 @@ async function processAsset(assetFromBatch) {
   // 3) Species classification (only animals) -> update those inserted rows (Option A)
   let speciesUpdated = 0;
   let speciesFailures = 0;
+  let speciesCompleted = false;
+  let wildlifeDetectionsSuppressed = 0;
+  let validWildlifeDetectionsAfterSpecies = 0;
+
 
   if (SPECIES_ENABLED && inserted.length && hasWildlifeDetection) {
     // map animal detections in insertion order by md_idx
@@ -834,6 +878,7 @@ async function processAsset(assetFromBatch) {
         // results: [{i, species, score, sim, bbox, ...}]
         const results = Array.isArray(species?.results) ? species.results : [];
         const modelName = species?.payload?.model || null;
+        speciesCompleted = true;
 
         // update per bbox-index i
         for (const r of results) {
@@ -848,33 +893,62 @@ async function processAsset(assetFromBatch) {
           // only write taxonomy enum values; runner already outputs your enum values
           if (!sp) continue;
 
-          const mergedMeta = {
-            ...(target.meta || {}),
-            species: {
-              model: modelName,
-              sim_threshold: species?.payload?.sim_threshold ?? null,
-              bbox_pad: species?.payload?.bbox_pad ?? null,
-              prompt_mode: species?.payload?.prompt_mode ?? null,
-              softmax: species?.payload?.prompt_mode === "softmax" ? 1 : 0,
-              sim: Number.isFinite(spSim) ? spSim : null,
-              score: Number.isFinite(spScore) ? spScore : null,
-              raw_label: r?.raw_label ?? null,
-              raw_common_name: r?.raw_common_name ?? null,
-              raw_taxon_id: r?.raw_taxon_id ?? null,
-              mapping_reason: r?.mapping_reason ?? null,
-              top_k: Array.isArray(r?.top_k) ? r.top_k : [],
-            },
+          const blankGuarded = isBlankDominantLowMdGuard({
+            mdScore: target?.score,
+            speciesResult: r,
+          });
+
+          if (blankGuarded) {
+            wildlifeDetectionsSuppressed++;
+          } else {
+            validWildlifeDetectionsAfterSpecies++;
+          }
+
+          const speciesMeta = {
+            model: modelName,
+            sim_threshold: species?.payload?.sim_threshold ?? null,
+            bbox_pad: species?.payload?.bbox_pad ?? null,
+            prompt_mode: species?.payload?.prompt_mode ?? null,
+            softmax: species?.payload?.prompt_mode === "softmax" ? 1 : 0,
+            sim: Number.isFinite(spSim) ? spSim : null,
+            score: Number.isFinite(spScore) ? spScore : null,
+            raw_label: r?.raw_label ?? null,
+            raw_common_name: r?.raw_common_name ?? null,
+            raw_taxon_id: r?.raw_taxon_id ?? null,
+            mapping_reason: r?.mapping_reason ?? null,
+            top_k: Array.isArray(r?.top_k) ? r.top_k : [],
           };
 
+          if (blankGuarded) {
+            speciesMeta.quality_gate = {
+              decision: "suppress_wildlife_detection",
+              reason: "blank_dominant_low_md_guard",
+              md_score: Number(target?.score || 0),
+              blank_score:
+                Array.isArray(r?.top_k) && r.top_k.length
+                  ? Number(
+                      (
+                        r.top_k.find((item) => Number(item?.rank) === 1) ||
+                        r.top_k[0]
+                      )?.score ?? 0
+                    )
+                  : null,
+              species_score: Number.isFinite(spScore) ? spScore : null,
+            };
+          }
 
-const { error: upErr } = await supabase
-  .from("detections")
-  .update({
-    species: sp,
-    meta: mergedMeta,
-  })
-  .eq("id", target.id);
+          const mergedMeta = {
+            ...(target.meta || {}),
+            species: speciesMeta,
+          };
 
+          const { error: upErr } = await supabase
+            .from("detections")
+            .update({
+              species: blankGuarded ? null : sp,
+              meta: mergedMeta,
+            })
+            .eq("id", target.id);
 
           if (upErr) {
             speciesFailures++;
@@ -895,9 +969,20 @@ const { error: upErr } = await supabase
   } catch {}
 
 // 4) Empty/relevance patch (system decision)
-patch.empty = emptyInfo.empty;
-patch.empty_confidence = emptyInfo.empty_confidence;
-patch.relevant = hasWildlifeDetection;
+const blankGuardSuppressedAllWildlife =
+  SPECIES_ENABLED &&
+  speciesCompleted &&
+  wildlifeDetectionsSuppressed > 0 &&
+  validWildlifeDetectionsAfterSpecies === 0;
+
+const hasFinalWildlifeDetection =
+  hasWildlifeDetection && !blankGuardSuppressedAllWildlife;
+
+patch.empty = blankGuardSuppressedAllWildlife ? true : emptyInfo.empty;
+patch.empty_confidence = blankGuardSuppressedAllWildlife
+  ? 1
+  : emptyInfo.empty_confidence;
+patch.relevant = hasFinalWildlifeDetection;
 
 let securityRowsInserted = 0;
 
@@ -933,7 +1018,7 @@ await markProcessed(core.id, patch);
   // 5) event layer
   // Only wildlife assets are event-eligible.
   // Security and empty/noisy assets must not create or extend events.
-  if (hasWildlifeDetection) {
+  if (hasFinalWildlifeDetection) {
     await supabase.rpc("upsert_event_for_asset", {
       p_asset_id: core.id,
       p_window_minutes: 10,
@@ -961,6 +1046,9 @@ await markProcessed(core.id, patch);
     species_enabled: SPECIES_ENABLED,
     species_updated: speciesUpdated,
     species_failures: speciesFailures,
+
+    wildlife_suppressed: wildlifeDetectionsSuppressed,
+    final_wildlife_detection: hasFinalWildlifeDetection,
   };
 }
 
