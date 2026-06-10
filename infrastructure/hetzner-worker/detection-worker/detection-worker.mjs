@@ -1,4 +1,4 @@
-// infrastructure/hetzner-worker/detection-worker/detection-worker.mjs #11
+// infrastructure/hetzner-worker/detection-worker/detection-worker.mjs #12
 import { createClient } from "@supabase/supabase-js";
 import exifrDefault, * as exifrNS from "exifr";
 import fs from "fs";
@@ -868,14 +868,21 @@ async function processAsset(assetFromBatch) {
           ).toLowerCase();
           const rank1Score = Number(rank1?.score ?? 0);
 
-          const blankGuarded =
-            sp !== "other" &&
-            Number.isFinite(spScore) &&
-            spScore < SPECIES_BLANK_GUARD_SPECIES_MAX &&
+          const blankDominant =
             rank1CommonName === "blank" &&
             rank1Score >= SPECIES_BLANK_GUARD_BLANK_MIN;
 
-          if (blankGuarded) {
+          const blankGuarded =
+            blankDominant &&
+            sp !== "other" &&
+            Number.isFinite(spScore) &&
+            spScore < SPECIES_BLANK_GUARD_SPECIES_MAX;
+
+          const blankOtherSuppressed =
+            blankDominant &&
+            sp === "other";
+
+          if (blankGuarded || blankOtherSuppressed) {
             wildlifeDetectionsSuppressed++;
           } else {
             validWildlifeDetectionsAfterSpecies++;
@@ -896,10 +903,12 @@ async function processAsset(assetFromBatch) {
             top_k: topK,
           };
 
-          if (blankGuarded) {
+          if (blankGuarded || blankOtherSuppressed) {
             speciesMeta.quality_gate = {
               decision: "suppress_wildlife_detection",
-              reason: "blank_dominant_speciesnet_guard",
+              reason: blankOtherSuppressed
+                ? "blank_dominant_other_guard"
+                : "blank_dominant_speciesnet_guard",
               blank_score: rank1Score,
               species_score: Number.isFinite(spScore) ? spScore : null,
             };
@@ -913,7 +922,7 @@ async function processAsset(assetFromBatch) {
           const { error: upErr } = await supabase
             .from("detections")
             .update({
-              species: blankGuarded ? null : sp,
+              species: blankGuarded || blankOtherSuppressed ? null : sp,
               meta: mergedMeta,
             })
             .eq("id", target.id);

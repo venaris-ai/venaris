@@ -1,4 +1,4 @@
-# infrastructure/hetzner-worker/detection-worker/species/speciesnet_venaris_map.py #3
+# infrastructure/hetzner-worker/detection-worker/species/speciesnet_venaris_map.py #5
 
 from __future__ import annotations
 
@@ -89,7 +89,12 @@ EXACT_TAXON_TO_VENARIS = {
     ("scolopax", "rusticola"): "woodcock",
 
     # Large predators / cats.
+    # Product decision: Venaris shows the whole Lynx group as "Luchs".
+    # Keep the internal key "bobcat" for now to avoid a DB/species-key migration.
     ("lynx", "rufus"): "bobcat",
+    ("lynx", "lynx"): "bobcat",
+    ("lynx", "canadensis"): "bobcat",
+    ("lynx", "pardinus"): "bobcat",
 }
 
 
@@ -154,6 +159,34 @@ def _common_has_word(common: str, word: str) -> bool:
     return word in common.replace("-", " ").split()
 
 
+def _is_domestic_dog_label(label: SpeciesNetLabel) -> bool:
+    common = label.common_name
+    genus = label.genus
+    species = label.species
+
+    return (
+        common in {"dog", "domestic dog", "feral dog"}
+        or "domestic dog" in common
+        or "feral dog" in common
+        or common == "canis lupus familiaris"
+        or (genus == "canis" and species in {"familiaris", "lupus familiaris"})
+    )
+
+
+def _is_wild_wolf_label(label: SpeciesNetLabel) -> bool:
+    common = label.common_name
+    genus = label.genus
+    species = label.species
+
+    return (
+        common in {"wolf", "grey wolf", "gray wolf", "eurasian wolf"}
+        or "grey wolf" in common
+        or "gray wolf" in common
+        or "eurasian wolf" in common
+        or (genus == "canis" and species in {"lupus", "lupus lupus"})
+    )
+
+
 def map_speciesnet_label_to_venaris(raw_label: Any) -> tuple[str, str]:
     label = parse_speciesnet_label(raw_label)
 
@@ -166,6 +199,12 @@ def map_speciesnet_label_to_venaris(raw_label: Any) -> tuple[str, str]:
     # Explicit non-animal / unknown SpeciesNet categories.
     if common in {"blank", "unknown", "vehicle", "human"}:
         return "other", f"non_target_common:{common}"
+
+    # Domestic dogs are a non-target category in Venaris. Keep this before
+    # exact taxonomy so canis familiaris / canis lupus familiaris can never
+    # become a Venaris wolf by label parsing or future taxonomy additions.
+    if _is_domestic_dog_label(label):
+        return "other", "non_target_common:domestic_dog"
 
     exact_taxon = EXACT_TAXON_TO_VENARIS.get((genus, species))
     if exact_taxon:
@@ -324,8 +363,21 @@ def map_speciesnet_label_to_venaris(raw_label: Any) -> tuple[str, str]:
     if family == "ursidae" or _common_has_word(common, "bear"):
         return "bear", "pragmatic_bear_group"
 
-    if "bobcat" in common:
-        return "bobcat", "common_name:bobcat"
+    # Product decision: Venaris groups clear Lynx species as "Luchs".
+    # Internal species key stays "bobcat" for compatibility. The UI label should
+    # be changed separately from "Rotluchs" to "Luchs".
+    if genus == "lynx" and family == "felidae":
+        return "bobcat", "pragmatic_lynx_group"
+
+    if common in {
+        "bobcat",
+        "eurasian lynx",
+        "canada lynx",
+        "canadian lynx",
+        "iberian lynx",
+        "lynx species",
+    }:
+        return "bobcat", "pragmatic_lynx_group"
 
     return "other", "no_venaris_target_mapping"
 
@@ -382,15 +434,43 @@ def best_venaris_species_from_speciesnet_classifications(
             reason="empty_classifications",
         )
 
-    # Selection policy: keep Venaris product behavior unchanged.
-    # We accept the first SpeciesNet candidate, in SpeciesNet rank order,
-    # that maps to a concrete Venaris species. Low scores remain allowed
-    # and are surfaced to the user as low probability.
+    # Selection policy: keep Venaris product behavior unchanged except for one
+    # targeted trust guard: a dominant domestic dog must not be promoted to wolf
+    # or another target just because a low-score target appears later in Top-K.
     candidates = explain_venaris_species_candidates(
         classes=classes,
         scores=scores,
         limit=None,
     )
+
+    best_domestic_dog: Optional[dict[str, Any]] = None
+    best_wild_wolf: Optional[dict[str, Any]] = None
+
+    for candidate in candidates:
+        label = parse_speciesnet_label(candidate["raw_label"])
+
+        if _is_domestic_dog_label(label):
+            if best_domestic_dog is None or float(candidate["score"]) > float(
+                best_domestic_dog["score"]
+            ):
+                best_domestic_dog = candidate
+
+        if _is_wild_wolf_label(label):
+            if best_wild_wolf is None or float(candidate["score"]) > float(
+                best_wild_wolf["score"]
+            ):
+                best_wild_wolf = candidate
+
+    if best_domestic_dog is not None and best_wild_wolf is not None:
+        if float(best_domestic_dog["score"]) > float(best_wild_wolf["score"]):
+            return VenarisSpeciesPrediction(
+                species="other",
+                score=float(best_domestic_dog["score"]),
+                raw_label=str(best_domestic_dog["raw_label"]),
+                raw_common_name=str(best_domestic_dog["raw_common_name"]),
+                raw_taxon_id=str(best_domestic_dog["raw_taxon_id"]),
+                reason="domestic_dog_beats_wolf_score",
+            )
 
     best_other: Optional[dict[str, Any]] = None
 
@@ -429,64 +509,3 @@ def best_venaris_species_from_speciesnet_classifications(
         raw_taxon_id="",
         reason="no_predictions",
     )
-
-
-if __name__ == "__main__":
-    examples = [
-        "ce9a5481-b3f7-4e42-8b8b-382f601fded0;mammalia;lagomorpha;leporidae;lepus;europaeus;european hare",
-        "317171d7-d306-4e71-9a4a-33e62012076b;mammalia;artiodactyla;cervidae;capreolus;capreolus;european roe deer",
-        "f1856211-cfb7-4a5b-9158-c0f72fd09ee6;;;;;;blank",
-        "eb3829b0-772e-4088-ae90-f11b9fe38284;mammalia;artiodactyla;cervidae;cervus;elaphus;red deer",
-        "5a565886-156e-4b19-a017-6a5bbae4df0f;mammalia;lagomorpha;leporidae;oryctolagus;cuniculus;european rabbit",
-        "dummy;mammalia;lagomorpha;leporidae;sylvilagus;floridanus;eastern cottontail",
-        "d106b2ea-7474-4da0-bb65-3345d07fdc1f;mammalia;carnivora;mustelidae;martes;martes;pine marten",
-        "ac0e8ba7-7261-4d17-8645-11ed3d02165a;mammalia;carnivora;canidae;vulpes;vulpes;red fox",
-        "dummy;mammalia;artiodactyla;suidae;sus;barbatus;bearded pig",
-        "dummy;mammalia;artiodactyla;cervidae;cervus;canadensis;elk",
-        "dummy;mammalia;carnivora;ursidae;ursus;arctos;brown bear",
-        "b1352069-a39c-4a84-a949-60044271c0c1;aves;;;;;bird",
-        "9ba3565d-9934-4e74-8ef4-d110ad587014;aves;galliformes;phasianidae;phasianus;colchicus;ring-necked pheasant",
-        "dummy;aves;galliformes;phasianidae;pucrasia;macrolopha;koklass pheasant",
-        "427cd520-9264-420e-b1d1-6c9e6495b461;aves;anseriformes;anatidae;branta;canadensis;canada goose",
-        "dummy;aves;anseriformes;anatidae;alopochen;aegyptiaca;egyptian goose",
-        "dummy;aves;anseriformes;anatidae;anser;anser;greylag goose",
-        "dummy;aves;anseriformes;anatidae;anas;platyrhynchos;mallard",
-        "dummy;aves;charadriiformes;scolopacidae;scolopax;rusticola;eurasian woodcock",
-        "dummy;aves;passeriformes;corvidae;corvus;corax;common raven",
-        "dummy;aves;passeriformes;corvidae;corvus;;corvus species",
-        "dummy;aves;passeriformes;corvidae;pica;hudsonia;black-billed magpie",
-        "dummy;aves;passeriformes;corvidae;;;corvidae family",
-    ]
-
-    print("Example mappings:")
-    for raw in examples:
-        mapped, reason = map_speciesnet_label_to_venaris(raw)
-        print(f"{mapped:16} {reason:42} {parse_speciesnet_label(raw).common_name}")
-
-    invalid_exact_targets = sorted(
-        {
-            mapped_species
-            for mapped_species in EXACT_TAXON_TO_VENARIS.values()
-            if mapped_species not in VENARIS_SPECIES
-        }
-    )
-
-    if invalid_exact_targets:
-        raise SystemExit(
-            "Invalid exact-taxonomy targets: " + ", ".join(invalid_exact_targets)
-        )
-
-    exact_species = set(EXACT_TAXON_TO_VENARIS.values())
-    venaris_without_exact_taxon = sorted(
-        VENARIS_SPECIES - exact_species - {"other"}
-    )
-
-    print()
-    print(f"VENARIS_SPECIES count: {len(VENARIS_SPECIES)}")
-    print(f"EXACT_TAXON_TO_VENARIS entries: {len(EXACT_TAXON_TO_VENARIS)}")
-    print(f"Species covered by exact taxonomy: {len(exact_species)}")
-
-    print()
-    print("Venaris species without exact taxonomy mapping:")
-    for species in venaris_without_exact_taxon:
-        print(f"- {species}")
