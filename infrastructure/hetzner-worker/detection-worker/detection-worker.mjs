@@ -1,4 +1,4 @@
-// infrastructure/hetzner-worker/detection-worker/detection-worker.mjs #10
+// infrastructure/hetzner-worker/detection-worker/detection-worker.mjs #11
 import { createClient } from "@supabase/supabase-js";
 import exifrDefault, * as exifrNS from "exifr";
 import fs from "fs";
@@ -68,9 +68,6 @@ const SPECIES_RUNNER = process.env.SPECIES_RUNNER;
 const SPECIES_SIM_THRESHOLD = process.env.SPECIES_SIM_THRESHOLD;
 const SPECIES_BBOX_PAD = process.env.SPECIES_BBOX_PAD;
 const SPECIES_SPECIES_SOFTMAX = process.env.SPECIES_SPECIES_SOFTMAX;
-const SPECIES_BLANK_GUARD_MD_MAX = Number(
-  process.env.SPECIES_BLANK_GUARD_MD_MAX ?? "0.40"
-);
 const SPECIES_BLANK_GUARD_BLANK_MIN = Number(
   process.env.SPECIES_BLANK_GUARD_BLANK_MIN ?? "0.90"
 );
@@ -611,36 +608,6 @@ function summarizeDetections(dets) {
   return { counts, bestAnimal, bestHuman, bestVehicle };
 }
 
-function isBlankDominantLowMdGuard({ mdScore, speciesResult }) {
-  const selectedSpecies = speciesResult?.species || null;
-  const selectedSpeciesScore = Number(speciesResult?.score ?? 0);
-  const selectedRawCommonName = String(
-    speciesResult?.raw_common_name || ""
-  ).toLowerCase();
-
-  const topK = Array.isArray(speciesResult?.top_k) ? speciesResult.top_k : [];
-  const rank1 =
-    topK.find((item) => Number(item?.rank) === 1) || topK[0] || null;
-
-  const rank1CommonName = String(rank1?.raw_common_name || "").toLowerCase();
-  const rank1Score = Number(rank1?.score ?? 0);
-
-  const isMiniConcreteSpecies =
-    selectedSpecies &&
-    selectedSpecies !== "other" &&
-    selectedSpeciesScore < SPECIES_BLANK_GUARD_SPECIES_MAX;
-
-  const isBlankOther =
-    selectedSpecies === "other" && selectedRawCommonName === "blank";
-
-  return (
-    Number(mdScore || 0) < SPECIES_BLANK_GUARD_MD_MAX &&
-    rank1CommonName === "blank" &&
-    rank1Score >= SPECIES_BLANK_GUARD_BLANK_MIN &&
-    (isMiniConcreteSpecies || isBlankOther)
-  );
-}
-
 function computeEmptyFromBestAnimal(bestAnimal) {
   const empty = bestAnimal < EMPTY_THRESHOLD;
   return {
@@ -893,10 +860,20 @@ async function processAsset(assetFromBatch) {
           // only write taxonomy enum values; runner already outputs your enum values
           if (!sp) continue;
 
-          const blankGuarded = isBlankDominantLowMdGuard({
-            mdScore: target?.score,
-            speciesResult: r,
-          });
+          const topK = Array.isArray(r?.top_k) ? r.top_k : [];
+          const rank1 =
+            topK.find((item) => Number(item?.rank) === 1) || topK[0] || null;
+          const rank1CommonName = String(
+            rank1?.raw_common_name || ""
+          ).toLowerCase();
+          const rank1Score = Number(rank1?.score ?? 0);
+
+          const blankGuarded =
+            sp !== "other" &&
+            Number.isFinite(spScore) &&
+            spScore < SPECIES_BLANK_GUARD_SPECIES_MAX &&
+            rank1CommonName === "blank" &&
+            rank1Score >= SPECIES_BLANK_GUARD_BLANK_MIN;
 
           if (blankGuarded) {
             wildlifeDetectionsSuppressed++;
@@ -916,23 +893,14 @@ async function processAsset(assetFromBatch) {
             raw_common_name: r?.raw_common_name ?? null,
             raw_taxon_id: r?.raw_taxon_id ?? null,
             mapping_reason: r?.mapping_reason ?? null,
-            top_k: Array.isArray(r?.top_k) ? r.top_k : [],
+            top_k: topK,
           };
 
           if (blankGuarded) {
             speciesMeta.quality_gate = {
               decision: "suppress_wildlife_detection",
-              reason: "blank_dominant_low_md_guard",
-              md_score: Number(target?.score || 0),
-              blank_score:
-                Array.isArray(r?.top_k) && r.top_k.length
-                  ? Number(
-                      (
-                        r.top_k.find((item) => Number(item?.rank) === 1) ||
-                        r.top_k[0]
-                      )?.score ?? 0
-                    )
-                  : null,
+              reason: "blank_dominant_speciesnet_guard",
+              blank_score: rank1Score,
               species_score: Number.isFinite(spScore) ? spScore : null,
             };
           }
