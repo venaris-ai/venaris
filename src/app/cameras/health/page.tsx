@@ -173,7 +173,7 @@ function t(language: AppLanguage) {
       offlineText: "Cameras without signal beyond the offline window.",
       unknownText: "Cameras without a usable last signal.",
       cameraCol: "Camera",
-      groundCol: "Ground",
+      groundCol: "Location",
       methodCol: "Method",
       healthCol: "Health",
       statusCol: "Status",
@@ -242,7 +242,7 @@ function t(language: AppLanguage) {
     unknownText:
       "Kameras ohne verwertbares letztes Lebenszeichen.",
     cameraCol: "Kamera",
-    groundCol: "Revier",
+    groundCol: "Standort",
     methodCol: "Methode",
     healthCol: "Leben",
     statusCol: "Status",

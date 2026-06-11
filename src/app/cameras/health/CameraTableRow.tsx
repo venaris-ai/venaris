@@ -281,7 +281,7 @@ export default function CameraTableRow({
         </td>
 
         <td className="px-6 py-4 text-white/68 whitespace-nowrap">
-          {row.revier_name}
+          {row.location_name ?? "—"}
         </td>
 
         <td className="px-6 py-4 text-white/68 whitespace-nowrap">
