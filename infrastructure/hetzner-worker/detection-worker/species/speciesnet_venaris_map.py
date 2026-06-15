@@ -1,10 +1,12 @@
-# infrastructure/hetzner-worker/detection-worker/species/speciesnet_venaris_map.py #5
+# infrastructure/hetzner-worker/detection-worker/species/speciesnet_venaris_map.py #6
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Any, Optional
 
+DOMINANT_OTHER_MIN_SCORE = 0.90
+LOW_TARGET_MAX_SCORE = 0.02
 
 VENARIS_SPECIES = {
     "badger",
@@ -434,9 +436,15 @@ def best_venaris_species_from_speciesnet_classifications(
             reason="empty_classifications",
         )
 
-    # Selection policy: keep Venaris product behavior unchanged except for one
-    # targeted trust guard: a dominant domestic dog must not be promoted to wolf
-    # or another target just because a low-score target appears later in Top-K.
+    # Selection policy: keep Venaris product behavior conservative.
+    #
+    # 1) Targeted dog/wolf trust guard:
+    #    a dominant domestic dog must not be promoted to wolf just because a
+    #    lower-score wolf candidate appears later in Top-K.
+    #
+    # 2) Dominant non-target trust guard:
+    #    a very confident non-target/other prediction must not be overridden by
+    #    an extremely low-score Venaris target candidate later in Top-K.
     candidates = explain_venaris_species_candidates(
         classes=classes,
         scores=scores,
@@ -473,6 +481,38 @@ def best_venaris_species_from_speciesnet_classifications(
             )
 
     best_other: Optional[dict[str, Any]] = None
+    best_target: Optional[dict[str, Any]] = None
+
+    for candidate in candidates:
+        mapped_species = str(candidate["mapped_species"])
+
+        if mapped_species == "other":
+            if best_other is None or float(candidate["score"]) > float(
+                best_other["score"]
+            ):
+                best_other = candidate
+            continue
+
+        _assert_venaris_species(mapped_species)
+
+        if best_target is None or float(candidate["score"]) > float(
+            best_target["score"]
+        ):
+            best_target = candidate
+
+    if best_other is not None and best_target is not None:
+        if (
+            float(best_other["score"]) >= DOMINANT_OTHER_MIN_SCORE
+            and float(best_target["score"]) < LOW_TARGET_MAX_SCORE
+        ):
+            return VenarisSpeciesPrediction(
+                species="other",
+                score=float(best_other["score"]),
+                raw_label=str(best_other["raw_label"]),
+                raw_common_name=str(best_other["raw_common_name"]),
+                raw_taxon_id=str(best_other["raw_taxon_id"]),
+                reason="dominant_other_beats_low_target",
+            )
 
     for candidate in candidates:
         mapped_species = str(candidate["mapped_species"])
@@ -487,9 +527,6 @@ def best_venaris_species_from_speciesnet_classifications(
                 raw_taxon_id=str(candidate["raw_taxon_id"]),
                 reason=str(candidate["mapping_reason"]),
             )
-
-        if best_other is None:
-            best_other = candidate
 
     if best_other is not None:
         return VenarisSpeciesPrediction(
