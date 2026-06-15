@@ -504,6 +504,7 @@ def best_venaris_species_from_speciesnet_classifications(
         if (
             float(best_other["score"]) >= DOMINANT_OTHER_MIN_SCORE
             and float(best_target["score"]) < LOW_TARGET_MAX_SCORE
+            and int(best_target["rank"]) >= 4
         ):
             return VenarisSpeciesPrediction(
                 species="other",
