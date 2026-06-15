@@ -9,8 +9,6 @@ type CameraRow = {
   id: string;
   name: string;
   locationName: string | null;
-  technicalName: string;
-  manualLabel: string | null;
 };
 
 type MessageTone = "success" | "error" | "info";
@@ -30,9 +28,9 @@ function t(language: AppLanguage) {
       intro:
         "Select files or a ZIP archive — or simply drag and drop them here.",
       targetCamera: "Target camera",
-      noManualCameras: "(no manual cameras available)",
+      noCameras: "(no cameras available)",
       targetCameraHint:
-        "The import is assigned to a camera provisioned as “manual”.",
+        "The import is assigned to the selected camera",
       addFiles: "Add files",
       addFilesHint: "Supported: JPG/PNG/WEBP or ZIP with images.",
       chooseFiles: "Choose images or ZIP…",
@@ -45,7 +43,7 @@ function t(language: AppLanguage) {
       running: "Import running…",
       startImport: "Start import",
       demoMode: "Demo mode",
-      selectCamera: "Please select a manual camera.",
+      selectCamera: "Please select a camera.",
       selectFiles: "Please select files or a ZIP archive.",
       noticeTitle: "Notice",
       errorTitle: "Import could not be completed",
@@ -63,9 +61,9 @@ importTooLarge:
     intro:
       "Dateien oder ZIP auswählen – oder einfach per Drag & Drop hier hineinziehen.",
     targetCamera: "Ziel-Kamera",
-    noManualCameras: "(keine manuellen Kameras verfügbar)",
+    noCameras: "(keine Kameras verfügbar)",
     targetCameraHint:
-      "Der Import wird einer als „manual“ provisionierten Kamera zugeordnet.",
+      "Der Import wird der ausgewählten Kamera zugeordnet.",
     addFiles: "Dateien hinzufügen",
     addFilesHint: "Unterstützt: JPG/PNG/WEBP oder ZIP mit Bildern.",
     chooseFiles: "Bilder oder ZIP auswählen…",
@@ -78,7 +76,7 @@ importTooLarge:
     running: "Import läuft…",
     startImport: "Import starten",
     demoMode: "Demo-Modus",
-    selectCamera: "Bitte eine manuelle Kamera auswählen.",
+    selectCamera: "Bitte eine Kamera auswählen.",
     selectFiles: "Bitte Dateien oder ein ZIP auswählen.",
     noticeTitle: "Hinweis",
     errorTitle: "Import konnte nicht abgeschlossen werden",
@@ -170,26 +168,26 @@ export default function CamerasImportPageClient({
       params.set("revier", revierParam);
     }
 
-    const url = params.toString()
-      ? `/api/manual-cameras?${params.toString()}`
-      : "/api/manual-cameras";
+  const url = params.toString()
+    ? `/api/cameras?${params.toString()}`
+    : "/api/cameras";
 
-    const res = await fetch(url, { cache: "no-store" });
-    const json = await parseApiResponse(res);
+  const res = await fetch(url, { cache: "no-store" });
+  const json = await parseApiResponse(res);
 
-    if (!res.ok) {
-      setMsgTone("error");
-      setMsg(
-        normalizeApiErrorMessage(
-          json.error || json.rawText || `HTTP ${res.status}`,
-          language
-        )
-      );
-      return;
-    }
+  if (!res.ok) {
+    setMsgTone("error");
+    setMsg(
+      normalizeApiErrorMessage(
+        json.error || json.rawText || `HTTP ${res.status}`,
+        language
+      )
+    );
+    return;
+  }
 
-    const list = (json.items ?? []) as CameraRow[];
-    setCameras(list);
+const list = (json.cameras ?? []) as CameraRow[];
+setCameras(list);
 
     setCameraId((current) => {
       if (list.length === 0) return "";
@@ -362,7 +360,7 @@ if (importTooLarge) {
           >
             {cameras.length === 0 ? (
               <option value="" className="bg-[#102018] text-white">
-                {text.noManualCameras}
+                {text.noCameras}
               </option>
             ) : null}
 
@@ -373,12 +371,8 @@ if (importTooLarge) {
                 className="bg-[#102018] text-white"
               >
 
-
-{camera.name}
-{camera.locationName ? ` · ${camera.locationName}` : ""}
-{camera.manualLabel || camera.technicalName
-  ? ` · ${camera.manualLabel || camera.technicalName}`
-  : ""}
+            {camera.name}
+            {camera.locationName ? ` · ${camera.locationName}` : ""}
 
               </option>
             ))}
