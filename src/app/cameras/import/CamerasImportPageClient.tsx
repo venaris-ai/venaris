@@ -1,8 +1,14 @@
-// src/app/cameras/import/CamerasImportPageClient.tsx #2
+// src/app/cameras/import/CamerasImportPageClient.tsx #3
 "use client";
 
 import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import {
+  MANUAL_IMPORT_ACCEPT,
+  MANUAL_IMPORT_MAX_BYTES,
+  MANUAL_IMPORT_MAX_LABEL,
+  isManualImportAllowedFileLike,
+} from "@/lib/manualImportLimits";
 import { type AppLanguage } from "@/lib/i18n";
 
 type CameraRow = {
@@ -12,8 +18,6 @@ type CameraRow = {
 };
 
 type MessageTone = "success" | "error" | "info";
-
-const MAX_IMPORT_BYTES = 100 * 1024 * 1024;
 
 function formatMb(bytes: number) {
   return `${Math.round((bytes / 1024 / 1024) * 10) / 10} MB`;
@@ -25,17 +29,14 @@ function t(language: AppLanguage) {
       demoReadOnly: "Demo mode: changes are disabled.",
       importEyebrow: "Import",
       importTitle: "Import",
-      intro:
-        "Select files or a ZIP archive — or simply drag and drop them here.",
+      intro: "Select image files — or simply drag and drop them here.",
       targetCamera: "Target camera",
       noCameras: "(no cameras available)",
-      targetCameraHint:
-        "The import is assigned to the selected camera",
+      targetCameraHint: "The import is assigned to the selected camera",
       addFiles: "Add files",
-      addFilesHint: "Supported: JPG/PNG/WEBP or ZIP with images.",
-      chooseFiles: "Choose images or ZIP…",
-      dragHint:
-        "Tip: you can also drag files or a ZIP archive directly here.",
+      addFilesHint: "Supported: JPG/PNG/WEBP.",
+      chooseFiles: "Choose images…",
+      dragHint: "Tip: you can also drag image files directly here.",
       selected: "Selected:",
       files: "file(s)",
       noneSelected: "No files selected yet.",
@@ -44,14 +45,18 @@ function t(language: AppLanguage) {
       startImport: "Start import",
       demoMode: "Demo mode",
       selectCamera: "Please select a camera.",
-      selectFiles: "Please select files or a ZIP archive.",
+      selectFiles: "Please select image files.",
       noticeTitle: "Notice",
       errorTitle: "Import could not be completed",
       successTitle: "Import completed",
       successText: "The selected files have been processed successfully.",
-maxImportSize: "Max. 100 MB per import",
-importTooLarge:
-  "The import is larger than 100 MB. Please split the selection into multiple imports.",    };
+      maxImportSize: `Max. ${MANUAL_IMPORT_MAX_LABEL} per import`,
+      importTooLarge: `The import is larger than ${MANUAL_IMPORT_MAX_LABEL}. Please split the selection into multiple imports.`,
+      unsupportedFilesSkipped: (count: number) =>
+        `${count} unsupported file(s) were ignored. Supported formats: JPG, PNG, WEBP.`,
+      uploadPayloadTooLarge:
+        "This import is too large for the current upload route. Please split it into smaller packages for now.",
+    };
   }
 
   return {
@@ -59,16 +64,14 @@ importTooLarge:
     importEyebrow: "Import",
     importTitle: "Import",
     intro:
-      "Dateien oder ZIP auswählen – oder einfach per Drag & Drop hier hineinziehen.",
+      "Bilddateien auswählen – oder einfach per Drag & Drop hier hineinziehen.",
     targetCamera: "Ziel-Kamera",
     noCameras: "(keine Kameras verfügbar)",
-    targetCameraHint:
-      "Der Import wird der ausgewählten Kamera zugeordnet.",
+    targetCameraHint: "Der Import wird der ausgewählten Kamera zugeordnet.",
     addFiles: "Dateien hinzufügen",
-    addFilesHint: "Unterstützt: JPG/PNG/WEBP oder ZIP mit Bildern.",
-    chooseFiles: "Bilder oder ZIP auswählen…",
-    dragHint:
-      "Tipp: Du kannst auch einfach Dateien oder ein ZIP direkt hier hineinziehen.",
+    addFilesHint: "Unterstützt: JPG/PNG/WEBP.",
+    chooseFiles: "Bilder auswählen…",
+    dragHint: "Tipp: Du kannst Bilddateien auch direkt hier hineinziehen.",
     selected: "Ausgewählt:",
     files: "Datei(en)",
     noneSelected: "Noch keine Dateien ausgewählt.",
@@ -77,14 +80,17 @@ importTooLarge:
     startImport: "Import starten",
     demoMode: "Demo-Modus",
     selectCamera: "Bitte eine Kamera auswählen.",
-    selectFiles: "Bitte Dateien oder ein ZIP auswählen.",
+    selectFiles: "Bitte Bilddateien auswählen.",
     noticeTitle: "Hinweis",
     errorTitle: "Import konnte nicht abgeschlossen werden",
     successTitle: "Import abgeschlossen",
     successText: "Die ausgewählten Dateien wurden erfolgreich verarbeitet.",
-maxImportSize: "Max. 100 MB pro Import",
-importTooLarge:
-  "Der Import ist größer als 100 MB. Bitte die Auswahl auf mehrere Importvorgänge aufteilen.",
+    maxImportSize: `Max. ${MANUAL_IMPORT_MAX_LABEL} pro Import`,
+    importTooLarge: `Der Import ist größer als ${MANUAL_IMPORT_MAX_LABEL}. Bitte die Auswahl auf mehrere Importvorgänge aufteilen.`,
+    unsupportedFilesSkipped: (count: number) =>
+      `${count} nicht unterstützte Datei(en) wurden ignoriert. Unterstützte Formate: JPG, PNG, WEBP.`,
+    uploadPayloadTooLarge:
+      "Dieser Import ist für die aktuelle Upload-Route zu groß. Bitte vorübergehend in kleinere Pakete aufteilen.",
   };
 }
 
@@ -93,6 +99,14 @@ function normalizeApiErrorMessage(message: string, language: AppLanguage) {
 
   if (message.includes("Demo mode is read-only")) {
     return text.demoReadOnly;
+  }
+
+  if (
+    message.includes("HTTP 413") ||
+    message.includes("FUNCTION_PAYLOAD_TOO_LARGE") ||
+    message.toLowerCase().includes("payload too large")
+  ) {
+    return text.uploadPayloadTooLarge;
   }
 
   return message;
@@ -136,7 +150,6 @@ function alertTone(tone: MessageTone) {
   };
 }
 
-
 export default function CamerasImportPageClient({
   language,
   isDemo = false,
@@ -159,7 +172,7 @@ export default function CamerasImportPageClient({
 
   const selectedBytes = files.reduce((sum, file) => sum + file.size, 0);
   const selectedMb = formatMb(selectedBytes);
-  const importTooLarge = selectedBytes > MAX_IMPORT_BYTES;
+  const importTooLarge = selectedBytes > MANUAL_IMPORT_MAX_BYTES;
 
   async function loadCameras() {
     const params = new URLSearchParams();
@@ -168,26 +181,26 @@ export default function CamerasImportPageClient({
       params.set("revier", revierParam);
     }
 
-  const url = params.toString()
-    ? `/api/cameras?${params.toString()}`
-    : "/api/cameras";
+    const url = params.toString()
+      ? `/api/cameras?${params.toString()}`
+      : "/api/cameras";
 
-  const res = await fetch(url, { cache: "no-store" });
-  const json = await parseApiResponse(res);
+    const res = await fetch(url, { cache: "no-store" });
+    const json = await parseApiResponse(res);
 
-  if (!res.ok) {
-    setMsgTone("error");
-    setMsg(
-      normalizeApiErrorMessage(
-        json.error || json.rawText || `HTTP ${res.status}`,
-        language
-      )
-    );
-    return;
-  }
+    if (!res.ok) {
+      setMsgTone("error");
+      setMsg(
+        normalizeApiErrorMessage(
+          json.error || json.rawText || `HTTP ${res.status}`,
+          language
+        )
+      );
+      return;
+    }
 
-const list = (json.cameras ?? []) as CameraRow[];
-setCameras(list);
+    const list = (json.cameras ?? []) as CameraRow[];
+    setCameras(list);
 
     setCameraId((current) => {
       if (list.length === 0) return "";
@@ -203,7 +216,17 @@ setCameras(list);
   }, [revierParam, language]);
 
   function addFiles(newFiles: File[]) {
-    setFiles((current) => [...current, ...newFiles]);
+    const supported = newFiles.filter(isManualImportAllowedFileLike);
+    const rejectedCount = newFiles.length - supported.length;
+
+    if (supported.length > 0) {
+      setFiles((current) => [...current, ...supported]);
+    }
+
+    if (rejectedCount > 0) {
+      setMsgTone("error");
+      setMsg(text.unsupportedFilesSkipped(rejectedCount));
+    }
   }
 
   function onPickFiles(e: React.ChangeEvent<HTMLInputElement>) {
@@ -243,11 +266,11 @@ setCameras(list);
       return;
     }
 
-if (importTooLarge) {
-  setMsgTone("error");
-  setMsg(text.importTooLarge);
-  return;
-}
+    if (importTooLarge) {
+      setMsgTone("error");
+      setMsg(text.importTooLarge);
+      return;
+    }
 
     setBusy(true);
 
@@ -279,13 +302,10 @@ if (importTooLarge) {
       setFiles([]);
       setMsgTone("success");
       setMsg(text.successText);
-
-} catch (error: unknown) {
-  setMsgTone("error");
-  setMsg(normalizeApiErrorMessage(getErrorMessage(error), language));
-} finally {
-
-
+    } catch (error: unknown) {
+      setMsgTone("error");
+      setMsg(normalizeApiErrorMessage(getErrorMessage(error), language));
+    } finally {
       setBusy(false);
       setDragOver(false);
     }
@@ -308,7 +328,7 @@ if (importTooLarge) {
   }
 
   const canImport =
-  !!cameraId && files.length > 0 && !busy && !isDemo && !importTooLarge;
+    !!cameraId && files.length > 0 && !busy && !isDemo && !importTooLarge;
   const messageTone = alertTone(msgTone);
   const messageTitle =
     msgTone === "success"
@@ -370,10 +390,8 @@ if (importTooLarge) {
                 value={camera.id}
                 className="bg-[#102018] text-white"
               >
-
-            {camera.name}
-            {camera.locationName ? ` · ${camera.locationName}` : ""}
-
+                {camera.name}
+                {camera.locationName ? ` · ${camera.locationName}` : ""}
               </option>
             ))}
           </select>
@@ -401,7 +419,9 @@ if (importTooLarge) {
         >
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <div className="text-sm font-medium text-white">{text.addFiles}</div>
+              <div className="text-sm font-medium text-white">
+                {text.addFiles}
+              </div>
               <div className="text-xs text-white/45">{text.addFilesHint}</div>
             </div>
 
@@ -427,56 +447,50 @@ if (importTooLarge) {
           <input
             ref={fileInputRef}
             type="file"
-            accept="image/*,.zip"
+            accept={MANUAL_IMPORT_ACCEPT}
             multiple
             className="hidden"
             onChange={onPickFiles}
           />
 
+          <div className="mt-4 text-xs text-white/45">{text.dragHint}</div>
 
-<div className="mt-4 text-xs text-white/45">{text.dragHint}</div>
+          {files.length > 0 ? (
+            <ul className="mt-3 max-h-32 space-y-1 overflow-auto rounded-[14px] border border-white/10 bg-white/5 p-3 text-xs text-white/62">
+              {files.map((file, index) => (
+                <li key={`${file.name}-${file.size}-${index}`} className="truncate">
+                  {file.name}
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </div>
 
-{files.length > 0 ? (
-  <ul className="mt-3 max-h-32 space-y-1 overflow-auto rounded-[14px] border border-white/10 bg-white/5 p-3 text-xs text-white/62">
-    {files.map((file, index) => (
-      <li key={`${file.name}-${file.size}-${index}`} className="truncate">
-        {file.name}
-      </li>
-    ))}
-  </ul>
-) : null}
-</div>
-
-<div className="flex items-center justify-between gap-3">
-
-<div className="min-w-0 flex-1">
-  {busy ? (
-    <div className="space-y-2">
-      <div className="text-sm text-white/72">{text.running}</div>
-<div className="h-1.5 overflow-hidden rounded-full bg-white/10">
-  <div className="h-full w-2/3 animate-[venaris-demo-progress_1.2s_ease-in-out_infinite] rounded-full bg-[#c9952e]" />
-</div>
-    </div>
-  ) : files.length > 0 ? (
-    <div className="space-y-1 text-sm text-white/72">
-      <div>
-        {text.selected}{" "}
-        <span className="font-medium text-white">{files.length}</span>{" "}
-        {text.files} ·{" "}
-        <span className="font-medium text-white">{selectedMb}</span>
-      </div>
-      <div className={importTooLarge ? "text-rose-200" : "text-white/45"}>
-        {text.maxImportSize}
-      </div>
-    </div>
-  ) : (
-    <span className="text-sm text-white/45">{text.noneSelected}</span>
-  )}
-</div>
-
-
-
-
+        <div className="flex items-center justify-between gap-3">
+          <div className="min-w-0 flex-1">
+            {busy ? (
+              <div className="space-y-2">
+                <div className="text-sm text-white/72">{text.running}</div>
+                <div className="h-1.5 overflow-hidden rounded-full bg-white/10">
+                  <div className="h-full w-2/3 animate-[venaris-demo-progress_1.2s_ease-in-out_infinite] rounded-full bg-[#c9952e]" />
+                </div>
+              </div>
+            ) : files.length > 0 ? (
+              <div className="space-y-1 text-sm text-white/72">
+                <div>
+                  {text.selected}{" "}
+                  <span className="font-medium text-white">{files.length}</span>{" "}
+                  {text.files} ·{" "}
+                  <span className="font-medium text-white">{selectedMb}</span>
+                </div>
+                <div className={importTooLarge ? "text-rose-200" : "text-white/45"}>
+                  {text.maxImportSize}
+                </div>
+              </div>
+            ) : (
+              <span className="text-sm text-white/45">{text.noneSelected}</span>
+            )}
+          </div>
 
           <div className="flex items-center gap-2">
             <button
@@ -497,24 +511,20 @@ if (importTooLarge) {
               {text.clearSelection}
             </button>
 
-
-<button
-  type="button"
-  onClick={startImport}
-  disabled={!canImport}
-  className={[
-    "rounded-[10px] px-4 py-2 text-sm transition disabled:cursor-not-allowed",
-    canImport
-      ? "bg-[#c9952e] text-[#102018] hover:bg-[#d6a13a]"
-      : "bg-white/10 text-white/35",
-  ].join(" ")}
-  title={isDemo ? text.demoReadOnly : ""}
->
-  {busy ? text.running : isDemo ? text.demoMode : text.startImport}
-</button>
-
-
-
+            <button
+              type="button"
+              onClick={startImport}
+              disabled={!canImport}
+              className={[
+                "rounded-[10px] px-4 py-2 text-sm transition disabled:cursor-not-allowed",
+                canImport
+                  ? "bg-[#c9952e] text-[#102018] hover:bg-[#d6a13a]"
+                  : "bg-white/10 text-white/35",
+              ].join(" ")}
+              title={isDemo ? text.demoReadOnly : ""}
+            >
+              {busy ? text.running : isDemo ? text.demoMode : text.startImport}
+            </button>
           </div>
         </div>
       </section>
