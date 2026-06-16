@@ -1,4 +1,4 @@
-// src/app/api/upload/prepare/route.ts #1
+// src/app/api/upload/prepare/route.ts #2
 export const runtime = "nodejs";
 
 import crypto from "crypto";
@@ -106,22 +106,40 @@ function getSupabaseTusEndpoint() {
   return url.toString();
 }
 
-function extractSignedUploadToken(data: unknown) {
-  const d = data as { token?: string; signedUrl?: string } | null;
+function getSignedUploadDiagnostics(data: unknown) {
+  const d = data as { token?: string; signedUrl?: string; path?: string } | null;
+  const token = typeof d?.token === "string" ? d.token : "";
+  let signedUrlHasToken = false;
+  let signedUrlTokenDotCount: number | null = null;
 
-  if (d?.token) return d.token;
-
-  if (d?.signedUrl) {
+  if (typeof d?.signedUrl === "string") {
     try {
       const url = new URL(d.signedUrl);
-      const token = url.searchParams.get("token");
-      if (token) return token;
+      const signedUrlToken = url.searchParams.get("token") ?? "";
+      signedUrlHasToken = signedUrlToken.length > 0;
+      signedUrlTokenDotCount = signedUrlToken
+        ? signedUrlToken.split(".").length - 1
+        : null;
     } catch {
-      // ignore fallback parse errors
+      signedUrlHasToken = false;
+      signedUrlTokenDotCount = null;
     }
   }
 
-  return null;
+  return {
+    keys: d ? Object.keys(d).sort() : [],
+    hasToken: token.length > 0,
+    tokenLength: token.length,
+    tokenDotCount: token ? token.split(".").length - 1 : null,
+    hasSignedUrl: typeof d?.signedUrl === "string" && d.signedUrl.length > 0,
+    signedUrlHasToken,
+    signedUrlTokenDotCount,
+  };
+}
+
+function extractSignedUploadToken(data: unknown) {
+  const d = data as { token?: string } | null;
+  return typeof d?.token === "string" && d.token.length > 0 ? d.token : null;
 }
 
 export async function POST(req: NextRequest) {
@@ -290,11 +308,23 @@ export async function POST(req: NextRequest) {
 
         const token = extractSignedUploadToken(signed);
 
-        if (signedError || !token) {
-          throw new Error(
-            signedError?.message ?? `${text.signedUploadUrlFailed}: ${row.id}`
-          );
-        }
+    if (signedError || !token) {
+      const diagnostics = getSignedUploadDiagnostics(signed);
+
+      console.error("SIGNED_UPLOAD_TOKEN_DIAGNOSTICS", {
+        uploadId: row.id,
+        storagePath: row.storage_path,
+        diagnostics,
+        signedError: signedError?.message ?? null,
+      });
+
+      throw new Error(
+        signedError?.message ??
+          `${text.signedUploadUrlFailed}: ${row.id}; token diagnostics=${JSON.stringify(
+            diagnostics
+          )}`
+      );
+    }
 
         preparedFiles.push({
           clientId: original.clientId,
