@@ -1,9 +1,8 @@
-// src/app/cameras/import/CamerasImportPageClient.tsx #4
+// src/app/cameras/import/CamerasImportPageClient.tsx #3
 "use client";
 
 import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import * as tus from "tus-js-client";
 import {
   MANUAL_IMPORT_ACCEPT,
   MANUAL_IMPORT_MAX_BYTES,
@@ -20,43 +19,8 @@ type CameraRow = {
 
 type MessageTone = "success" | "error" | "info";
 
-type PreparedUploadFile = {
-  clientId: string;
-  uploadId: string;
-  status: "upload_required";
-  bucket: string;
-  storagePath: string;
-  token: string;
-  contentType: string;
-  expectedSizeBytes: number;
-};
-
-type PrepareUploadResponse = {
-  ok: boolean;
-  batchId: string;
-  bucket: string;
-  endpoint: string;
-  chunkSizeBytes: number;
-  maxBytes: number;
-  files: PreparedUploadFile[];
-};
-
-type CompletedUpload = {
-  uploadId: string;
-};
-
 function formatMb(bytes: number) {
   return `${Math.round((bytes / 1024 / 1024) * 10) / 10} MB`;
-}
-
-function createClientId(file: File, index: number) {
-  return [
-    index,
-    file.name,
-    file.size,
-    file.lastModified,
-    crypto.randomUUID(),
-  ].join(":");
 }
 
 function t(language: AppLanguage) {
@@ -78,29 +42,20 @@ function t(language: AppLanguage) {
       noneSelected: "No files selected yet.",
       clearSelection: "Clear selection",
       running: "Import running…",
-      preparing: "Preparing upload…",
-      uploading: "Uploading…",
-      finalizing: "Finalizing import…",
       startImport: "Start import",
       demoMode: "Demo mode",
       selectCamera: "Please select a camera.",
       selectFiles: "Please select image files.",
       noticeTitle: "Notice",
       errorTitle: "Import could not be completed",
-      successTitle: "Import queued",
-      successText:
-        "The selected files were uploaded successfully and are now being processed.",
+      successTitle: "Import completed",
+      successText: "The selected files have been processed successfully.",
       maxImportSize: `Max. ${MANUAL_IMPORT_MAX_LABEL} per import`,
       importTooLarge: `The import is larger than ${MANUAL_IMPORT_MAX_LABEL}. Please split the selection into multiple imports.`,
       unsupportedFilesSkipped: (count: number) =>
         `${count} unsupported file(s) were ignored. Supported formats: JPG, PNG, WEBP.`,
       uploadPayloadTooLarge:
         "This import is too large for the current upload route. Please split it into smaller packages for now.",
-      prepareFailed: "Upload preparation failed.",
-      uploadFailed: "Upload failed.",
-      completeFailed: "Import completion failed.",
-      preparedFileMissing:
-        "Upload preparation returned an incomplete file mapping.",
     };
   }
 
@@ -122,29 +77,20 @@ function t(language: AppLanguage) {
     noneSelected: "Noch keine Dateien ausgewählt.",
     clearSelection: "Auswahl löschen",
     running: "Import läuft…",
-    preparing: "Upload wird vorbereitet…",
-    uploading: "Upload läuft…",
-    finalizing: "Import wird abgeschlossen…",
     startImport: "Import starten",
     demoMode: "Demo-Modus",
     selectCamera: "Bitte eine Kamera auswählen.",
     selectFiles: "Bitte Bilddateien auswählen.",
     noticeTitle: "Hinweis",
     errorTitle: "Import konnte nicht abgeschlossen werden",
-    successTitle: "Import eingereiht",
-    successText:
-      "Die ausgewählten Dateien wurden erfolgreich hochgeladen und werden jetzt verarbeitet.",
+    successTitle: "Import abgeschlossen",
+    successText: "Die ausgewählten Dateien wurden erfolgreich verarbeitet.",
     maxImportSize: `Max. ${MANUAL_IMPORT_MAX_LABEL} pro Import`,
     importTooLarge: `Der Import ist größer als ${MANUAL_IMPORT_MAX_LABEL}. Bitte die Auswahl auf mehrere Importvorgänge aufteilen.`,
     unsupportedFilesSkipped: (count: number) =>
       `${count} nicht unterstützte Datei(en) wurden ignoriert. Unterstützte Formate: JPG, PNG, WEBP.`,
     uploadPayloadTooLarge:
       "Dieser Import ist für die aktuelle Upload-Route zu groß. Bitte vorübergehend in kleinere Pakete aufteilen.",
-    prepareFailed: "Upload-Vorbereitung fehlgeschlagen.",
-    uploadFailed: "Upload fehlgeschlagen.",
-    completeFailed: "Import-Abschluss fehlgeschlagen.",
-    preparedFileMissing:
-      "Die Upload-Vorbereitung hat keine vollständige Dateizuordnung geliefert.",
   };
 }
 
@@ -204,50 +150,6 @@ function alertTone(tone: MessageTone) {
   };
 }
 
-function uploadFileWithTus({
-  file,
-  prepared,
-  endpoint,
-  chunkSizeBytes,
-  onProgress,
-}: {
-  file: File;
-  prepared: PreparedUploadFile;
-  endpoint: string;
-  chunkSizeBytes: number;
-  onProgress: (bytesUploaded: number, bytesTotal: number) => void;
-}) {
-  return new Promise<void>((resolve, reject) => {
-    const upload = new tus.Upload(file, {
-      endpoint,
-      chunkSize: chunkSizeBytes,
-      retryDelays: [0, 1000, 3000, 5000],
-      uploadDataDuringCreation: true,
-      removeFingerprintOnSuccess: true,
-      headers: {
-        "x-signature": prepared.token,
-      },
-      metadata: {
-        bucketName: prepared.bucket,
-        objectName: prepared.storagePath,
-        contentType: prepared.contentType || file.type || "image/jpeg",
-        cacheControl: "3600",
-      },
-      onError(error) {
-        reject(error);
-      },
-      onProgress(bytesUploaded, bytesTotal) {
-        onProgress(bytesUploaded, bytesTotal);
-      },
-      onSuccess() {
-        resolve();
-      },
-    });
-
-    upload.start();
-  });
-}
-
 export default function CamerasImportPageClient({
   language,
   isDemo = false,
@@ -263,8 +165,6 @@ export default function CamerasImportPageClient({
   const [msg, setMsg] = useState("");
   const [msgTone, setMsgTone] = useState<MessageTone>("info");
   const [busy, setBusy] = useState(false);
-  const [busyLabel, setBusyLabel] = useState("");
-  const [uploadProgress, setUploadProgress] = useState(0);
   const [dragOver, setDragOver] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -345,67 +245,8 @@ export default function CamerasImportPageClient({
     e.target.value = "";
   }
 
-  async function prepareUpload(clientIds: string[]) {
-    const res = await fetch("/api/upload/prepare", {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-      },
-      body: JSON.stringify({
-        cameraId,
-        files: files.map((file, index) => ({
-          clientId: clientIds[index],
-          name: file.name,
-          size: file.size,
-          type: file.type,
-          lastModified: file.lastModified,
-        })),
-      }),
-    });
-
-    const json = await parseApiResponse(res);
-
-    if (!res.ok || !json.ok) {
-      throw new Error(
-        normalizeApiErrorMessage(
-          json.error || json.details || json.rawText || text.prepareFailed,
-          language
-        )
-      );
-    }
-
-    return json as PrepareUploadResponse;
-  }
-
-  async function completeUpload(batchId: string, uploaded: CompletedUpload[]) {
-    if (uploaded.length === 0) return;
-
-    const res = await fetch("/api/upload/complete", {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-      },
-      body: JSON.stringify({
-        batchId,
-        uploaded,
-      }),
-    });
-
-    const json = await parseApiResponse(res);
-
-    if (!res.ok || !json.ok) {
-      throw new Error(
-        normalizeApiErrorMessage(
-          json.error || json.details || json.rawText || text.completeFailed,
-          language
-        )
-      );
-    }
-  }
-
   async function startImport() {
     setMsg("");
-    setUploadProgress(0);
 
     if (isDemo) {
       setMsgTone("info");
@@ -432,62 +273,32 @@ export default function CamerasImportPageClient({
     }
 
     setBusy(true);
-    setBusyLabel(text.preparing);
-
-    const uploaded: CompletedUpload[] = [];
 
     try {
-      const clientIds = files.map(createClientId);
-      const prepared = await prepareUpload(clientIds);
-      const preparedByClientId = new Map(
-        prepared.files.map((file) => [file.clientId, file])
-      );
+      const formData = new FormData();
+      formData.append("cameraId", cameraId);
+      formData.append("channel", "import");
 
-      const uploadedBytesByIndex = new Array(files.length).fill(0) as number[];
-      const totalBytes = selectedBytes || 1;
-
-      setBusyLabel(text.uploading);
-
-      for (let index = 0; index < files.length; index++) {
-        const file = files[index];
-        const clientId = clientIds[index];
-        const preparedFile = preparedByClientId.get(clientId);
-
-        if (!preparedFile) {
-          throw new Error(text.preparedFileMissing);
-        }
-
-        await uploadFileWithTus({
-          file,
-          prepared: preparedFile,
-          endpoint: prepared.endpoint,
-          chunkSizeBytes: prepared.chunkSizeBytes,
-          onProgress(bytesUploaded) {
-            uploadedBytesByIndex[index] = bytesUploaded;
-            const doneBytes = uploadedBytesByIndex.reduce(
-              (sum, value) => sum + value,
-              0
-            );
-            setUploadProgress(
-              Math.min(99, Math.round((doneBytes / totalBytes) * 100))
-            );
-          },
-        });
-
-        uploadedBytesByIndex[index] = file.size;
-        uploaded.push({ uploadId: preparedFile.uploadId });
-
-        const doneBytes = uploadedBytesByIndex.reduce(
-          (sum, value) => sum + value,
-          0
-        );
-        setUploadProgress(Math.min(99, Math.round((doneBytes / totalBytes) * 100)));
+      for (const file of files) {
+        formData.append("files", file);
       }
 
-      setBusyLabel(text.finalizing);
-      await completeUpload(prepared.batchId, uploaded);
+      const res = await fetch("/api/upload", {
+        method: "POST",
+        body: formData,
+      });
 
-      setUploadProgress(100);
+      const json = await res.json().catch(() => ({}));
+
+      if (!res.ok || !json.ok) {
+        throw new Error(
+          normalizeApiErrorMessage(
+            json.error || json.details || `HTTP ${res.status}`,
+            language
+          )
+        );
+      }
+
       setFiles([]);
       setMsgTone("success");
       setMsg(text.successText);
@@ -496,7 +307,6 @@ export default function CamerasImportPageClient({
       setMsg(normalizeApiErrorMessage(getErrorMessage(error), language));
     } finally {
       setBusy(false);
-      setBusyLabel("");
       setDragOver(false);
     }
   }
@@ -565,7 +375,7 @@ export default function CamerasImportPageClient({
             className="w-full rounded-[10px] border border-white/10 bg-white/5 p-2 text-white outline-none disabled:bg-white/5 disabled:text-white/35"
             value={cameraId}
             onChange={(e) => setCameraId(e.target.value)}
-            disabled={isDemo || busy}
+            disabled={isDemo}
             title={isDemo ? text.demoReadOnly : ""}
           >
             {cameras.length === 0 ? (
@@ -598,16 +408,14 @@ export default function CamerasImportPageClient({
           ].join(" ")}
           onDragEnter={(e) => {
             e.preventDefault();
-            if (!isDemo && !busy) setDragOver(true);
+            if (!isDemo) setDragOver(true);
           }}
           onDragOver={(e) => {
             e.preventDefault();
-            if (!isDemo && !busy) setDragOver(true);
+            if (!isDemo) setDragOver(true);
           }}
           onDragLeave={() => setDragOver(false)}
-          onDrop={(e) => {
-            if (!busy) onDrop(e);
-          }}
+          onDrop={onDrop}
         >
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
@@ -629,7 +437,7 @@ export default function CamerasImportPageClient({
 
                 fileInputRef.current?.click();
               }}
-              disabled={isDemo || busy}
+              disabled={isDemo}
               title={isDemo ? text.demoReadOnly : ""}
             >
               {text.chooseFiles}
@@ -662,15 +470,9 @@ export default function CamerasImportPageClient({
           <div className="min-w-0 flex-1">
             {busy ? (
               <div className="space-y-2">
-                <div className="text-sm text-white/72">
-                  {busyLabel || text.running}
-                  {uploadProgress > 0 ? ` · ${uploadProgress}%` : ""}
-                </div>
+                <div className="text-sm text-white/72">{text.running}</div>
                 <div className="h-1.5 overflow-hidden rounded-full bg-white/10">
-                  <div
-                    className="h-full rounded-full bg-[#c9952e] transition-all"
-                    style={{ width: `${Math.max(uploadProgress, 8)}%` }}
-                  />
+                  <div className="h-full w-2/3 animate-[venaris-demo-progress_1.2s_ease-in-out_infinite] rounded-full bg-[#c9952e]" />
                 </div>
               </div>
             ) : files.length > 0 ? (
@@ -702,7 +504,6 @@ export default function CamerasImportPageClient({
                 }
 
                 setFiles([]);
-                setUploadProgress(0);
               }}
               disabled={busy || files.length === 0 || isDemo}
               title={isDemo ? text.demoReadOnly : ""}
