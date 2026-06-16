@@ -1,0 +1,17 @@
+# infrastructure/hetzner-worker/systemd/venaris-manual-import-finalizer.service #1
+[Unit]
+Description=Venaris Manual Import Finalizer
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=venaris
+WorkingDirectory=/opt/venaris-worker
+EnvironmentFile=/opt/venaris-worker/.env.manual-import-finalizer
+ExecStart=/usr/bin/node /opt/venaris-worker/manual-import-finalizer.mjs
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target
