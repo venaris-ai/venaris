@@ -1,4 +1,4 @@
-// src/app/api/upload/prepare/route.ts #2
+// src/app/api/upload/prepare/route.ts #3
 export const runtime = "nodejs";
 
 import crypto from "crypto";
@@ -81,29 +81,6 @@ function normalizeContentType(name: string, type: unknown) {
 function parsePositiveSize(value: unknown) {
   const n = Number(value);
   return Number.isFinite(n) && n > 0 ? Math.floor(n) : null;
-}
-
-function getSupabaseTusEndpoint() {
-  const rawUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
-
-  if (!rawUrl) {
-    throw new Error("missing NEXT_PUBLIC_SUPABASE_URL or SUPABASE_URL");
-  }
-
-  const url = new URL(rawUrl);
-
-  if (
-    url.hostname.endsWith(".supabase.co") &&
-    !url.hostname.endsWith(".storage.supabase.co")
-  ) {
-    url.hostname = url.hostname.replace(".supabase.co", ".storage.supabase.co");
-  }
-
-  url.pathname = "/storage/v1/upload/resumable";
-  url.search = "";
-  url.hash = "";
-
-  return url.toString();
 }
 
 function getSignedUploadDiagnostics(data: unknown) {
@@ -249,7 +226,7 @@ export async function POST(req: NextRequest) {
         meta: {
           source: "manual",
           channel: "import",
-          adapter: "tus",
+          adapter: "signed_standard",
           file_count: files.length,
           total_bytes: totalBytes,
           max_import_bytes: MANUAL_IMPORT_MAX_BYTES,
@@ -308,28 +285,29 @@ export async function POST(req: NextRequest) {
 
         const token = extractSignedUploadToken(signed);
 
-    if (signedError || !token) {
-      const diagnostics = getSignedUploadDiagnostics(signed);
+        if (signedError || !token) {
+          const diagnostics = getSignedUploadDiagnostics(signed);
 
-      console.error("SIGNED_UPLOAD_TOKEN_DIAGNOSTICS", {
-        uploadId: row.id,
-        storagePath: row.storage_path,
-        diagnostics,
-        signedError: signedError?.message ?? null,
-      });
+          console.error("SIGNED_UPLOAD_TOKEN_DIAGNOSTICS", {
+            uploadId: row.id,
+            storagePath: row.storage_path,
+            diagnostics,
+            signedError: signedError?.message ?? null,
+          });
 
-      throw new Error(
-        signedError?.message ??
-          `${text.signedUploadUrlFailed}: ${row.id}; token diagnostics=${JSON.stringify(
-            diagnostics
-          )}`
-      );
-    }
+          throw new Error(
+            signedError?.message ??
+              `${text.signedUploadUrlFailed}: ${row.id}; token diagnostics=${JSON.stringify(
+                diagnostics
+              )}`
+          );
+        }
 
         preparedFiles.push({
           clientId: original.clientId,
           uploadId: row.id,
           status: "upload_required",
+          uploadStrategy: "signed_standard",
           bucket: BUCKET,
           storagePath: row.storage_path,
           token,
@@ -361,8 +339,7 @@ export async function POST(req: NextRequest) {
       ok: true,
       batchId: batch.id,
       bucket: BUCKET,
-      endpoint: getSupabaseTusEndpoint(),
-      chunkSizeBytes: 6 * 1024 * 1024,
+      uploadStrategy: "signed_standard",
       maxBytes: MANUAL_IMPORT_MAX_BYTES,
       files: preparedFiles,
     });
