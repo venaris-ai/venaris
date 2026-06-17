@@ -7,6 +7,7 @@ from typing import Any, Optional
 
 DOMINANT_OTHER_MIN_SCORE = 0.90
 LOW_TARGET_MAX_SCORE = 0.02
+RABBIT_REQUIRES_HIGH_CONFIDENCE_WHEN_HARE_PRESENT = 0.90
 
 VENARIS_SPECIES = {
     "badger",
@@ -479,6 +480,35 @@ def best_venaris_species_from_speciesnet_classifications(
                 raw_taxon_id=str(best_domestic_dog["raw_taxon_id"]),
                 reason="domestic_dog_beats_wolf_score",
             )
+   
+    first_target = None
+    best_hare = None
+
+    for candidate in candidates:
+        mapped_species = candidate["mapped_species"]
+        score = candidate["score"]
+
+        if mapped_species != "other" and first_target is None:
+            first_target = candidate
+
+        if mapped_species == "hare":
+            if best_hare is None or score > best_hare["score"]:
+                best_hare = candidate
+
+    if (
+        first_target is not None
+        and first_target["mapped_species"] == "rabbit"
+        and float(first_target["score"]) < RABBIT_REQUIRES_HIGH_CONFIDENCE_WHEN_HARE_PRESENT
+        and best_hare is not None
+    ):
+        return VenarisSpeciesPrediction(
+            species="hare",
+            score=float(best_hare["score"]),
+            raw_label=str(best_hare["raw_label"]),
+            raw_common_name=str(best_hare["raw_common_name"]),
+            raw_taxon_id=str(best_hare["raw_taxon_id"]),
+            reason="hare_beats_low_confidence_rabbit",
+        )
 
     best_other: Optional[dict[str, Any]] = None
     best_target: Optional[dict[str, Any]] = None
