@@ -1,4 +1,4 @@
-// src/app/cameras/import/CamerasImportPageClient.tsx #7
+// src/app/cameras/import/CamerasImportPageClient.tsx #8
 "use client";
 
 import { useEffect, useRef, useState } from "react";
@@ -653,15 +653,17 @@ export default function CamerasImportPageClient({
 
       <section className="space-y-5 rounded-[28px] border border-white/10 bg-white/5 p-5 backdrop-blur-sm">
         <div className="space-y-2">
-          <label className="text-sm font-medium text-white">
+          <label htmlFor="manual-import-camera" className="text-sm font-medium text-white">
             {text.targetCamera}
           </label>
           <select
+            id="manual-import-camera"
+            name="cameraId"
             className="w-full rounded-[10px] border border-white/10 bg-white/5 p-2 text-white outline-none disabled:bg-white/5 disabled:text-white/35"
             value={cameraId}
             onChange={(e) => setCameraId(e.target.value)}
             disabled={isDemo || busy}
-            title={isDemo ? text.demoReadOnly : ""}
+            title={isDemo ? text.demoReadOnly : undefined}
           >
             {cameras.length === 0 ? (
               <option value="" className="bg-[#102018] text-white">
@@ -723,7 +725,7 @@ export default function CamerasImportPageClient({
                 fileInputRef.current?.click();
               }}
               disabled={isDemo || busy}
-              title={isDemo ? text.demoReadOnly : ""}
+              title={isDemo ? text.demoReadOnly : undefined}
             >
               {text.chooseFiles}
             </button>
@@ -731,10 +733,13 @@ export default function CamerasImportPageClient({
 
           <input
             ref={fileInputRef}
+            id="manual-import-files"
+            name="manual-import-files"
             type="file"
             accept={MANUAL_IMPORT_ACCEPT}
             multiple
             className="hidden"
+            aria-label={text.chooseFiles}
             onChange={onPickFiles}
           />
 
@@ -803,7 +808,7 @@ export default function CamerasImportPageClient({
                 setUploadProgress(0);
               }}
               disabled={busy || files.length === 0 || isDemo}
-              title={isDemo ? text.demoReadOnly : ""}
+              title={isDemo ? text.demoReadOnly : undefined}
             >
               {text.clearSelection}
             </button>
@@ -818,7 +823,7 @@ export default function CamerasImportPageClient({
                   ? "bg-[#c9952e] text-[#102018] hover:bg-[#d6a13a]"
                   : "bg-white/10 text-white/35",
               ].join(" ")}
-              title={isDemo ? text.demoReadOnly : ""}
+              title={isDemo ? text.demoReadOnly : undefined}
             >
               {busy ? text.running : isDemo ? text.demoMode : text.startImport}
             </button>
