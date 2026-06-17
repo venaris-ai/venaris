@@ -1,4 +1,4 @@
-// infrastructure/hetzner-worker/detection-worker/detection-worker.mjs #12
+// infrastructure/hetzner-worker/detection-worker/detection-worker.mjs #13
 import { createClient } from "@supabase/supabase-js";
 import exifrDefault, * as exifrNS from "exifr";
 import fs from "fs";
@@ -998,7 +998,7 @@ await markProcessed(core.id, patch);
   if (hasFinalWildlifeDetection) {
     await supabase.rpc("upsert_event_for_asset", {
       p_asset_id: core.id,
-      p_window_minutes: 10,
+      p_window_minutes: 20,
     });
   }
 
