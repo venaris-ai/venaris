@@ -1,4 +1,4 @@
-// src/components/RevierScopeSelect.tsx #5
+// src/components/RevierScopeSelect.tsx #6
 "use client";
 
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
@@ -28,11 +28,14 @@ export default function RevierScopeSelect({ reviers, value, language }: Props) {
 
   return (
     <select
+      id="header-revier-scope"
+      name="revier"
       value={value}
       onChange={(e) => handleChange(e.target.value)}
       aria-label={language === "en" ? "Select ground" : "Revier auswählen"}
       className="bg-transparent px-0 py-0 text-xs text-white outline-none"
     >
+
       <option value="all" className="bg-[#102018] text-white">
         {language === "en" ? "All grounds" : "Alle Reviere"}
       </option>
