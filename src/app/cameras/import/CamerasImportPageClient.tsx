@@ -1,4 +1,4 @@
-// src/app/cameras/import/CamerasImportPageClient.tsx #5
+// src/app/cameras/import/CamerasImportPageClient.tsx #6
 "use client";
 
 import { useEffect, useRef, useState } from "react";
@@ -18,7 +18,7 @@ type CameraRow = {
   locationName: string | null;
 };
 
-type MessageTone = "success" | "error" | "info";
+type MessageTone = "success" | "error" | "info" | "warning";
 
 type PreparedUploadFile = {
   clientId: string;
@@ -44,6 +44,16 @@ type PrepareUploadResponse = {
 type CompletedUpload = {
   uploadId: string;
 };
+
+const COMPLETE_BATCH_SIZE = 10;
+const TRANSIENT_RETRY_DELAYS_MS = [1500, 4000, 9000];
+
+class UploadInterruptedError extends Error {
+  constructor() {
+    super("upload_interrupted");
+    this.name = "UploadInterruptedError";
+  }
+}
 
 function formatMb(bytes: number) {
   return `${Math.round((bytes / 1024 / 1024) * 10) / 10} MB`;
@@ -81,6 +91,9 @@ function t(language: AppLanguage) {
       preparing: "Preparing upload…",
       uploading: "Uploading…",
       finalizing: "Finalizing import…",
+      interruptedUploadTitle: "Upload temporarily interrupted",
+      interruptedUploadText:
+        "Please start the import again. Already uploaded images will be handled automatically.",
       startImport: "Start import",
       demoMode: "Demo mode",
       selectCamera: "Please select a camera.",
@@ -125,6 +138,9 @@ function t(language: AppLanguage) {
     preparing: "Upload wird vorbereitet…",
     uploading: "Upload läuft…",
     finalizing: "Import wird abgeschlossen…",
+    interruptedUploadTitle: "Upload kurzzeitig unterbrochen",
+    interruptedUploadText:
+      "Bitte starte den Import erneut. Bereits hochgeladene Bilder werden automatisch berücksichtigt.",
     startImport: "Import starten",
     demoMode: "Demo-Modus",
     selectCamera: "Bitte eine Kamera auswählen.",
@@ -180,6 +196,67 @@ function getErrorMessage(error: unknown) {
   return error instanceof Error ? error.message : String(error);
 }
 
+function getErrorStatusCode(error: unknown) {
+  const candidate = error as
+    | { status?: number | string; statusCode?: number | string }
+    | null
+    | undefined;
+
+  const raw = candidate?.statusCode ?? candidate?.status;
+  const n = typeof raw === "string" ? Number.parseInt(raw, 10) : raw;
+
+  return typeof n === "number" && Number.isFinite(n) ? n : null;
+}
+
+function isTransientUploadError(error: unknown) {
+  const status = getErrorStatusCode(error);
+
+  if (status === 502 || status === 503 || status === 504) {
+    return true;
+  }
+
+  const message = getErrorMessage(error).toLowerCase();
+
+  return (
+    message.includes("http 502") ||
+    message.includes("http 503") ||
+    message.includes("http 504") ||
+    message.includes("bad gateway") ||
+    message.includes("service unavailable") ||
+    message.includes("gateway timeout") ||
+    message.includes("failed to fetch") ||
+    message.includes("networkerror") ||
+    message.includes("network error") ||
+    message.includes("timeout") ||
+    message.includes("temporarily")
+  );
+}
+
+function sleep(ms: number) {
+  return new Promise((resolve) => {
+    window.setTimeout(resolve, ms);
+  });
+}
+
+async function withTransientRetry<T>(operation: () => Promise<T>) {
+  for (let attempt = 0; attempt <= TRANSIENT_RETRY_DELAYS_MS.length; attempt++) {
+    try {
+      return await operation();
+    } catch (error: unknown) {
+      const shouldRetry =
+        isTransientUploadError(error) && attempt < TRANSIENT_RETRY_DELAYS_MS.length;
+
+      if (!shouldRetry) {
+        throw error;
+      }
+
+      await sleep(TRANSIENT_RETRY_DELAYS_MS[attempt]);
+    }
+  }
+
+  throw new UploadInterruptedError();
+}
+
 function alertTone(tone: MessageTone) {
   if (tone === "success") {
     return {
@@ -197,10 +274,18 @@ function alertTone(tone: MessageTone) {
     };
   }
 
+  if (tone === "warning") {
+    return {
+      wrap: "border-amber-300/20 bg-amber-300/10",
+      title: "text-amber-100",
+      text: "text-amber-100/75",
+    };
+  }
+
   return {
-    wrap: "border-amber-300/20 bg-amber-300/10",
-    title: "text-amber-100",
-    text: "text-amber-100/75",
+    wrap: "border-white/10 bg-white/5",
+    title: "text-white/85",
+    text: "text-white/62",
   };
 }
 
@@ -221,7 +306,10 @@ async function uploadFileToSignedUrl({
     });
 
   if (error) {
-    throw new Error(error.message);
+    const status = getErrorStatusCode(error);
+    const message = status ? `HTTP ${status}: ${error.message}` : error.message;
+
+    throw new Error(message);
   }
 }
 
@@ -345,7 +433,10 @@ export default function CamerasImportPageClient({
     if (!res.ok || !json.ok) {
       throw new Error(
         normalizeApiErrorMessage(
-          json.error || json.details || json.rawText || text.prepareFailed,
+          json.error ||
+            json.details ||
+            json.rawText ||
+            `HTTP ${res.status}: ${text.prepareFailed}`,
           language
         )
       );
@@ -373,7 +464,10 @@ export default function CamerasImportPageClient({
     if (!res.ok || !json.ok) {
       throw new Error(
         normalizeApiErrorMessage(
-          json.error || json.details || json.rawText || text.completeFailed,
+          json.error ||
+            json.details ||
+            json.rawText ||
+            `HTTP ${res.status}: ${text.completeFailed}`,
           language
         )
       );
@@ -411,7 +505,7 @@ export default function CamerasImportPageClient({
     setBusy(true);
     setBusyLabel(text.preparing);
 
-    const uploaded: CompletedUpload[] = [];
+    const pendingComplete: CompletedUpload[] = [];
 
     try {
       const clientIds = files.map(createClientId);
@@ -422,6 +516,16 @@ export default function CamerasImportPageClient({
           preparedFile,
         ])
       );
+
+      async function completePendingUploads() {
+        if (pendingComplete.length === 0) return;
+
+        const chunk = [...pendingComplete];
+        setBusyLabel(text.finalizing);
+        await withTransientRetry(() => completeUpload(prepared.batchId, chunk));
+        pendingComplete.splice(0, pendingComplete.length);
+        setBusyLabel(text.uploading);
+      }
 
       setBusyLabel(text.uploading);
 
@@ -434,24 +538,52 @@ export default function CamerasImportPageClient({
           throw new Error(text.preparedFileMissing);
         }
 
-        await uploadFileToSignedUrl({ file, prepared: preparedFile });
+        try {
+          await withTransientRetry(() =>
+            uploadFileToSignedUrl({ file, prepared: preparedFile })
+          );
+        } catch (error: unknown) {
+          if (isTransientUploadError(error)) {
+            if (pendingComplete.length > 0) {
+              try {
+                await completePendingUploads();
+              } catch {
+                // The next user retry is still safe because manual import deduplicates
+                // files by camera and hash during finalization.
+              }
+            }
 
-        uploaded.push({ uploadId: preparedFile.uploadId });
+            throw new UploadInterruptedError();
+          }
+
+          throw error;
+        }
+
+        pendingComplete.push({ uploadId: preparedFile.uploadId });
+
+        if (pendingComplete.length >= COMPLETE_BATCH_SIZE) {
+          await completePendingUploads();
+        }
+
         setUploadProgress(
           Math.min(99, Math.round(((index + 1) / files.length) * 100))
         );
       }
 
-      setBusyLabel(text.finalizing);
-      await completeUpload(prepared.batchId, uploaded);
+      await completePendingUploads();
 
       setUploadProgress(100);
       setFiles([]);
       setMsgTone("success");
       setMsg(text.successText);
     } catch (error: unknown) {
-      setMsgTone("error");
-      setMsg(normalizeApiErrorMessage(getErrorMessage(error), language));
+      if (error instanceof UploadInterruptedError || isTransientUploadError(error)) {
+        setMsgTone("warning");
+        setMsg(text.interruptedUploadText);
+      } else {
+        setMsgTone("error");
+        setMsg(normalizeApiErrorMessage(getErrorMessage(error), language));
+      }
     } finally {
       setBusy(false);
       setBusyLabel("");
@@ -487,7 +619,9 @@ export default function CamerasImportPageClient({
       ? text.successTitle
       : msgTone === "error"
         ? text.errorTitle
-        : text.noticeTitle;
+        : msgTone === "warning"
+          ? text.interruptedUploadTitle
+          : text.noticeTitle;
 
   return (
     <main className="space-y-8">
