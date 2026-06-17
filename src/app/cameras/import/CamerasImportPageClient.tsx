@@ -1,4 +1,4 @@
-// src/app/cameras/import/CamerasImportPageClient.tsx #6
+// src/app/cameras/import/CamerasImportPageClient.tsx #7
 "use client";
 
 import { useEffect, useRef, useState } from "react";
@@ -521,10 +521,8 @@ export default function CamerasImportPageClient({
         if (pendingComplete.length === 0) return;
 
         const chunk = [...pendingComplete];
-        setBusyLabel(text.finalizing);
         await withTransientRetry(() => completeUpload(prepared.batchId, chunk));
         pendingComplete.splice(0, pendingComplete.length);
-        setBusyLabel(text.uploading);
       }
 
       setBusyLabel(text.uploading);
@@ -570,6 +568,7 @@ export default function CamerasImportPageClient({
         );
       }
 
+      setBusyLabel(text.finalizing);
       await completePendingUploads();
 
       setUploadProgress(100);
