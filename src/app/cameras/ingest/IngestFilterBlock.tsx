@@ -1,9 +1,10 @@
-// src/app/cameras/ingest/IngestFilterBlock.tsx #1
+// src/app/cameras/ingest/IngestFilterBlock.tsx #2
 import Link from "next/link";
 
 type CameraOption = {
   id: string;
   name: string | null;
+  location_name: string | null;
 };
 
 type IngestFilterText = {
@@ -16,6 +17,14 @@ type IngestFilterText = {
   applyFilters: string;
   resetFilters: string;
 };
+
+
+function formatCameraOptionLabel(camera: CameraOption, unnamedCamera: string) {
+  const cameraName = camera.name?.trim() || unnamedCamera;
+  const locationName = camera.location_name?.trim();
+
+  return locationName ? `${cameraName} ${locationName}` : cameraName;
+}
 
 type IngestFilterBlockProps = {
   text: IngestFilterText;
@@ -62,7 +71,7 @@ export default function IngestFilterBlock({
             <option value="">{text.allCameras}</option>
             {cameraOptions.map((camera) => (
               <option key={camera.id} value={camera.id}>
-                {camera.name?.trim() || text.unnamedCamera}
+                {formatCameraOptionLabel(camera, text.unnamedCamera)}
               </option>
             ))}
           </select>
