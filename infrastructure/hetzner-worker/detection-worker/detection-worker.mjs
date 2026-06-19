@@ -1,4 +1,4 @@
-// infrastructure/hetzner-worker/detection-worker/detection-worker.mjs #13
+// infrastructure/hetzner-worker/detection-worker/detection-worker.mjs #14
 import { createClient } from "@supabase/supabase-js";
 import exifrDefault, * as exifrNS from "exifr";
 import fs from "fs";
@@ -13,8 +13,18 @@ if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
   throw new Error("Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY");
 }
 
+function positiveNumber(value, fallback) {
+  const n = Number(value);
+  return Number.isFinite(n) && n > 0 ? n : fallback;
+}
+
 const WORKER_ID = process.env.WORKER_ID || `det-worker-${process.pid}`;
-const POLL_SECONDS = Number(process.env.POLL_SECONDS || 5);
+const POLL_SECONDS = positiveNumber(process.env.POLL_SECONDS || 5, 5);
+const IDLE_BACKOFF_ENABLED = process.env.IDLE_BACKOFF_ENABLED !== "0";
+const MAX_IDLE_POLL_SECONDS = positiveNumber(
+  process.env.MAX_IDLE_POLL_SECONDS || 60,
+  60
+);
 const BATCH_SIZE = Number(process.env.BATCH_SIZE || 10);
 const MAX_ATTEMPTS = Number(process.env.MAX_ATTEMPTS || 5);
 const STUCK_MINUTES = Number(process.env.STUCK_MINUTES || 30);
@@ -85,6 +95,18 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
 });
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+function getNextIdlePollSeconds(currentSeconds) {
+  if (!IDLE_BACKOFF_ENABLED) {
+    return POLL_SECONDS;
+  }
+
+  const base = Math.max(1, POLL_SECONDS);
+  const max = Math.max(base, MAX_IDLE_POLL_SECONDS);
+  const current = Math.max(base, positiveNumber(currentSeconds, base));
+
+  return Math.min(current * 2, max);
+}
 
 function exifrParse() {
   return exifrNS?.parse || exifrDefault?.parse || exifrNS?.default?.parse || null;
@@ -1032,7 +1054,9 @@ await markProcessed(core.id, patch);
 async function main() {
   console.log(`[${WORKER_ID}] started`, {
     POLL_SECONDS,
-    BATCH_SIZE,
+    IDLE_BACKOFF_ENABLED,
+    MAX_IDLE_POLL_SECONDS,
+    BATCH_SIZE,  
     MAX_ATTEMPTS,
     STUCK_MINUTES,
     STORAGE_DOWNLOAD_ENABLED,
@@ -1058,6 +1082,8 @@ async function main() {
     SPECIES_SPECIES_SOFTMAX,
   });
 
+  let idlePollSeconds = POLL_SECONDS;
+
   while (true) {
     let batch = [];
 
@@ -1065,14 +1091,18 @@ async function main() {
       batch = await claimBatch();
     } catch (e) {
       console.error(`[${WORKER_ID}] claim error`, e?.message || e);
-      await sleep(POLL_SECONDS * 1000);
+      await sleep(idlePollSeconds * 1000);
+      idlePollSeconds = getNextIdlePollSeconds(idlePollSeconds);
       continue;
     }
 
     if (!batch.length) {
-      await sleep(POLL_SECONDS * 1000);
+      await sleep(idlePollSeconds * 1000);
+      idlePollSeconds = getNextIdlePollSeconds(idlePollSeconds);
       continue;
     }
+
+    idlePollSeconds = POLL_SECONDS;
 
     for (const a of batch) {
       const t0 = Date.now();

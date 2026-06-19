@@ -1,4 +1,4 @@
-// infrastructure/hetzner-worker/manual-import-finalizer.mjs #2
+// infrastructure/hetzner-worker/manual-import-finalizer.mjs #3
 import crypto from "crypto";
 import { createClient } from "@supabase/supabase-js";
 
@@ -10,12 +10,22 @@ function env(name, required = true) {
   return String(v || "").trim();
 }
 
+function positiveNumber(value, fallback) {
+  const n = Number(value);
+  return Number.isFinite(n) && n > 0 ? n : fallback;
+}
+
 const SUPABASE_URL = env("SUPABASE_URL");
 const SUPABASE_SERVICE_ROLE_KEY = env("SUPABASE_SERVICE_ROLE_KEY");
 
 const WORKER_ID =
   process.env.WORKER_ID || `manual-import-finalizer-${process.pid}`;
-const POLL_SECONDS = Number(process.env.POLL_SECONDS || "5");
+const POLL_SECONDS = positiveNumber(process.env.POLL_SECONDS || "5", 5);
+const IDLE_BACKOFF_ENABLED = process.env.IDLE_BACKOFF_ENABLED !== "0";
+const MAX_IDLE_POLL_SECONDS = positiveNumber(
+  process.env.MAX_IDLE_POLL_SECONDS || "60",
+  60
+);
 const BATCH_SIZE = Number(process.env.BATCH_SIZE || "10");
 const STUCK_MINUTES = Number(process.env.STUCK_MINUTES || "30");
 const MAX_ATTEMPTS = Number(process.env.MAX_ATTEMPTS || "5");
@@ -26,6 +36,18 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
 });
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+function getNextIdlePollSeconds(currentSeconds) {
+  if (!IDLE_BACKOFF_ENABLED) {
+    return POLL_SECONDS;
+  }
+
+  const base = Math.max(1, POLL_SECONDS);
+  const max = Math.max(base, MAX_IDLE_POLL_SECONDS);
+  const current = Math.max(base, positiveNumber(currentSeconds, base));
+
+  return Math.min(current * 2, max);
+}
 
 function sha256(buf) {
   return crypto.createHash("sha256").update(buf).digest("hex");
@@ -293,7 +315,11 @@ async function processRow(row) {
     throw new Error(`manual_import_files_update_failed:${updateError.message}`);
   }
 
-  if (isDuplicate && existingStoragePath && existingStoragePath !== row.storage_path) {
+  if (
+    isDuplicate &&
+    existingStoragePath &&
+    existingStoragePath !== row.storage_path
+  ) {
     await removeStorageObject(bucket, row.storage_path);
   }
 
@@ -311,11 +337,15 @@ async function processRow(row) {
 async function main() {
   console.log(`[${WORKER_ID}] started`, {
     POLL_SECONDS,
+    IDLE_BACKOFF_ENABLED,
+    MAX_IDLE_POLL_SECONDS,
     BATCH_SIZE,
     STUCK_MINUTES,
     MAX_ATTEMPTS,
     DEFAULT_BUCKET,
   });
+
+  let idlePollSeconds = POLL_SECONDS;
 
   while (true) {
     try {
@@ -324,9 +354,12 @@ async function main() {
       const rows = await claimBatch();
 
       if (!rows.length) {
-        await sleep(POLL_SECONDS * 1000);
+        await sleep(idlePollSeconds * 1000);
+        idlePollSeconds = getNextIdlePollSeconds(idlePollSeconds);
         continue;
       }
+
+      idlePollSeconds = POLL_SECONDS;
 
       for (const row of rows) {
         const t0 = Date.now();
@@ -360,7 +393,8 @@ async function main() {
       }
     } catch (error) {
       console.error(`[${WORKER_ID}] loop error`, safeMessage(error));
-      await sleep(POLL_SECONDS * 1000);
+      await sleep(idlePollSeconds * 1000);
+      idlePollSeconds = getNextIdlePollSeconds(idlePollSeconds);
     }
   }
 }
