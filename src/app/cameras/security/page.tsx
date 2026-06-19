@@ -1,4 +1,4 @@
-// src/app/cameras/security/page.tsx #3
+// src/app/cameras/security/page.tsx #4
 export const dynamic = "force-dynamic";
 
 import Link from "next/link";
@@ -39,6 +39,7 @@ type RevierRow = {
 type CameraScopeRow = {
   id: string;
   name: string | null;
+  location_name: string | null;
   revier_id: string | null;
 };
 
@@ -391,7 +392,7 @@ export default async function CamerasSecurityPage(props: {
     if (allowedRevierIds.length > 0) {
       let camerasQuery = supabase
         .from("cameras")
-        .select("id,name,revier_id")
+        .select("id,name,location_name,revier_id")
         .eq("organization_id", activeOrganization.id);
 
       camerasQuery =
