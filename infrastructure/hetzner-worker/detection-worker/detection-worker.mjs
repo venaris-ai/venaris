@@ -1,4 +1,4 @@
-// infrastructure/hetzner-worker/detection-worker/detection-worker.mjs #14
+// infrastructure/hetzner-worker/detection-worker/detection-worker.mjs #15
 import { createClient } from "@supabase/supabase-js";
 import exifrDefault, * as exifrNS from "exifr";
 import fs from "fs";
@@ -37,6 +37,9 @@ const SECURITY_DELETE_AFTER_DAYS = Number(
 
 const STORAGE_DOWNLOAD_ENABLED =
   (process.env.STORAGE_DOWNLOAD_ENABLED ?? "1") !== "0";
+
+const LEGACY_EVENT_UPSERT_ENABLED =
+  (process.env.LEGACY_EVENT_UPSERT_ENABLED ?? "1") !== "0";
 
 // EXIF safety caps (soft)
 const EXIF_MAX_BYTES = Number(process.env.EXIF_MAX_BYTES || 6_000_000);
@@ -1014,14 +1017,23 @@ if (hasSecurityDetection) {
 
 await markProcessed(core.id, patch);
 
-  // 5) event layer
-  // Only wildlife assets are event-eligible.
-  // Security and empty/noisy assets must not create or extend events.
+  // 5) legacy event layer
+  // Materialized events are now the fachliche event truth.
+  // Keep this legacy path feature-flagged during rollout because older routes
+  // and demo/preview helpers can still depend on legacy event IDs.
+  let legacyEventUpserted = false;
+  let legacyEventUpsertSkipped = false;
+
   if (hasFinalWildlifeDetection) {
-    await supabase.rpc("upsert_event_for_asset", {
-      p_asset_id: core.id,
-      p_window_minutes: 20,
-    });
+    if (LEGACY_EVENT_UPSERT_ENABLED) {
+      await supabase.rpc("upsert_event_for_asset", {
+        p_asset_id: core.id,
+        p_window_minutes: 20,
+      });
+      legacyEventUpserted = true;
+    } else {
+      legacyEventUpsertSkipped = true;
+    }
   }
 
   return {
@@ -1048,6 +1060,10 @@ await markProcessed(core.id, patch);
 
     wildlife_suppressed: wildlifeDetectionsSuppressed,
     final_wildlife_detection: hasFinalWildlifeDetection,
+
+    legacy_event_upsert_enabled: LEGACY_EVENT_UPSERT_ENABLED,
+    legacy_event_upserted: legacyEventUpserted,
+    legacy_event_upsert_skipped: legacyEventUpsertSkipped,
   };
 }
 
@@ -1060,6 +1076,7 @@ async function main() {
     MAX_ATTEMPTS,
     STUCK_MINUTES,
     STORAGE_DOWNLOAD_ENABLED,
+    LEGACY_EVENT_UPSERT_ENABLED,
     EXIF_MAX_BYTES,
     EXIF_TIMEOUT_MS,
     EXIF_MAX_FUTURE_MINUTES,
@@ -1121,6 +1138,7 @@ async function main() {
             `md_total=${res.md_total} animals=${res.md_counts.animal} humans=${res.md_counts.human} vehicles=${res.md_counts.vehicle} ` +
             `best_animal=${res.best_animal.toFixed(3)} empty=${res.empty} (${emptyReason}) ` +
             `inserted=${res.inserted} species_updated=${res.species_updated} species_failures=${res.species_failures} ` +
+            `legacy_event_upserted=${res.legacy_event_upserted} legacy_event_skipped=${res.legacy_event_upsert_skipped} ` +
             `captured=${res.capturedSource} dt_ms=${Date.now() - t0}`
         );
       } catch (e) {

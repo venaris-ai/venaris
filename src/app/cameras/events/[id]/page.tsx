@@ -1,4 +1,4 @@
-// src/app/cameras/events/[id]/page.tsx #19
+// src/app/cameras/events/[id]/page.tsx #20
 export const runtime = "nodejs";
 
 import Link from "next/link";
@@ -87,6 +87,63 @@ type MaterializedEventRow = {
 type MaterializedEventAssetRow = {
   asset_id: string | null;
 };
+
+type MaterializedNavigationEventRow = {
+  id: string;
+  start_at: string;
+};
+
+type LegacyEventRow = {
+  id: string;
+  camera_id: string;
+  start_at: string;
+  end_at: string;
+  top_label: string | null;
+  top_species: string | null;
+  top_count: number | null;
+  relevance_score: number | null;
+  created_at: string | null;
+};
+
+const MATERIALIZED_EVENT_SELECT = [
+  "id",
+  "camera_id",
+  "start_at",
+  "end_at",
+  "asset_count",
+  "event_species_auto",
+  "event_species_user",
+  "event_species_effective",
+  "event_animal_count_auto",
+  "event_animal_count_user",
+  "event_animal_count_effective",
+  "event_species_score",
+  "event_species_margin",
+  "event_relevant_auto",
+  "event_relevant_user",
+  "event_relevant_effective",
+  "legacy_event_ids",
+  "materializer_version",
+].join(",");
+
+function materializedEventAsLegacyFallback(
+  materializedEvent: MaterializedEventRow
+): LegacyEventRow {
+  return {
+    id: materializedEvent.id,
+    camera_id: materializedEvent.camera_id,
+    start_at: materializedEvent.start_at,
+    end_at: materializedEvent.end_at,
+    top_label: "animal",
+    top_species: materializedEvent.event_species_effective,
+    top_count: materializedEvent.event_animal_count_effective,
+    relevance_score:
+      materializedEvent.event_relevant_effective === false
+        ? 0
+        : materializedEvent.event_species_score,
+    created_at: materializedEvent.start_at,
+  };
+}
 
 function readSpeciesScore(meta: unknown): number | null {
   if (!meta || typeof meta !== "object") return null;
@@ -321,43 +378,61 @@ export default async function CameraEventDetailPage(props: {
     {}
   );
 
-  const { data: event, error: eventErr } = await supabase
-    .from("events")
-    .select(
-      "id,camera_id,start_at,end_at,top_label,top_species,top_count,relevance_score,created_at"
-    )
+  const { data: directMaterializedEventData } = await supabase
+    .from("materialized_events")
+    .select(MATERIALIZED_EVENT_SELECT)
     .eq("id", eventId)
-    .single();
+    .eq("materializer_version", ACTIVE_EVENT_MATERIALIZER_VERSION)
+    .maybeSingle<MaterializedEventRow>();
 
-  if (eventErr || !event) {
-    return (
-      <main className="space-y-8">
-        <section className="rounded-[32px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(201,149,46,0.16),transparent_24%),linear-gradient(135deg,rgba(255,255,255,0.06),rgba(255,255,255,0.03))] p-6 backdrop-blur-sm">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <div className="text-xs font-medium uppercase tracking-[0.22em] text-amber-200/80">
-                {text.eyebrow}
+  let materializedEvent: MaterializedEventRow | null =
+    directMaterializedEventData ?? null;
+
+  let event: LegacyEventRow | null = materializedEvent
+    ? materializedEventAsLegacyFallback(materializedEvent)
+    : null;
+
+  if (!event) {
+    const { data: legacyEvent, error: eventErr } = await supabase
+      .from("events")
+      .select(
+        "id,camera_id,start_at,end_at,top_label,top_species,top_count,relevance_score,created_at"
+      )
+      .eq("id", eventId)
+      .single<LegacyEventRow>();
+
+    if (eventErr || !legacyEvent) {
+      return (
+        <main className="space-y-8">
+          <section className="rounded-[32px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(201,149,46,0.16),transparent_24%),linear-gradient(135deg,rgba(255,255,255,0.06),rgba(255,255,255,0.03))] p-6 backdrop-blur-sm">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <div className="text-xs font-medium uppercase tracking-[0.22em] text-amber-200/80">
+                  {text.eyebrow}
+                </div>
+                <h1 className="mt-3 text-3xl font-semibold text-white">
+                  {text.title}
+                </h1>
+                <p className="mt-2 text-sm text-white/68">{text.intro}</p>
               </div>
-              <h1 className="mt-3 text-3xl font-semibold text-white">
-                {text.title}
-              </h1>
-              <p className="mt-2 text-sm text-white/68">{text.intro}</p>
+
+              <EventNavigation
+                olderEventHref={null}
+                overviewHref={backHref}
+                newerEventHref={null}
+                text={text}
+              />
             </div>
+          </section>
 
-            <EventNavigation
-              olderEventHref={null}
-              overviewHref={backHref}
-              newerEventHref={null}
-              text={text}
-            />
+          <div className="rounded-[24px] border border-rose-300/20 bg-rose-300/10 p-4 text-sm text-rose-100">
+            {text.notFound}: {eventErr?.message ?? "unknown error"}
           </div>
-        </section>
+        </main>
+      );
+    }
 
-        <div className="rounded-[24px] border border-rose-300/20 bg-rose-300/10 p-4 text-sm text-rose-100">
-          {text.notFound}: {eventErr?.message ?? "unknown error"}
-        </div>
-      </main>
-    );
+    event = legacyEvent;
   }
 
   const { data: camera } = await supabase
@@ -397,38 +472,21 @@ export default async function CameraEventDetailPage(props: {
     );
   }
 
-  const { data: materializedEventData } = await supabase
-    .from("materialized_events")
-    .select(
-      [
-        "id",
-        "camera_id",
-        "start_at",
-        "end_at",
-        "asset_count",
-        "event_species_auto",
-        "event_species_user",
-        "event_species_effective",
-        "event_animal_count_auto",
-        "event_animal_count_user",
-        "event_animal_count_effective",
-        "event_species_score",
-        "event_species_margin",
-        "event_relevant_auto",
-        "event_relevant_user",
-        "event_relevant_effective",
-        "legacy_event_ids",
-        "materializer_version",
-      ].join(",")
-    )
-    .eq("camera_id", event.camera_id)
-    .eq("materializer_version", ACTIVE_EVENT_MATERIALIZER_VERSION)
-    .contains("legacy_event_ids", [eventId])
-    .order("materialized_at", { ascending: false })
-    .limit(1)
-    .maybeSingle<MaterializedEventRow>();
+  if (!materializedEvent) {
+    const { data: linkedMaterializedEventData } = await supabase
+      .from("materialized_events")
+      .select(MATERIALIZED_EVENT_SELECT)
+      .eq("camera_id", event.camera_id)
+      .eq("materializer_version", ACTIVE_EVENT_MATERIALIZER_VERSION)
+      .contains("legacy_event_ids", [eventId])
+      .order("materialized_at", { ascending: false })
+      .limit(1)
+      .maybeSingle<MaterializedEventRow>();
 
-  if (materializedEventData?.event_relevant_effective === false) {
+    materializedEvent = linkedMaterializedEventData ?? null;
+  }
+
+  if (materializedEvent?.event_relevant_effective === false) {
     return (
       <main className="space-y-8">
         <section className="rounded-[32px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(201,149,46,0.16),transparent_24%),linear-gradient(135deg,rgba(255,255,255,0.06),rgba(255,255,255,0.03))] p-6 backdrop-blur-sm">
@@ -458,8 +516,6 @@ export default async function CameraEventDetailPage(props: {
       </main>
     );
   }
-
-  const materializedEvent = materializedEventData ?? null;
 
   const { data: reviersData, error: reviersError } = await supabase
     .from("reviers")
@@ -588,15 +644,19 @@ export default async function CameraEventDetailPage(props: {
   eventQuerySuffix = buildEventQuerySuffix(eventListContext);
 
   if (selectedNavigationCameraIds.length > 0) {
+    const currentNavigationEventId = materializedEvent?.id ?? event.id;
+    const currentNavigationStartAt = materializedEvent?.start_at ?? event.start_at;
+
     let olderEventQuery = supabase
-      .from("event_feed")
+      .from("materialized_events")
       .select("id,start_at")
       .in("camera_id", selectedNavigationCameraIds)
-      .neq("id", eventId)
-      .lt("start_at", event.start_at)
+      .eq("materializer_version", ACTIVE_EVENT_MATERIALIZER_VERSION)
+      .eq("event_relevant_effective", true)
+      .not("event_species_effective", "is", null)
       .gt("asset_count", 0)
-      .gt("relevance_score", 0)
-      .not("top_species", "is", null);
+      .neq("id", currentNavigationEventId)
+      .lt("start_at", currentNavigationStartAt);
 
     if (requestedFromDate) {
       olderEventQuery = olderEventQuery.gte("start_at", `${requestedFromDate}T00:00:00`);
@@ -609,17 +669,18 @@ export default async function CameraEventDetailPage(props: {
     const { data: olderEvent } = await olderEventQuery
       .order("start_at", { ascending: false })
       .limit(1)
-      .maybeSingle();
+      .maybeSingle<MaterializedNavigationEventRow>();
 
     let newerEventQuery = supabase
-      .from("event_feed")
+      .from("materialized_events")
       .select("id,start_at")
       .in("camera_id", selectedNavigationCameraIds)
-      .neq("id", eventId)
-      .gt("start_at", event.start_at)
+      .eq("materializer_version", ACTIVE_EVENT_MATERIALIZER_VERSION)
+      .eq("event_relevant_effective", true)
+      .not("event_species_effective", "is", null)
       .gt("asset_count", 0)
-      .gt("relevance_score", 0)
-      .not("top_species", "is", null);
+      .neq("id", currentNavigationEventId)
+      .gt("start_at", currentNavigationStartAt);
 
     if (requestedFromDate) {
       newerEventQuery = newerEventQuery.gte("start_at", `${requestedFromDate}T00:00:00`);
@@ -632,7 +693,7 @@ export default async function CameraEventDetailPage(props: {
     const { data: newerEvent } = await newerEventQuery
       .order("start_at", { ascending: true })
       .limit(1)
-      .maybeSingle();
+      .maybeSingle<MaterializedNavigationEventRow>();
 
     if (olderEvent?.id) {
       olderEventHref = buildEventHref(olderEvent.id, eventListContext);
@@ -663,7 +724,7 @@ export default async function CameraEventDetailPage(props: {
     }
   }
 
-  if (assetIds.length === 0) {
+  if (assetIds.length === 0 && !directMaterializedEventData) {
     const { data: eventAssets } = await supabase
       .from("event_assets")
       .select("asset_id")
