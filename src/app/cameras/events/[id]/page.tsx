@@ -1,4 +1,4 @@
-// src/app/cameras/events/[id]/page.tsx #18
+// src/app/cameras/events/[id]/page.tsx #19
 export const runtime = "nodejs";
 
 import Link from "next/link";
@@ -23,6 +23,7 @@ import {
   getSpeciesOptions,
   loadSpeciesMeta,
 } from "@/lib/speciesMeta";
+import { ACTIVE_EVENT_MATERIALIZER_VERSION } from "@/lib/eventMaterializer";
 
 type SearchParams = {
   revier?: string;
@@ -48,7 +49,6 @@ type AssetViewItem = {
   emptyConfidence?: number | null;
 };
 
-
 type DetectionTopRow = {
   asset_id: string | null;
   species: string | null;
@@ -56,6 +56,36 @@ type DetectionTopRow = {
   score: number | null; // MegaDetector animal score
   meta: unknown;
   speciesScore?: number | null; // SpeciesNet species score from meta.species.score
+};
+
+type MaterializedEventRow = {
+  id: string;
+  camera_id: string;
+  start_at: string;
+  end_at: string;
+  asset_count: number | null;
+
+  event_species_auto: string | null;
+  event_species_user: string | null;
+  event_species_effective: string | null;
+
+  event_animal_count_auto: number | null;
+  event_animal_count_user: number | null;
+  event_animal_count_effective: number | null;
+
+  event_species_score: number | null;
+  event_species_margin: number | null;
+
+  event_relevant_auto: boolean | null;
+  event_relevant_user: boolean | null;
+  event_relevant_effective: boolean | null;
+
+  legacy_event_ids: string[] | null;
+  materializer_version: string;
+};
+
+type MaterializedEventAssetRow = {
+  asset_id: string | null;
 };
 
 function readSpeciesScore(meta: unknown): number | null {
@@ -70,8 +100,6 @@ function readSpeciesScore(meta: unknown): number | null {
 
   return Number.isFinite(numericValue) ? numericValue : null;
 }
-
-
 
 type EventListContext = {
   revier?: string;
@@ -274,18 +302,16 @@ export default async function CameraEventDetailPage(props: {
   const speciesMetaRows = await loadSpeciesMeta();
   const speciesMetaMap = buildSpeciesMetaMap(speciesMetaRows);
 
-const speciesOptions = getSpeciesOptions(speciesMetaRows, language).sort(
-  (a, b) => {
-    if (a.value === "other") return 1;
-    if (b.value === "other") return -1;
+  const speciesOptions = getSpeciesOptions(speciesMetaRows, language).sort(
+    (a, b) => {
+      if (a.value === "other") return 1;
+      if (b.value === "other") return -1;
 
-    return a.label.localeCompare(b.label, language === "de" ? "de" : "en", {
-      sensitivity: "base",
-    });
-  }
-);
-
-
+      return a.label.localeCompare(b.label, language === "de" ? "de" : "en", {
+        sensitivity: "base",
+      });
+    }
+  );
 
   const speciesLabelByCode = speciesOptions.reduce<Record<string, string>>(
     (acc, option) => {
@@ -370,6 +396,70 @@ const speciesOptions = getSpeciesOptions(speciesMetaRows, language).sort(
       </main>
     );
   }
+
+  const { data: materializedEventData } = await supabase
+    .from("materialized_events")
+    .select(
+      [
+        "id",
+        "camera_id",
+        "start_at",
+        "end_at",
+        "asset_count",
+        "event_species_auto",
+        "event_species_user",
+        "event_species_effective",
+        "event_animal_count_auto",
+        "event_animal_count_user",
+        "event_animal_count_effective",
+        "event_species_score",
+        "event_species_margin",
+        "event_relevant_auto",
+        "event_relevant_user",
+        "event_relevant_effective",
+        "legacy_event_ids",
+        "materializer_version",
+      ].join(",")
+    )
+    .eq("camera_id", event.camera_id)
+    .eq("materializer_version", ACTIVE_EVENT_MATERIALIZER_VERSION)
+    .contains("legacy_event_ids", [eventId])
+    .order("materialized_at", { ascending: false })
+    .limit(1)
+    .maybeSingle<MaterializedEventRow>();
+
+  if (materializedEventData?.event_relevant_effective === false) {
+    return (
+      <main className="space-y-8">
+        <section className="rounded-[32px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(201,149,46,0.16),transparent_24%),linear-gradient(135deg,rgba(255,255,255,0.06),rgba(255,255,255,0.03))] p-6 backdrop-blur-sm">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <div className="text-xs font-medium uppercase tracking-[0.22em] text-amber-200/80">
+                {text.eyebrow}
+              </div>
+              <h1 className="mt-3 text-3xl font-semibold text-white">
+                {text.title}
+              </h1>
+              <p className="mt-2 text-sm text-white/68">{text.intro}</p>
+            </div>
+
+            <EventNavigation
+              olderEventHref={null}
+              overviewHref={backHref}
+              newerEventHref={null}
+              text={text}
+            />
+          </div>
+        </section>
+
+        <div className="rounded-[24px] border border-rose-300/20 bg-rose-300/10 p-4 text-sm text-rose-100">
+          {text.notFoundOrForbidden}
+        </div>
+      </main>
+    );
+  }
+
+  const materializedEvent = materializedEventData ?? null;
 
   const { data: reviersData, error: reviersError } = await supabase
     .from("reviers")
@@ -555,14 +645,34 @@ const speciesOptions = getSpeciesOptions(speciesMetaRows, language).sort(
 
   const afterRemoveHref = olderEventHref ?? newerEventHref ?? backHref;
 
-  const { data: eventAssets, error: assetsErr } = await supabase
-    .from("event_assets")
-    .select("asset_id")
-    .eq("event_id", eventId);
+  let assetIds: string[] = [];
 
-  const assetIds = (eventAssets ?? [])
-    .map((row: { asset_id: string | null }) => row.asset_id)
-    .filter(Boolean) as string[];
+  if (materializedEvent?.id) {
+    const { data: materializedEventAssets, error: materializedEventAssetsErr } =
+      await supabase
+        .from("materialized_event_assets")
+        .select("asset_id")
+        .eq("materialized_event_id", materializedEvent.id)
+        .order("asset_captured_at", { ascending: true })
+        .returns<MaterializedEventAssetRow[]>();
+
+    if (!materializedEventAssetsErr) {
+      assetIds = (materializedEventAssets ?? [])
+        .map((row) => row.asset_id)
+        .filter(Boolean) as string[];
+    }
+  }
+
+  if (assetIds.length === 0) {
+    const { data: eventAssets } = await supabase
+      .from("event_assets")
+      .select("asset_id")
+      .eq("event_id", eventId);
+
+    assetIds = (eventAssets ?? [])
+      .map((row: { asset_id: string | null }) => row.asset_id)
+      .filter(Boolean) as string[];
+  }
 
   let assets: Array<{
     id: string;
@@ -577,7 +687,7 @@ const speciesOptions = getSpeciesOptions(speciesMetaRows, language).sort(
     empty_confidence: number | null;
   }> = [];
 
-  if (!assetsErr && assetIds.length > 0) {
+  if (assetIds.length > 0) {
     const { data: assetsData, error: assetsDataErr } = await supabase
       .from("assets")
       .select(
@@ -610,24 +720,22 @@ const speciesOptions = getSpeciesOptions(speciesMetaRows, language).sort(
 
   const detectionsByAssetId: Record<string, DetectionTopRow> = {};
   if (assetIds.length > 0) {
+    const { data: detectionData } = await supabase
+      .from("detections")
+      .select("asset_id,species,species_user,score,meta")
+      .in("asset_id", assetIds)
+      .eq("label", "animal")
+      .order("score", { ascending: false })
+      .returns<DetectionTopRow[]>();
 
-const { data: detectionData } = await supabase
-  .from("detections")
-  .select("asset_id,species,species_user,score,meta")
-  .in("asset_id", assetIds)
-  .eq("label", "animal")
-  .order("score", { ascending: false })
-  .returns<DetectionTopRow[]>();
-
-for (const detection of detectionData ?? []) {
-  if (detection.asset_id && !detectionsByAssetId[detection.asset_id]) {
-    detectionsByAssetId[detection.asset_id] = {
-      ...detection,
-      speciesScore: readSpeciesScore(detection.meta),
-    };
-  }
-}
-
+    for (const detection of detectionData ?? []) {
+      if (detection.asset_id && !detectionsByAssetId[detection.asset_id]) {
+        detectionsByAssetId[detection.asset_id] = {
+          ...detection,
+          speciesScore: readSpeciesScore(detection.meta),
+        };
+      }
+    }
   }
 
   const initialAssets: AssetViewItem[] = assets
@@ -646,14 +754,14 @@ for (const detection of detectionData ?? []) {
       emptyConfidence: asset.empty_confidence ?? null,
     }))
     .sort((a, b) => {
-const scoreA =
-  detectionsByAssetId[a.id]?.speciesScore ??
-  detectionsByAssetId[a.id]?.score ??
-  -1;
-const scoreB =
-  detectionsByAssetId[b.id]?.speciesScore ??
-  detectionsByAssetId[b.id]?.score ??
-  -1;
+      const scoreA =
+        detectionsByAssetId[a.id]?.speciesScore ??
+        detectionsByAssetId[a.id]?.score ??
+        -1;
+      const scoreB =
+        detectionsByAssetId[b.id]?.speciesScore ??
+        detectionsByAssetId[b.id]?.score ??
+        -1;
 
       const scoreDiff = scoreB - scoreA;
 
@@ -670,8 +778,15 @@ const scoreB =
     ? `${camera.name}${camera.location_name ? ` (${camera.location_name})` : ""}`
     : text.unnamedCamera;
 
+  const displaySpecies =
+    materializedEvent?.event_species_effective ?? event.top_species;
+  const displayCount =
+    materializedEvent?.event_animal_count_effective ?? event.top_count;
+  const displayStartAt = materializedEvent?.start_at ?? event.start_at;
+  const displayEndAt = materializedEvent?.end_at ?? event.end_at;
+
   const topSpeciesLabel = getSpeciesLabel(
-    event.top_species,
+    displaySpecies,
     language,
     speciesMetaMap
   );
@@ -688,8 +803,8 @@ const scoreB =
               {topSpeciesLabel}
             </h1>
             <p className="mt-2 text-sm text-white/68">
-              {formatAppDateTime(event.start_at, language, eventTimeZone)} –{" "}
-              {formatAppDateTime(event.end_at, language, eventTimeZone)}
+              {formatAppDateTime(displayStartAt, language, eventTimeZone)} –{" "}
+              {formatAppDateTime(displayEndAt, language, eventTimeZone)}
             </p>
           </div>
 
@@ -711,11 +826,19 @@ const scoreB =
         speciesOptions={speciesOptions}
         speciesLabelByCode={speciesLabelByCode}
         topSpeciesLabel={topSpeciesLabel}
-        eventCount={event.top_count}
+        eventCount={displayCount}
         cameraLabel={cameraLabel}
         currentEventId={eventId}
         afterRemoveHref={afterRemoveHref}
         eventQuerySuffix={eventQuerySuffix}
+        materializedEventId={materializedEvent?.id ?? null}
+        initialEventRelevantAuto={materializedEvent?.event_relevant_auto ?? null}
+        initialEventRelevantUser={materializedEvent?.event_relevant_user ?? null}
+        initialEventSpeciesAuto={materializedEvent?.event_species_auto ?? null}
+        initialEventSpeciesUser={materializedEvent?.event_species_user ?? null}
+        initialEventAnimalCountAuto={materializedEvent?.event_animal_count_auto ?? null}
+        initialEventAnimalCountUser={materializedEvent?.event_animal_count_user ?? null}
+        eventProbabilityScore={materializedEvent?.event_species_score ?? null}
       />
     </main>
   );

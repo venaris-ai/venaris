@@ -21,6 +21,12 @@ import {
   getSpeciesLabel,
   loadSpeciesMeta,
 } from "@/lib/speciesMeta";
+import {
+  applyReviewableMaterializedEventFilters,
+  getMaterializedEventDetailId,
+  MATERIALIZED_EVENT_NORMAL_SELECT,
+  type MaterializedEventFeedRow,
+} from "@/lib/materializedEventFeed";
 
 function t(language: AppLanguage) {
   if (language === "en") {
@@ -153,29 +159,9 @@ type AssetRow = {
   ingest_batch_id: string | null;
 };
 
-type EventAssetRow = {
-  event_id: string;
+type MaterializedEventAssetRow = {
+  materialized_event_id: string;
   asset_id: string;
-};
-
-type EventFeedRow = {
-  id: string;
-  camera_id: string;
-  start_at: string | null;
-  end_at: string | null;
-  asset_count: number | null;
-  top_species: string | null;
-  top_count: number | null;
-  relevance_score: number | null;
-};
-
-type DetectionTopRow = {
-  asset_id: string | null;
-  species: string | null;
-  species_user: string | null;
-  score: number | null;
-  meta: unknown;
-  speciesScore?: number | null;
 };
 
 type IngestEventRow = {
@@ -194,23 +180,6 @@ type IngestEventRow = {
   topCount: number | null;
   probabilityScore: number | null;
 };
-
-function readSpeciesScore(meta: unknown): number | null {
-  if (!meta || typeof meta !== "object") return null;
-
-  const speciesMeta = (meta as { species?: unknown }).species;
-  if (!speciesMeta || typeof speciesMeta !== "object") return null;
-
-  const value = (speciesMeta as { score?: unknown }).score;
-  const numericValue =
-    typeof value === "number"
-      ? value
-      : typeof value === "string"
-        ? Number(value)
-        : NaN;
-
-  return Number.isFinite(numericValue) ? numericValue : null;
-}
 
 function extractCameraName(value: BatchCameraRelation): string | null {
   if (!value) return null;
@@ -252,60 +221,6 @@ function pickLatestBatch(
   }
 
   return selected;
-}
-
-function buildProbabilityScoreByEventId(
-  events: EventFeedRow[],
-  eventAssets: EventAssetRow[],
-  detectionRows: DetectionTopRow[]
-) {
-  const assetIdsByEventId = new Map<string, Set<string>>();
-
-  for (const row of eventAssets) {
-    if (!row.asset_id) continue;
-
-    if (!assetIdsByEventId.has(row.event_id)) {
-      assetIdsByEventId.set(row.event_id, new Set<string>());
-    }
-
-    assetIdsByEventId.get(row.event_id)?.add(row.asset_id);
-  }
-
-  const detectionRowsWithSpeciesScore = detectionRows.map((row) => ({
-    ...row,
-    speciesScore: readSpeciesScore(row.meta),
-  }));
-
-  const scoreByEventId = new Map<string, number | null>();
-
-  for (const event of events) {
-    const eventAssetIds = assetIdsByEventId.get(event.id);
-
-    if (!eventAssetIds || eventAssetIds.size === 0) {
-      scoreByEventId.set(event.id, null);
-      continue;
-    }
-
-    const candidates = detectionRowsWithSpeciesScore.filter((row) => {
-      if (!row.asset_id || !eventAssetIds.has(row.asset_id)) return false;
-
-      if (!event.top_species) return true;
-
-      const effectiveSpecies = row.species_user ?? row.species;
-      return effectiveSpecies === event.top_species;
-    });
-
-    const best = [...candidates].sort((a, b) => {
-      const scoreA = a.speciesScore ?? a.score ?? -1;
-      const scoreB = b.speciesScore ?? b.score ?? -1;
-
-      return scoreB - scoreA;
-    })[0];
-
-    scoreByEventId.set(event.id, best?.speciesScore ?? best?.score ?? null);
-  }
-
-  return scoreByEventId;
 }
 
 function Badge({
@@ -582,11 +497,13 @@ export default async function CamerasIngestPage(props: {
         );
 
         if (allowedCameraIds.length > 0) {
-          const oldestEventQuery = supabase
-            .from("event_feed")
-            .select("start_at")
-            .in("camera_id", filteredCameraIds)
-            .not("start_at", "is", null)
+          const oldestEventQuery = applyReviewableMaterializedEventFilters(
+            supabase
+              .from("materialized_events")
+              .select("start_at")
+              .in("camera_id", filteredCameraIds)
+              .not("start_at", "is", null)
+          )
             .order("start_at", { ascending: true, nullsFirst: false })
             .limit(1);
 
@@ -597,7 +514,7 @@ export default async function CamerasIngestPage(props: {
             apiError = oldestEventError.message;
           } else {
             oldestEventDate = formatDateInputValue(
-              ((oldestEventData ?? []) as Pick<EventFeedRow, "start_at">[])[0]
+              ((oldestEventData ?? []) as Pick<MaterializedEventFeedRow, "start_at">[])[0]
                 ?.start_at
             );
 
@@ -612,10 +529,13 @@ export default async function CamerasIngestPage(props: {
         }
 
         if (!apiError && allowedCameraIds.length > 0) {
-          let eventCountQuery = supabase
-            .from("event_feed")
-            .select("id", { count: "exact", head: true })
-            .in("camera_id", filteredCameraIds);
+         let eventCountQuery = applyReviewableMaterializedEventFilters(
+           supabase
+             .from("materialized_events")
+             .select("id", { count: "exact", head: true })
+             .in("camera_id", filteredCameraIds)
+         );
+
 
           if (fromDate) {
             eventCountQuery = eventCountQuery.gte("start_at", `${fromDate}T00:00:00`);
@@ -642,12 +562,12 @@ export default async function CamerasIngestPage(props: {
               MAX_PAGINATED_EVENTS - 1
             );
 
-            let eventsQuery = supabase
-              .from("event_feed")
-              .select(
-                "id,camera_id,start_at,end_at,asset_count,top_species,top_count,relevance_score"
-              )
-              .in("camera_id", filteredCameraIds);
+            let eventsQuery = applyReviewableMaterializedEventFilters(
+              supabase
+                .from("materialized_events")
+                .select(MATERIALIZED_EVENT_NORMAL_SELECT)
+                .in("camera_id", filteredCameraIds)
+            );
 
             if (fromDate) {
               eventsQuery = eventsQuery.gte("start_at", `${fromDate}T00:00:00`);
@@ -659,26 +579,27 @@ export default async function CamerasIngestPage(props: {
 
             const { data: eventsData, error: eventsError } = await eventsQuery
               .order("start_at", { ascending: false, nullsFirst: false })
-              .range(from, to);
+              .range(from, to)
+              .returns<MaterializedEventFeedRow[]>();
 
           if (eventsError) {
             apiError = eventsError.message;
           } else {
-            const events = (eventsData ?? []) as EventFeedRow[];
-            const eventIds = events.map((event) => event.id);
+          const events = eventsData ?? [];
+          const eventIds = events.map((event) => event.id);
 
-            if (eventIds.length > 0) {
-              const { data: eventAssetsData, error: eventAssetsError } =
-                await supabase
-                  .from("event_assets")
-                  .select("event_id,asset_id")
-                  .in("event_id", eventIds);
+          if (eventIds.length > 0) {
+             const { data: eventAssetsData, error: eventAssetsError } =
+               await supabase
+                  .from("materialized_event_assets")
+                  .select("materialized_event_id,asset_id")
+                  .in("materialized_event_id", eventIds)
+                  .returns<MaterializedEventAssetRow[]>();
 
               if (eventAssetsError) {
                 apiError = eventAssetsError.message;
               } else {
-                const eventAssets =
-                  (eventAssetsData ?? []) as EventAssetRow[];
+              const eventAssets = eventAssetsData ?? [];
 
                 const assetIds = Array.from(
                   new Set(eventAssets.map((row) => row.asset_id).filter(Boolean))
@@ -698,24 +619,6 @@ export default async function CamerasIngestPage(props: {
                   }
                 }
 
-                let detections: DetectionTopRow[] = [];
-                if (!apiError && assetIds.length > 0) {
-                  const { data: detectionData, error: detectionError } =
-                    await supabase
-                      .from("detections")
-                      .select("asset_id,species,species_user,score,meta")
-                      .in("asset_id", assetIds)
-                      .eq("label", "animal")
-                      .order("score", { ascending: false })
-                      .returns<DetectionTopRow[]>();
-
-                  if (detectionError) {
-                    apiError = detectionError.message;
-                  } else {
-                    detections = detectionData ?? [];
-                  }
-                }
-
                 if (!apiError) {
                   const batchIdByAssetId = new Map<string, string>();
                   const batchIdsByEventId = new Map<string, Set<string>>();
@@ -729,11 +632,11 @@ export default async function CamerasIngestPage(props: {
                     const batchId = batchIdByAssetId.get(row.asset_id);
                     if (!batchId) continue;
 
-                    if (!batchIdsByEventId.has(row.event_id)) {
-                      batchIdsByEventId.set(row.event_id, new Set<string>());
+                    if (!batchIdsByEventId.has(row.materialized_event_id)) {
+                     batchIdsByEventId.set(row.materialized_event_id, new Set<string>());
                     }
 
-                    batchIdsByEventId.get(row.event_id)?.add(batchId);
+                    batchIdsByEventId.get(row.materialized_event_id)?.add(batchId);
                   }
 
                   const batchIds = Array.from(
@@ -772,13 +675,6 @@ export default async function CamerasIngestPage(props: {
                       batches.map((batch) => [batch.id, batch] as const)
                     );
 
-                    const probabilityScoreByEventId =
-                      buildProbabilityScoreByEventId(
-                        events,
-                        eventAssets,
-                        detections
-                      );
-
                     const resolvedRows: IngestEventRow[] = [];
 
                     for (const event of events) {
@@ -789,26 +685,25 @@ export default async function CamerasIngestPage(props: {
                       const revierId = revierIdByCameraId.get(event.camera_id);
 
                       resolvedRows.push({
-                        eventId: event.id,
+                        eventId: getMaterializedEventDetailId(event),
                         batchId: batch?.id ?? null,
                         cameraName:
-                          batch?.cameraName ??
-                          cameraNameById.get(event.camera_id) ??
-                          null,
-                        receivedAt: batch?.receivedAt ?? null,
-                        source: batch?.source ?? null,
-                        ingestStatus: batch?.status ?? null,
-                        errorSummary: batch?.errorSummary ?? null,
-                        startAt: event.start_at,
-                        endAt: event.end_at,
-                        timeZone: revierId
-                          ? timeZoneByRevierId.get(revierId) ?? null
-                          : null,
-                        assetCount: event.asset_count ?? 0,
-                        topSpecies: event.top_species,
-                        topCount: event.top_count,
-                        probabilityScore:
-                          probabilityScoreByEventId.get(event.id) ?? null,
+                        batch?.cameraName ??
+                        cameraNameById.get(event.camera_id) ??
+                        null,
+                      receivedAt: batch?.receivedAt ?? null,
+                      source: batch?.source ?? null,
+                      ingestStatus: batch?.status ?? null,
+                      errorSummary: batch?.errorSummary ?? null,
+                      startAt: event.start_at,
+                      endAt: event.end_at,
+                      timeZone: revierId
+                        ? timeZoneByRevierId.get(revierId) ?? null
+                        : null,
+                      assetCount: event.asset_count ?? 0,
+                      topSpecies: event.event_species_effective,
+                      topCount: event.event_animal_count_effective,
+                      probabilityScore: event.event_species_score,
                       });
                     }
 

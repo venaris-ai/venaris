@@ -1,4 +1,4 @@
-// src/app/cameras/events/[id]/EventAssetReviewPanel.tsx #2
+// src/app/cameras/events/[id]/EventAssetReviewPanel.tsx #3
 "use client";
 
 import { useMemo, useState } from "react";
@@ -27,7 +27,6 @@ type DetectionTopRow = {
   speciesScore?: number | null; // SpeciesNet species score
 };
 
-
 function t(language: AppLanguage) {
   if (language === "en") {
     return {
@@ -40,8 +39,7 @@ function t(language: AppLanguage) {
 
   return {
     capturesTitle: "Bilder zu diesem Ereignis",
-    capturesText:
-      "Wähle ein Bild aus, um die Details zu prüfen.",
+    capturesText: "Wähle ein Bild aus, um die Details zu prüfen.",
     noAssets: "Keine Assets gefunden (event_assets leer oder Asset-IDs fehlen).",
   };
 }
@@ -60,6 +58,14 @@ export default function EventAssetReviewPanel({
   currentEventId,
   afterRemoveHref,
   eventQuerySuffix,
+  materializedEventId = null,
+  initialEventRelevantAuto = null,
+  initialEventRelevantUser = null,
+  initialEventSpeciesAuto = null,
+  initialEventSpeciesUser = null,
+  initialEventAnimalCountAuto = null,
+  initialEventAnimalCountUser = null,
+  eventProbabilityScore = null,
 }: {
   assets: AssetItem[];
   detectionsByAssetId: Record<string, DetectionTopRow>;
@@ -74,6 +80,14 @@ export default function EventAssetReviewPanel({
   currentEventId: string;
   afterRemoveHref: string;
   eventQuerySuffix: string;
+  materializedEventId?: string | null;
+  initialEventRelevantAuto?: boolean | null;
+  initialEventRelevantUser?: boolean | null;
+  initialEventSpeciesAuto?: string | null;
+  initialEventSpeciesUser?: string | null;
+  initialEventAnimalCountAuto?: number | null;
+  initialEventAnimalCountUser?: number | null;
+  eventProbabilityScore?: number | null;
 }) {
   const text = t(language);
   const [selectedAssetId, setSelectedAssetId] = useState<string | null>(
@@ -93,10 +107,12 @@ export default function EventAssetReviewPanel({
     ? detectionsByAssetId[selectedAsset.id] ?? null
     : null;
 
+  const isMaterializedEventMode = Boolean(materializedEventId);
+
   return (
     <>
-      <section className="grid gap-6 lg:grid-cols-[minmax(0,1.45fr)_380px]">
-        <div>
+      <section className="grid items-stretch gap-6 lg:grid-cols-[minmax(0,1.45fr)_380px]">
+        <div className="h-full">
           <EventHeroPanel
             asset={selectedAsset}
             selectedIndex={selectedIndex >= 0 ? selectedIndex : 0}
@@ -105,21 +121,38 @@ export default function EventAssetReviewPanel({
           />
         </div>
 
-        <aside className="space-y-4 rounded-[28px] border border-white/10 bg-white/5 p-5 backdrop-blur-sm">
+        <aside className="h-full rounded-[28px] border border-white/10 bg-white/5 p-5 backdrop-blur-sm">
           <EventDetailControls
-            key={selectedAsset?.id ?? "none"}
+            key={materializedEventId ?? selectedAsset?.id ?? "none"}
+            materializedEventId={materializedEventId}
             assetId={selectedAsset?.id ?? null}
-            initialRelevantAuto={selectedAsset?.relevant ?? null}
-            initialRelevantUser={selectedAsset?.relevantUser ?? null}
-            initialSpeciesAuto={selectedDetection?.species ?? null}
-            initialSpeciesUser={selectedDetection?.species_user ?? null}
-            
-probabilityScore={
-  selectedDetection?.speciesScore ??
-  selectedDetection?.score ??
-  null
-}
-
+            initialRelevantAuto={
+              isMaterializedEventMode
+                ? initialEventRelevantAuto
+                : selectedAsset?.relevant ?? null
+            }
+            initialRelevantUser={
+              isMaterializedEventMode
+                ? initialEventRelevantUser
+                : selectedAsset?.relevantUser ?? null
+            }
+            initialSpeciesAuto={
+              isMaterializedEventMode
+                ? initialEventSpeciesAuto
+                : selectedDetection?.species ?? null
+            }
+            initialSpeciesUser={
+              isMaterializedEventMode
+                ? initialEventSpeciesUser
+                : selectedDetection?.species_user ?? null
+            }
+            initialCountAuto={initialEventAnimalCountAuto}
+            initialCountUser={initialEventAnimalCountUser}
+            probabilityScore={
+              isMaterializedEventMode
+                ? eventProbabilityScore
+                : selectedDetection?.speciesScore ?? selectedDetection?.score ?? null
+            }
             cameraLabel={cameraLabel}
             timestampLabel={selectedAsset?.timestampLabel ?? null}
             isDemo={isDemo}

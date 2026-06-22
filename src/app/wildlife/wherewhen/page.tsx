@@ -1,4 +1,4 @@
-// src/app/wildlife/wherewhen/page.tsx #9
+// src/app/wildlife/wherewhen/page.tsx #10
 export const runtime = "nodejs";
 
 import Link from "next/link";
@@ -23,6 +23,10 @@ import {
   DEFAULT_APP_TIME_ZONE,
   getAppHour,
 } from "@/lib/dateTime";
+import {
+  applyNormalMaterializedEventFilters,
+  type MaterializedEventFeedRow,
+} from "@/lib/materializedEventFeed";
 
 type PeriodKey = "30d" | "90d" | "365d";
 
@@ -33,12 +37,10 @@ type SearchParams = {
   cameraPage?: string;
 };
 
-type EventFeedRow = {
-  id: string;
-  camera_id: string;
-  start_at: string | null;
-  top_species: string | null;
-};
+type WhereWhenEventRow = Pick<
+  MaterializedEventFeedRow,
+  "id" | "camera_id" | "start_at" | "event_species_effective"
+>;
 
 type CameraRow = {
   id: string;
@@ -492,13 +494,18 @@ export default async function WildlifeWhereWhenPage(props: {
     );
   }
 
-  const { data: eventsData, error: eventsError } = await supabase
-    .from("event_feed")
-    .select("id,camera_id,start_at,top_species")
-    .in("camera_id", cameraIds)
-    .gte("start_at", startAt)
-    .lt("start_at", endAt)
-    .order("start_at", { ascending: false });
+const eventsQuery = applyNormalMaterializedEventFilters(
+  supabase
+    .from("materialized_events")
+    .select("id,camera_id,start_at,event_species_effective")
+    .in("camera_id", cameraIds),
+);
+
+const { data: eventsData, error: eventsError } = await eventsQuery
+  .gte("start_at", startAt)
+  .lt("start_at", endAt)
+  .order("start_at", { ascending: false })
+  .returns<WhereWhenEventRow[]>();
 
   if (eventsError) {
     return (
@@ -515,16 +522,16 @@ export default async function WildlifeWhereWhenPage(props: {
     );
   }
 
-  const events = ((eventsData ?? []) as EventFeedRow[]).filter((e) => e.top_species);
-  const speciesCounts = new Map<string, number>();
+const events = eventsData ?? [];
+const speciesCounts = new Map<string, number>();
 
-  for (const event of events) {
-    if (!event.top_species) continue;
-    speciesCounts.set(
-      event.top_species,
-      (speciesCounts.get(event.top_species) ?? 0) + 1
-    );
-  }
+for (const event of events) {
+  const species = event.event_species_effective;
+
+  if (!species) continue;
+
+  speciesCounts.set(species, (speciesCounts.get(species) ?? 0) + 1);
+}
 
   const speciesOptions: SpeciesOption[] = Array.from(speciesCounts.entries())
     .map(([species, count]) => ({ species, count }))
@@ -535,9 +542,9 @@ export default async function WildlifeWhereWhenPage(props: {
       ? searchParams.species
       : speciesOptions[0]?.species ?? null;
 
-  const selectedEvents = selectedSpecies
-    ? events.filter((event) => event.top_species === selectedSpecies)
-    : [];
+const selectedEvents = selectedSpecies
+  ? events.filter((event) => event.event_species_effective === selectedSpecies)
+  : [];
 
   const cameraCounts = new Map<string, number>();
   const windowCounts = new Map<number, number>();

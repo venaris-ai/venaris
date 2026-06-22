@@ -1,4 +1,4 @@
-// src/app/wildlife/activity/page.tsx #6
+// src/app/wildlife/activity/page.tsx #8
 export const runtime = "nodejs";
 
 import Link from "next/link";
@@ -18,6 +18,10 @@ import {
   DEFAULT_APP_TIME_ZONE,
   getAppHour,
 } from "@/lib/dateTime";
+import {
+  applyNormalMaterializedEventFilters,
+  type MaterializedEventFeedRow,
+} from "@/lib/materializedEventFeed";
 
 type PeriodKey = "30d" | "90d" | "365d";
 
@@ -27,12 +31,10 @@ type SearchParams = {
   camera?: string;
 };
 
-type EventFeedRow = {
-  id: string;
-  camera_id: string;
-  start_at: string | null;
-  top_species: string | null;
-};
+type ActivityEventRow = Pick<
+  MaterializedEventFeedRow,
+  "id" | "camera_id" | "start_at"
+>;
 
 type CameraRow = {
   id: string;
@@ -446,16 +448,18 @@ export default async function WildlifeActivityPage(props: {
     );
   }
 
+const eventsQuery = applyNormalMaterializedEventFilters(
+  supabase
+    .from("materialized_events")
+    .select("id,camera_id,start_at")
+    .in("camera_id", eventCameraIds),
+);
 
-const { data: eventsData, error: eventsError } = await supabase
-  .from("event_feed")
-  .select("id,camera_id,start_at,top_species")
-  .in("camera_id", eventCameraIds)
+const { data: eventsData, error: eventsError } = await eventsQuery
   .gte("start_at", startAt)
   .lt("start_at", endAt)
-  .not("top_species", "is", null)
-  .order("start_at", { ascending: false });
-
+  .order("start_at", { ascending: false })
+  .returns<ActivityEventRow[]>();
 
   if (eventsError) {
     return (
@@ -480,7 +484,7 @@ const { data: eventsData, error: eventsError } = await supabase
     );
   }
 
-  const events = (eventsData ?? []) as EventFeedRow[];
+  const events = eventsData ?? [];
 
   const hourlyActivity = Array.from({ length: 24 }, (_, hour) => ({
     hour,

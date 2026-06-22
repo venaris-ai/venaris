@@ -1,4 +1,4 @@
-// src/app/wildlife/species/page.tsx #7
+// src/app/wildlife/species/page.tsx #8
 export const runtime = "nodejs";
 
 import Link from "next/link";
@@ -19,6 +19,10 @@ import {
   getSpeciesLabel,
   loadSpeciesMeta,
 } from "@/lib/speciesMeta";
+import {
+  applyNormalMaterializedEventFilters,
+  type MaterializedEventFeedRow,
+} from "@/lib/materializedEventFeed";
 
 type PeriodKey = "30d" | "90d" | "365d";
 
@@ -27,13 +31,14 @@ type SearchParams = {
   revier?: string;
 };
 
-type EventFeedRow = {
-  id: string;
-  camera_id: string;
-  start_at: string | null;
-  top_species: string | null;
-  top_count: number | null;
-};
+type SpeciesEventRow = Pick<
+  MaterializedEventFeedRow,
+  | "id"
+  | "camera_id"
+  | "start_at"
+  | "event_species_effective"
+  | "event_animal_count_effective"
+>;
 
 type CameraRow = {
   id: string;
@@ -371,13 +376,20 @@ export default async function WildlifeSpeciesPage(props: {
     );
   }
 
-  const { data: eventsData, error: eventsError } = await supabase
-    .from("event_feed")
-    .select("id,camera_id,start_at,top_species,top_count")
-    .in("camera_id", cameraIds)
-    .gte("start_at", startAt)
-    .lt("start_at", endAt)
-    .order("start_at", { ascending: false });
+const eventsQuery = applyNormalMaterializedEventFilters(
+  supabase
+    .from("materialized_events")
+    .select(
+      "id,camera_id,start_at,event_species_effective,event_animal_count_effective",
+    )
+    .in("camera_id", cameraIds),
+);
+
+const { data: eventsData, error: eventsError } = await eventsQuery
+  .gte("start_at", startAt)
+  .lt("start_at", endAt)
+  .order("start_at", { ascending: false })
+  .returns<SpeciesEventRow[]>();
 
   if (eventsError) {
     return (
@@ -394,27 +406,29 @@ export default async function WildlifeSpeciesPage(props: {
     );
   }
 
-  const events = ((eventsData ?? []) as EventFeedRow[]).filter((e) => e.top_species);
+const events = eventsData ?? [];
 
-  const speciesStats = new Map<
-    string,
-    { species: string; eventCount: number; wildCount: number }
-  >();
+const speciesStats = new Map<
+  string,
+  { species: string; eventCount: number; wildCount: number }
+>();
 
-  for (const event of events) {
-    if (!event.top_species) continue;
+for (const event of events) {
+  const species = event.event_species_effective;
 
-    const existing =
-      speciesStats.get(event.top_species) ?? {
-        species: event.top_species,
-        eventCount: 0,
-        wildCount: 0,
-      };
+  if (!species) continue;
 
-    existing.eventCount += 1;
-    existing.wildCount += event.top_count ?? 1;
-    speciesStats.set(event.top_species, existing);
-  }
+  const existing =
+    speciesStats.get(species) ?? {
+      species,
+      eventCount: 0,
+      wildCount: 0,
+    };
+
+  existing.eventCount += 1;
+  existing.wildCount += event.event_animal_count_effective ?? 1;
+  speciesStats.set(species, existing);
+}
 
   const totalSpeciesEvents = Array.from(speciesStats.values()).reduce(
     (sum, row) => sum + row.eventCount,

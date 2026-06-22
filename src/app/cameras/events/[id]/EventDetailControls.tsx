@@ -1,4 +1,4 @@
-// src/app/cameras/events/[id]/EventDetailControls.tsx #11
+// src/app/cameras/events/[id]/EventDetailControls.tsx #13
 "use client";
 
 import { useState } from "react";
@@ -8,6 +8,7 @@ import type { SpeciesOption } from "@/lib/speciesMeta";
 
 type RelevantSelectValue = "yes" | "no";
 type SpeciesSelectValue = "auto" | string;
+type CountInputValue = string;
 
 function SaveIcon() {
   return (
@@ -62,6 +63,38 @@ function speciesUserToSelect(value: string | null): SpeciesSelectValue {
   return value;
 }
 
+function effectiveCountToInput(
+  countUser: number | null | undefined,
+  countAuto: number | null | undefined,
+  eventCount: number | null | undefined
+): CountInputValue {
+  const value = countUser ?? countAuto ?? eventCount;
+
+  if (typeof value !== "number" || !Number.isFinite(value)) return "";
+
+  return String(Math.round(value));
+}
+
+function countInputToNumber(value: CountInputValue): number | null {
+  const trimmed = value.trim();
+
+  if (!trimmed) return null;
+
+  const parsed = Number(trimmed);
+  if (!Number.isInteger(parsed) || parsed < 1 || parsed > 999) return null;
+
+  return parsed;
+}
+
+function isInvalidManualCount(value: CountInputValue) {
+  const trimmed = value.trim();
+
+  if (!trimmed) return false;
+
+  const parsed = Number(trimmed);
+  return !Number.isInteger(parsed) || parsed < 1 || parsed > 999;
+}
+
 function scoreBadge(score: number | null, language: AppLanguage) {
   if (typeof score !== "number") return "—";
 
@@ -89,10 +122,8 @@ function t(language: AppLanguage) {
       save: "Save changes",
       relevant: "Relevant",
       species: "Species",
-      count: "Count",
-      assets: "Assets",
-      detections: "Detections",
-      captures: "Captures",
+      count: "Animal count",
+      imageCount: "Image count",
       probability: "Probability",
       camera: "Camera",
       timestamp: "Timestamp",
@@ -112,10 +143,8 @@ function t(language: AppLanguage) {
     save: "Änderungen speichern",
     relevant: "Relevant",
     species: "Art",
-    count: "Anzahl",
-    assets: "Assets",
-    detections: "Erkennungen",
-    captures: "Aufnahmen",
+    count: "Anzahl Stück",
+    imageCount: "Anzahl Bilder",
     probability: "Wahrscheinlichkeit",
     camera: "Kamera",
     timestamp: "Zeitpunkt",
@@ -132,11 +161,14 @@ function t(language: AppLanguage) {
 }
 
 export default function EventDetailControls({
+  materializedEventId = null,
   assetId,
   initialRelevantAuto,
   initialRelevantUser,
   initialSpeciesAuto,
   initialSpeciesUser,
+  initialCountAuto = null,
+  initialCountUser = null,
   probabilityScore,
   cameraLabel,
   timestampLabel,
@@ -144,18 +176,20 @@ export default function EventDetailControls({
   language,
   speciesOptions,
   speciesLabelByCode,
-  topSpeciesLabel,
   eventCount,
   assetCount,
   currentEventId,
   afterRemoveHref,
   eventQuerySuffix,
 }: {
+  materializedEventId?: string | null;
   assetId: string | null;
   initialRelevantAuto: boolean | null;
   initialRelevantUser: boolean | null;
   initialSpeciesAuto: string | null;
   initialSpeciesUser: string | null;
+  initialCountAuto?: number | null;
+  initialCountUser?: number | null;
   probabilityScore?: number | null;
   cameraLabel: string;
   timestampLabel?: string | null;
@@ -173,16 +207,25 @@ export default function EventDetailControls({
   const router = useRouter();
   const text = t(language);
 
+  const isMaterializedEventMode = Boolean(materializedEventId);
+
   const initialRelevantValue = relevantToSelect(
     initialRelevantAuto,
     initialRelevantUser
   );
   const initialSpeciesValue = speciesUserToSelect(initialSpeciesUser);
+  const initialCountValue = effectiveCountToInput(
+    initialCountUser,
+    initialCountAuto,
+    eventCount
+  );
 
   const [relevantValue, setRelevantValue] =
     useState<RelevantSelectValue>(initialRelevantValue);
   const [speciesValue, setSpeciesValue] =
     useState<SpeciesSelectValue>(initialSpeciesValue);
+  const [countValue, setCountValue] =
+    useState<CountInputValue>(initialCountValue);
   const [busy, setBusy] = useState(false);
   const [isReadOnlyModalOpen, setIsReadOnlyModalOpen] = useState(false);
 
@@ -190,17 +233,75 @@ export default function EventDetailControls({
   const hasManualSpeciesOverride =
     !isManuallyNotRelevant && speciesValue !== "auto";
 
+  const countInputInvalid =
+    isMaterializedEventMode &&
+    !isManuallyNotRelevant &&
+    isInvalidManualCount(countValue);
+
+  const hasCountChanged =
+    isMaterializedEventMode &&
+    !isManuallyNotRelevant &&
+    countValue.trim() !== initialCountValue.trim();
+
+  const hasManualCountOverride =
+    isMaterializedEventMode &&
+    !isManuallyNotRelevant &&
+    (initialCountUser != null || hasCountChanged);
+
   const dirty =
     relevantValue !== initialRelevantValue ||
-    (!isManuallyNotRelevant && speciesValue !== initialSpeciesValue);
+    (!isManuallyNotRelevant && speciesValue !== initialSpeciesValue) ||
+    hasCountChanged;
+
+  const canSave =
+    dirty &&
+    !busy &&
+    !isDemo &&
+    !countInputInvalid &&
+    Boolean(materializedEventId || assetId);
 
   async function saveChanges() {
-    if (!assetId || !dirty || busy || isDemo) return;
+    if (!dirty || busy || isDemo || countInputInvalid) return;
 
     setBusy(true);
 
     try {
       const nextRelevant = selectToRelevantUser(relevantValue);
+
+      if (materializedEventId) {
+        const nextSpecies =
+          nextRelevant && speciesValue !== "auto" ? speciesValue : null;
+        const nextAnimalCount =
+          nextRelevant && hasManualCountOverride
+            ? countInputToNumber(countValue)
+            : null;
+
+        const reviewRes = await fetch("/api/materialized-event-review", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            materializedEventId,
+            relevant: nextRelevant,
+            species: nextSpecies,
+            animalCount: nextAnimalCount,
+          }),
+        });
+
+        if (!reviewRes.ok) {
+          const rawText = await reviewRes.text();
+          throw new Error(rawText || `Materialized event HTTP ${reviewRes.status}`);
+        }
+
+        if (!nextRelevant) {
+          router.push(afterRemoveHref);
+          return;
+        }
+
+        router.refresh();
+        return;
+      }
+
+      if (!assetId) return;
 
       const relevantRes = await fetch("/api/asset-relevant", {
         method: "POST",
@@ -222,18 +323,15 @@ export default function EventDetailControls({
           ? relevantPayload.eventId
           : null;
 
-if (!nextRelevant) {
-  if (typeof assetCount === "number" && assetCount > 1) {
-    router.refresh();
-    return;
-  }
+      if (!nextRelevant) {
+        if (typeof assetCount === "number" && assetCount > 1) {
+          router.refresh();
+          return;
+        }
 
-  router.push(afterRemoveHref);
-  return;
-}
-
-
-
+        router.push(afterRemoveHref);
+        return;
+      }
 
       const nextSpecies = speciesValue === "auto" ? null : speciesValue;
 
@@ -277,7 +375,7 @@ if (!nextRelevant) {
 
   return (
     <>
-      <div className="space-y-4">
+      <div className="flex h-full flex-col space-y-4">
         <div className="flex items-center justify-end">
           {dirty ? (
             isDemo ? (
@@ -294,7 +392,7 @@ if (!nextRelevant) {
               <button
                 type="button"
                 onClick={saveChanges}
-                disabled={busy || !assetId}
+                disabled={!canSave}
                 className="inline-flex h-8 w-8 items-center justify-center rounded-[10px] border border-amber-300/20 bg-amber-300/10 text-amber-200 hover:bg-amber-300/15 disabled:cursor-not-allowed disabled:opacity-60"
                 aria-label={text.save}
                 title={text.save}
@@ -316,21 +414,35 @@ if (!nextRelevant) {
         <div className="grid grid-cols-2 gap-3">
           <div className="rounded-[20px] border border-white/10 bg-white/5 p-4">
             <div className="text-xs text-white/45">{text.count}</div>
-            <div className="mt-1 text-2xl font-semibold text-white">
-              {formatInteger(eventCount, language)}
-            </div>
-            <div className="mt-1 text-xs text-white/55">
-              {topSpeciesLabel ? `${topSpeciesLabel} · ` : ""}
-              {text.detections}
-            </div>
+
+            {isMaterializedEventMode ? (
+              <input
+                type="number"
+                min={1}
+                max={999}
+                step={1}
+                inputMode="numeric"
+                value={countValue}
+                onChange={(event) => {
+                  const nextValue = event.target.value.trim();
+                  setCountValue(nextValue.replace(/[^\d]/g, ""));
+                }}
+                disabled={busy || isDemo || isManuallyNotRelevant}
+                className="mt-2 h-11 w-full rounded-[10px] border border-white/10 bg-white/5 px-3 text-2xl font-semibold text-white outline-none disabled:bg-white/5 disabled:text-white/35"
+                title={isDemo ? text.demoTitle : ""}
+              />
+            ) : (
+              <div className="mt-2 text-2xl font-semibold text-white">
+                {formatInteger(eventCount, language)}
+              </div>
+            )}
           </div>
 
           <div className="rounded-[20px] border border-white/10 bg-white/5 p-4">
-            <div className="text-xs text-white/45">{text.assets}</div>
-            <div className="mt-1 text-2xl font-semibold text-white">
+            <div className="text-xs text-white/45">{text.imageCount}</div>
+            <div className="mt-2 text-2xl font-semibold text-white">
               {formatInteger(assetCount, language)}
             </div>
-            <div className="mt-1 text-xs text-white/55">{text.captures}</div>
           </div>
         </div>
 
@@ -345,9 +457,10 @@ if (!nextRelevant) {
 
                 if (nextValue === "no") {
                   setSpeciesValue("auto");
+                  setCountValue(initialCountValue);
                 }
               }}
-              disabled={!assetId || busy || isDemo}
+              disabled={(!assetId && !materializedEventId) || busy || isDemo}
               className="mt-2 w-full rounded-[10px] border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none disabled:bg-white/5 disabled:text-white/35"
               title={isDemo ? text.demoTitle : ""}
             >
@@ -372,7 +485,7 @@ if (!nextRelevant) {
                 onChange={(e) =>
                   setSpeciesValue(e.target.value as SpeciesSelectValue)
                 }
-                disabled={!assetId || busy || isDemo}
+                disabled={(!assetId && !materializedEventId) || busy || isDemo}
                 className="mt-2 w-full rounded-[10px] border border-white/10 bg-white/5 px-3 py-2 text-sm text-white outline-none disabled:bg-white/5 disabled:text-white/35"
                 title={isDemo ? text.demoTitle : ""}
               >
@@ -396,7 +509,7 @@ if (!nextRelevant) {
         <div className="rounded-[20px] border border-white/10 bg-white/5 p-4">
           <div className="text-xs text-white/45">{text.probability}</div>
           <div className="mt-1 text-sm font-medium text-white">
-            {isManuallyNotRelevant || hasManualSpeciesOverride
+            {isManuallyNotRelevant || hasManualSpeciesOverride || hasManualCountOverride
               ? text.manual
               : formatProbability(probabilityScore, language)}
           </div>

@@ -1,4 +1,4 @@
-// src/app/page.tsx #13
+// src/app/page.tsx #14
 import Link from "next/link";
 import { cookies } from "next/headers";
 import { requirePathAccess, canAccessPath } from "@/lib/authz";
@@ -15,6 +15,12 @@ import {
   type AppLanguage,
 } from "@/lib/i18n";
 import { resolveAssetPreviewUrl } from "@/lib/demoAssetResolver";
+import {
+  applyNormalMaterializedEventFilters,
+  getMaterializedEventDetailId,
+  MATERIALIZED_EVENT_NORMAL_SELECT,
+  type MaterializedEventFeedRow,
+} from "@/lib/materializedEventFeed";
 
 type SubscriptionRow = {
   plan_key: "starter" | "pro" | "enterprise";
@@ -43,17 +49,6 @@ type RevierRow = {
   is_default: boolean;
 };
 
-type EventRow = {
-  id: string;
-  camera_id: string;
-  start_at: string | null;
-  end_at: string | null;
-  top_species: string | null;
-  top_count: number | null;
-  relevance_score: number | null;
-  created_at: string | null;
-};
-
 type AssetPreviewRow = {
   id: string;
   camera_id: string;
@@ -62,18 +57,15 @@ type AssetPreviewRow = {
   captured_at: string | null;
 };
 
-type EventAssetRow = {
-  event_id: string;
+type MaterializedEventAssetRow = {
+  materialized_event_id: string;
   asset_id: string;
-};
-
-type AssetDetectionScoreRow = {
-  asset_id: string | null;
-  score: number | null;
+  asset_captured_at: string | null;
+  image_species_score: number | null;
 };
 
 type EventPreviewItem = {
-  event: EventRow;
+  event: MaterializedEventFeedRow;
   previewUrl: string | null;
   timestampLabel: string;
 };
@@ -162,8 +154,21 @@ function formatRelativeTime(value: string | null, language: AppLanguage) {
   return formatter.format(Math.round(diffMs / day), "day");
 }
 
-function getAssetSortTime(asset: AssetPreviewRow) {
-  const value = asset.captured_at ?? asset.created_at;
+function getAssetSortTime(asset: AssetPreviewRow | null | undefined) {
+  const value = asset?.captured_at ?? asset?.created_at;
+
+  if (!value) return Number.MAX_SAFE_INTEGER;
+
+  const time = new Date(value).getTime();
+
+  return Number.isFinite(time) ? time : Number.MAX_SAFE_INTEGER;
+}
+
+function getEventAssetLinkSortTime(
+  link: MaterializedEventAssetRow,
+  asset: AssetPreviewRow | null | undefined,
+) {
+  const value = link.asset_captured_at ?? asset?.captured_at ?? asset?.created_at;
 
   if (!value) return Number.MAX_SAFE_INTEGER;
 
@@ -325,7 +330,7 @@ function t(language: AppLanguage) {
     noRecentEvents: "Noch kein Wildtier-Ereignis sichtbar.",
     detailsLabel: "Details ansehen",
     noPreview: "Keine Vorschau",
-    previewAlt: "Vorschau des letzten Wildtier-Ereignisse",
+    previewAlt: "Vorschau des letzten Wildtier-Ereignisses",
   };
 }
 
@@ -410,28 +415,24 @@ function EventGalleryCard({
           {events.map(({ event, previewUrl, timestampLabel }) => (
             <Link
               key={event.id}
-              href={`/cameras/events/${event.id}`}
+              href={`/cameras/events/${getMaterializedEventDetailId(event)}`}
               className="group rounded-[24px] border border-white/10 bg-white/5 p-3 backdrop-blur-sm transition hover:border-amber-300/25 hover:bg-white/8"
             >
               <div className="aspect-video w-full overflow-hidden rounded-[16px] bg-white/5">
-
-{previewUrl ? (
-  <>
-    {/* eslint-disable-next-line @next/next/no-img-element */}
-    <img
-      src={previewUrl}
-      alt={text.previewAlt}
-      className="h-full w-full object-cover transition duration-200 group-hover:scale-[1.02]"
-    />
-  </>
-) : (
-  <div className="flex h-full items-center justify-center text-sm text-white/45">
-    {text.noPreview}
-  </div>
-)}
-
-
-
+                {previewUrl ? (
+                  <>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={previewUrl}
+                      alt={text.previewAlt}
+                      className="h-full w-full object-cover transition duration-200 group-hover:scale-[1.02]"
+                    />
+                  </>
+                ) : (
+                  <div className="flex h-full items-center justify-center text-sm text-white/45">
+                    {text.noPreview}
+                  </div>
+                )}
               </div>
 
               <div className="mt-3 flex items-center justify-between gap-3 text-xs">
@@ -449,6 +450,7 @@ function EventGalleryCard({
     </section>
   );
 }
+
 export default async function HomePage() {
   const ctx = await requirePathAccess("/");
   const cookieStore = await cookies();
@@ -557,63 +559,61 @@ export default async function HomePage() {
     );
   }
 
+  const cameras = (camerasResult.data ?? []) as CameraRow[];
+  const reviers = (reviersResult.data ?? []) as RevierRow[];
 
-const cameras = (camerasResult.data ?? []) as CameraRow[];
-const reviers = (reviersResult.data ?? []) as RevierRow[];
+  const activeRevierIds = new Set(reviers.map((revier) => revier.id));
 
-const activeRevierIds = new Set(reviers.map((revier) => revier.id));
+  const scopedCameras = cameras.filter(
+    (camera) => camera.revier_id && activeRevierIds.has(camera.revier_id),
+  );
 
-const scopedCameras = cameras.filter(
-  (camera) => camera.revier_id && activeRevierIds.has(camera.revier_id),
-);
-
-const cameraIds = scopedCameras.map((camera) => camera.id);
-
-
-
+  const cameraIds = scopedCameras.map((camera) => camera.id);
 
   const membersCount = membersResult.count ?? 0;
   const openInvitesCount = invitesResult.count ?? 0;
   const subscription = subscriptionResult.data;
 
-  let latestEvents: EventRow[] = [];
+  let latestEvents: MaterializedEventFeedRow[] = [];
   let recentEventsCount = 0;
   let latestEventPreviews: EventPreviewItem[] = [];
 
   if (cameraIds.length > 0) {
-    const [latestEventsResult, eventsCountResult] = await Promise.all([
+    const latestEventsQuery = applyNormalMaterializedEventFilters(
       supabase
-        .from("events")
-        .select(
-          "id,camera_id,start_at,end_at,top_species,top_count,relevance_score,created_at",
-        )
-        .in("camera_id", cameraIds)
+        .from("materialized_events")
+        .select(MATERIALIZED_EVENT_NORMAL_SELECT)
+        .in("camera_id", cameraIds),
+    );
+
+    const eventsCountQuery = applyNormalMaterializedEventFilters(
+      supabase
+        .from("materialized_events")
+        .select("id", { count: "exact", head: true })
+        .in("camera_id", cameraIds),
+    );
+
+    const [latestEventsResult, eventsCountResult] = await Promise.all([
+      latestEventsQuery
         .order("start_at", { ascending: false })
         .order("created_at", { ascending: false })
         .limit(9)
-        .returns<EventRow[]>(),
+        .returns<MaterializedEventFeedRow[]>(),
 
-supabase
-  .from("events")
-  .select("id", { count: "exact", head: true })
-  .in("camera_id", cameraIds)
-  .gte("start_at", recentWindowIso)
-  .lt("start_at", nowIso)
-  .not("top_species", "is", null),
-
-
-
+      eventsCountQuery
+        .gte("start_at", recentWindowIso)
+        .lt("start_at", nowIso),
     ]);
 
     if (latestEventsResult.error) {
       throw new Error(
-        `Failed to load latest events: ${latestEventsResult.error.message}`,
+        `Failed to load latest materialized events: ${latestEventsResult.error.message}`,
       );
     }
 
     if (eventsCountResult.error) {
       throw new Error(
-        `Failed to load event count: ${eventsCountResult.error.message}`,
+        `Failed to load materialized event count: ${eventsCountResult.error.message}`,
       );
     }
 
@@ -625,99 +625,80 @@ supabase
     const eventIds = latestEvents.map((event) => event.id);
 
     const { data: eventAssets, error: eventAssetsError } = await supabase
-      .from("event_assets")
-      .select("event_id,asset_id")
-      .in("event_id", eventIds)
-      .returns<EventAssetRow[]>();
+      .from("materialized_event_assets")
+      .select(
+        "materialized_event_id,asset_id,asset_captured_at,image_species_score",
+      )
+      .in("materialized_event_id", eventIds)
+      .returns<MaterializedEventAssetRow[]>();
 
     if (eventAssetsError) {
       throw new Error(
-        `Failed to load latest event assets: ${eventAssetsError.message}`,
+        `Failed to load latest materialized event assets: ${eventAssetsError.message}`,
       );
     }
 
+    const eventAssetLinks = eventAssets ?? [];
     const assetIds = Array.from(
-      new Set((eventAssets ?? []).map((row) => row.asset_id)),
+      new Set(eventAssetLinks.map((row) => row.asset_id)),
     );
 
     let assetsById = new Map<string, AssetPreviewRow>();
-const bestAnimalScoreByAssetId = new Map<string, number>();
 
     if (assetIds.length > 0) {
-      const [assetsDataResult, detectionsDataResult] = await Promise.all([
-        supabase
-          .from("assets")
-          .select("id,camera_id,storage_path,created_at,captured_at")
-          .in("id", assetIds)
-          .returns<AssetPreviewRow[]>(),
+      const { data: assetsData, error: assetsDataError } = await supabase
+        .from("assets")
+        .select("id,camera_id,storage_path,created_at,captured_at")
+        .in("id", assetIds)
+        .returns<AssetPreviewRow[]>();
 
-        supabase
-          .from("detections")
-          .select("asset_id,score")
-          .in("asset_id", assetIds)
-          .eq("label", "animal")
-          .returns<AssetDetectionScoreRow[]>(),
-      ]);
-
-      if (assetsDataResult.error) {
+      if (assetsDataError) {
         throw new Error(
-          `Failed to load latest event preview assets: ${assetsDataResult.error.message}`,
-        );
-      }
-
-      if (detectionsDataResult.error) {
-        throw new Error(
-          `Failed to load latest event preview detection scores: ${detectionsDataResult.error.message}`,
+          `Failed to load latest materialized event preview assets: ${assetsDataError.message}`,
         );
       }
 
       assetsById = new Map(
-        (assetsDataResult.data ?? []).map((asset) => [asset.id, asset]),
+        (assetsData ?? []).map((asset) => [asset.id, asset]),
       );
-
-      for (const detection of detectionsDataResult.data ?? []) {
-        if (!detection.asset_id) continue;
-        if (typeof detection.score !== "number") continue;
-
-        const current = bestAnimalScoreByAssetId.get(detection.asset_id);
-
-        if (current === undefined || detection.score > current) {
-          bestAnimalScoreByAssetId.set(detection.asset_id, detection.score);
-        }
-      }
     }
 
-    const assetsByEventId = new Map<string, AssetPreviewRow[]>();
+    const linksByEventId = new Map<string, MaterializedEventAssetRow[]>();
 
-    for (const row of eventAssets ?? []) {
-      const asset = assetsById.get(row.asset_id);
-
-      if (!asset) continue;
-
-      const assetsForEvent = assetsByEventId.get(row.event_id) ?? [];
-      assetsForEvent.push(asset);
-      assetsByEventId.set(row.event_id, assetsForEvent);
+    for (const row of eventAssetLinks) {
+      const linksForEvent = linksByEventId.get(row.materialized_event_id) ?? [];
+      linksForEvent.push(row);
+      linksByEventId.set(row.materialized_event_id, linksForEvent);
     }
 
     latestEventPreviews = await Promise.all(
       latestEvents.map(async (event) => {
-        const assetsForEvent = [...(assetsByEventId.get(event.id) ?? [])].sort(
-          (a, b) => {
-            const scoreA = bestAnimalScoreByAssetId.get(a.id) ?? -1;
-            const scoreB = bestAnimalScoreByAssetId.get(b.id) ?? -1;
-            const scoreDiff = scoreB - scoreA;
+        const linksForEvent = [
+          ...(linksByEventId.get(event.id) ?? []),
+        ].sort((a, b) => {
+          const scoreA = a.image_species_score ?? -1;
+          const scoreB = b.image_species_score ?? -1;
+          const scoreDiff = scoreB - scoreA;
 
-            if (scoreDiff !== 0) return scoreDiff;
+          if (scoreDiff !== 0) return scoreDiff;
 
-            const capturedDiff = getAssetSortTime(a) - getAssetSortTime(b);
+          const assetA = assetsById.get(a.asset_id);
+          const assetB = assetsById.get(b.asset_id);
+          const linkTimeDiff =
+            getEventAssetLinkSortTime(a, assetA) -
+            getEventAssetLinkSortTime(b, assetB);
 
-            if (capturedDiff !== 0) return capturedDiff;
+          if (linkTimeDiff !== 0) return linkTimeDiff;
 
-            return a.id.localeCompare(b.id);
-          },
-        );
+          const assetTimeDiff = getAssetSortTime(assetA) - getAssetSortTime(assetB);
 
-        const heroAsset = assetsForEvent[0] ?? null;
+          if (assetTimeDiff !== 0) return assetTimeDiff;
+
+          return a.asset_id.localeCompare(b.asset_id);
+        });
+
+        const heroLink = linksForEvent[0] ?? null;
+        const heroAsset = heroLink ? assetsById.get(heroLink.asset_id) : null;
         const previewUrl = heroAsset
           ? await resolveAssetPreviewUrl({
               asset: {
@@ -733,7 +714,8 @@ const bestAnimalScoreByAssetId = new Map<string, number>();
           event,
           previewUrl,
           timestampLabel: formatRelativeTime(
-            heroAsset?.captured_at ??
+            heroLink?.asset_captured_at ??
+              heroAsset?.captured_at ??
               heroAsset?.created_at ??
               event.start_at ??
               event.created_at,
