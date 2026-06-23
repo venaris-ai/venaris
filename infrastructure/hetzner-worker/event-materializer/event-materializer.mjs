@@ -1,4 +1,4 @@
-// infrastructure/hetzner-worker/event-materializer/event-materializer.mjs #4
+// infrastructure/hetzner-worker/event-materializer/event-materializer.mjs #5
 import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";
@@ -64,6 +64,27 @@ function parseDateArg(value) {
   }
 
   return date.toISOString();
+}
+
+function parseCsv(value) {
+  return String(value ?? "")
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function normalizeScopeMode(value) {
+  const normalized = String(value ?? "").trim().toLowerCase();
+
+  if (!normalized || normalized === "dynamic" || normalized === "all" || normalized === "auto") {
+    return "dynamic";
+  }
+
+  if (normalized === "explicit" || normalized === "manual") {
+    return "explicit";
+  }
+
+  throw new Error(`Invalid MATERIALIZER_SCOPE: ${value}`);
 }
 
 function chunk(items, size) {
@@ -552,15 +573,57 @@ function buildMaterializedEvent(cluster, legacyEventIds, options) {
   };
 }
 
-async function fetchOrganizations(supabase, orgSlugs) {
+function assertNoExcludedOrgSlugs(orgSlugs, excludedOrgSlugs) {
+  const excluded = new Set(excludedOrgSlugs);
+  const blocked = orgSlugs.filter((slug) => excluded.has(slug));
+
+  if (blocked.length > 0) {
+    throw new Error(`Materializer scope includes excluded org slugs: ${blocked.join(", ")}`);
+  }
+}
+
+function assertNoDemoOrganizations(organizations) {
+  const demoRows = organizations.filter((org) => org.is_demo === true);
+
+  if (demoRows.length > 0) {
+    const slugs = demoRows.map((org) => org.slug).filter(Boolean).join(", ");
+    throw new Error(`Materializer scope includes demo organizations: ${slugs || demoRows.length}`);
+  }
+}
+
+async function fetchOrganizations(supabase, orgSlugs, excludedOrgSlugs) {
+  assertNoExcludedOrgSlugs(orgSlugs, excludedOrgSlugs);
+
   const { data, error } = await supabase
     .from("organizations")
-    .select("id,slug,name")
+    .select("id,slug,name,is_demo")
     .in("slug", orgSlugs);
 
   if (error) throw new Error(`organizations_failed: ${error.message}`);
 
-  return data ?? [];
+  const organizations = data ?? [];
+  assertNoDemoOrganizations(organizations);
+
+  return organizations;
+}
+
+async function fetchMaterializerOrganizations(supabase, excludedOrgSlugs) {
+  const excluded = new Set(excludedOrgSlugs);
+
+  const organizations = await fetchAll(
+    () =>
+      supabase
+        .from("organizations")
+        .select("id,slug,name,is_demo")
+        .order("slug", { ascending: true }),
+    "organizations_dynamic"
+  );
+
+  return organizations.filter((org) => {
+    const slug = String(org.slug ?? "").trim();
+
+    return Boolean(slug) && org.is_demo !== true && !excluded.has(slug);
+  });
 }
 
 async function fetchPendingAssets(supabase, options) {
@@ -947,14 +1010,33 @@ async function main() {
   const execute = argSet.has("--execute");
   const dryRun = !execute;
 
-  const orgSlugs = (
-    argValue("--org-slugs") ||
-    process.env.MATERIALIZER_ORG_SLUGS ||
-    "heubachwiesen-2,falke-jagd,andreas-dehling"
-  )
-    .split(",")
-    .map((slug) => slug.trim())
-    .filter(Boolean);
+  const orgSlugsArg = argValue("--org-slugs");
+
+  const scopeMode = normalizeScopeMode(
+    argValue("--scope") ||
+      process.env.MATERIALIZER_SCOPE ||
+      "dynamic"
+  );
+
+  const excludedOrgSlugs = uniqueNonEmpty(
+    parseCsv(
+      argValue("--exclude-org-slugs") ||
+        process.env.MATERIALIZER_EXCLUDED_ORG_SLUGS ||
+        "demo"
+    ),
+    1000
+  );
+
+  const configuredOrgSlugs = uniqueNonEmpty(
+    parseCsv(orgSlugsArg || process.env.MATERIALIZER_ORG_SLUGS || ""),
+    1000
+  );
+
+  const useExplicitOrgScope = scopeMode === "explicit" || orgSlugsArg !== null;
+
+  if (useExplicitOrgScope && configuredOrgSlugs.length === 0) {
+    throw new Error("Explicit materializer scope selected but no org slugs were provided.");
+  }
 
   const materializerVersion =
     argValue("--version") ||
@@ -989,30 +1071,55 @@ async function main() {
     argValue("--since") || process.env.MATERIALIZER_SINCE || null
   );
 
-  const options = {
-    execute,
-    dryRun,
-    orgSlugs,
-    materializerVersion,
-    windowMinutes,
-    contextMinutes,
-    maxPendingAssets,
-    maxContextAssets,
-    sinceIso,
-  };
-
   const supabase = buildSupabaseClient();
-  const runId = await createRun(supabase, options);
+  let runId = null;
 
   try {
+    const organizations = useExplicitOrgScope
+      ? await fetchOrganizations(supabase, configuredOrgSlugs, excludedOrgSlugs)
+      : await fetchMaterializerOrganizations(supabase, excludedOrgSlugs);
+
+    if (organizations.length === 0) {
+      throw new Error("No organizations found for event materializer scope.");
+    }
+
+    if (useExplicitOrgScope && organizations.length !== configuredOrgSlugs.length) {
+      const found = new Set(organizations.map((org) => org.slug));
+      const missing = configuredOrgSlugs.filter((slug) => !found.has(slug));
+      throw new Error(`Missing organizations for slugs: ${missing.join(", ")}`);
+    }
+
+    const orgSlugs = organizations.map((org) => org.slug);
+
+    const options = {
+      execute,
+      dryRun,
+      orgSlugs,
+      scopeMode: useExplicitOrgScope ? "explicit" : "dynamic",
+      configuredOrgSlugs: useExplicitOrgScope ? configuredOrgSlugs : [],
+      excludedOrgSlugs,
+      materializerVersion,
+      windowMinutes,
+      contextMinutes,
+      maxPendingAssets,
+      maxContextAssets,
+      sinceIso,
+    };
+
+    runId = await createRun(supabase, options);
+
     console.log(
       JSON.stringify(
         {
           tool: "event-materializer",
           mode: execute ? "shadow_execute" : "dry_run",
           scanMode: "pending_assets",
+          scopeMode: options.scopeMode,
+          configuredOrgSlugs: useExplicitOrgScope ? configuredOrgSlugs : null,
+          excludedOrgSlugs,
+          resolvedOrgSlugs: orgSlugs,
+          organizationCount: organizations.length,
           materializerVersion,
-          orgSlugs,
           windowMinutes,
           contextMinutes,
           maxPendingAssets,
@@ -1023,14 +1130,6 @@ async function main() {
         2
       )
     );
-
-    const organizations = await fetchOrganizations(supabase, orgSlugs);
-
-    if (organizations.length !== orgSlugs.length) {
-      const found = new Set(organizations.map((org) => org.slug));
-      const missing = orgSlugs.filter((slug) => !found.has(slug));
-      throw new Error(`Missing organizations for slugs: ${missing.join(", ")}`);
-    }
 
     const pendingAssets = await fetchPendingAssets(supabase, options);
     const pendingAssetIds = new Set(pendingAssets.map((asset) => asset.id));
