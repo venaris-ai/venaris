@@ -1,12 +1,16 @@
-// infrastructure/hetzner-worker/event-materializer/event-materializer.mjs #5
+// infrastructure/hetzner-worker/event-materializer/event-materializer.mjs #6
 import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";
+import os from "node:os";
 import { createClient } from "@supabase/supabase-js";
 
 const PAGE_SIZE = 1000;
 const IN_CHUNK_SIZE = 75;
 const DEFAULT_MAX_PENDING_ASSETS = 300;
+const DEFAULT_CLAIM_BATCH_SIZE = 300;
+const DEFAULT_CLAIM_LEASE_MINUTES = 30;
+const DEFAULT_CLAIM_RETRY_AFTER_MINUTES = 10;
 const DEFAULT_CONTEXT_MINUTES = 60;
 const DEFAULT_MAX_CONTEXT_ASSETS = 3000;
 
@@ -626,23 +630,124 @@ async function fetchMaterializerOrganizations(supabase, excludedOrgSlugs) {
   });
 }
 
-async function fetchPendingAssets(supabase, options) {
+async function fetchPendingAssetsPreview(supabase, options) {
   const { data, error } = await supabase.rpc(
-    "get_materializer_pending_assets",
+    "get_materializer_pending_assets_dynamic",
     {
-      p_org_slugs: options.orgSlugs,
       p_materializer_version: options.materializerVersion,
-      p_limit: options.maxPendingAssets,
+      p_limit: options.claimBatchSize,
       p_window_minutes: options.windowMinutes,
       p_since: options.sinceIso,
+      p_excluded_org_slugs: options.excludedOrgSlugs,
     }
   );
 
   if (error) {
-    throw new Error(`get_materializer_pending_assets_failed: ${error.message}`);
+    throw new Error(`get_materializer_pending_assets_dynamic_failed: ${error.message}`);
   }
 
   return data ?? [];
+}
+
+async function claimMaterializerPendingAssets(supabase, options, runId) {
+  const { data, error } = await supabase.rpc(
+    "claim_materializer_pending_assets",
+    {
+      p_materializer_version: options.materializerVersion,
+      p_limit: options.claimBatchSize,
+      p_window_minutes: options.windowMinutes,
+      p_since: options.sinceIso,
+      p_excluded_org_slugs: options.excludedOrgSlugs,
+      p_claimed_by: options.claimedBy,
+      p_run_id: runId,
+      p_lease_minutes: options.claimLeaseMinutes,
+    }
+  );
+
+  if (error) {
+    throw new Error(`claim_materializer_pending_assets_failed: ${error.message}`);
+  }
+
+  return data ?? [];
+}
+
+async function completeMaterializerClaims(supabase, options, runId, assetIds) {
+  if (!assetIds.length) return 0;
+
+  let completed = 0;
+
+  for (const assetIdChunk of chunk(assetIds, IN_CHUNK_SIZE)) {
+    const { data, error } = await supabase.rpc(
+      "complete_materializer_asset_claims",
+      {
+        p_materializer_version: options.materializerVersion,
+        p_asset_ids: assetIdChunk,
+        p_run_id: runId,
+      }
+    );
+
+    if (error) {
+      throw new Error(`complete_materializer_asset_claims_failed: ${error.message}`);
+    }
+
+    completed += Number(data ?? 0);
+  }
+
+  return completed;
+}
+
+async function releaseMaterializerClaims(supabase, options, runId, assetIds, reason) {
+  if (!assetIds.length) return 0;
+
+  let released = 0;
+
+  for (const assetIdChunk of chunk(assetIds, IN_CHUNK_SIZE)) {
+    const { data, error } = await supabase.rpc(
+      "release_materializer_asset_claims",
+      {
+        p_materializer_version: options.materializerVersion,
+        p_asset_ids: assetIdChunk,
+        p_run_id: runId,
+        p_reason: reason,
+      }
+    );
+
+    if (error) {
+      throw new Error(`release_materializer_asset_claims_failed: ${error.message}`);
+    }
+
+    released += Number(data ?? 0);
+  }
+
+  return released;
+}
+
+async function failMaterializerClaims(supabase, options, runId, assetIds, error) {
+  if (!assetIds.length) return 0;
+
+  let failed = 0;
+  const message = error instanceof Error ? error.message : String(error);
+
+  for (const assetIdChunk of chunk(assetIds, IN_CHUNK_SIZE)) {
+    const { data, error: rpcError } = await supabase.rpc(
+      "fail_materializer_asset_claims",
+      {
+        p_materializer_version: options.materializerVersion,
+        p_asset_ids: assetIdChunk,
+        p_run_id: runId,
+        p_error: message,
+        p_retry_after_minutes: options.claimRetryAfterMinutes,
+      }
+    );
+
+    if (rpcError) {
+      throw new Error(`fail_materializer_asset_claims_failed: ${rpcError.message}`);
+    }
+
+    failed += Number(data ?? 0);
+  }
+
+  return failed;
 }
 
 function buildContextRanges(pendingAssets, options) {
@@ -804,6 +909,122 @@ async function fetchLegacyEventAssets(supabase, assetIds) {
   }
 
   return rows;
+}
+
+async function processPendingAssetBatch(supabase, pendingAssets, options) {
+  const pendingAssetIds = new Set(pendingAssets.map((asset) => asset.id));
+
+  const { ranges, assets } = await fetchContextAssets(
+    supabase,
+    pendingAssets,
+    options
+  );
+
+  const assetIds = assets.map((asset) => asset.id);
+
+  const detections = await fetchDetections(supabase, assetIds);
+  const legacyEventAssets = await fetchLegacyEventAssets(supabase, assetIds);
+
+  const detectionsByAsset = groupDetectionsByAsset(detections);
+  const legacyEventsByAsset = groupLegacyEventsByAsset(legacyEventAssets);
+
+  const observations = assets
+    .map((asset) => buildImageObservation(asset, detectionsByAsset.get(asset.id) ?? []))
+    .filter((observation) => {
+      return observation.image_evidence.animal_detection_count > 0;
+    });
+
+  const now = new Date();
+  const clusters = buildClusters(observations, options.windowMinutes, now).filter(
+    (cluster) =>
+      cluster.observations.some((observation) =>
+        pendingAssetIds.has(observation.asset_id)
+      )
+  );
+
+  const materializedEvents = clusters.map((cluster) => {
+    const legacyEventIds = uniqueNonEmpty(
+      cluster.observations.flatMap(
+        (observation) => legacyEventsByAsset.get(observation.asset_id) ?? []
+      ),
+      100
+    );
+
+    const row = buildMaterializedEvent(cluster, legacyEventIds, options);
+
+    return {
+      row,
+      observations: cluster.observations,
+    };
+  });
+
+  const writeResults = [];
+
+  if (options.execute) {
+    for (const event of materializedEvents) {
+      writeResults.push(
+        await upsertMaterializedEvent(
+          supabase,
+          event.row,
+          event.observations,
+          options
+        )
+      );
+    }
+  }
+
+  const materializedAssetIds = uniqueNonEmpty(
+    materializedEvents.flatMap((event) =>
+      event.observations.map((observation) => observation.asset_id)
+    ),
+    100000
+  );
+
+  const materializedClaimedAssetIds = materializedAssetIds.filter((assetId) =>
+    pendingAssetIds.has(assetId)
+  );
+
+  const summaryRows = materializedEvents.slice(0, 50).map((event, index) => ({
+    camera_id: event.row.camera_id,
+    start_at: event.row.start_at,
+    end_at: event.row.end_at,
+    assets: event.row.asset_count,
+    species: event.row.event_species_auto,
+    score: Number(event.row.event_species_score.toFixed(4)),
+    margin: event.row.event_species_margin === null
+      ? null
+      : Number(event.row.event_species_margin.toFixed(4)),
+    animals: event.row.event_animal_count_auto,
+    pending_assets: event.observations.filter((observation) =>
+      pendingAssetIds.has(observation.asset_id)
+    ).length,
+    replaced_events: options.execute
+      ? writeResults[index]?.replacedEventIds?.length ?? 0
+      : 0,
+    legacy_events: event.row.legacy_event_ids.length,
+  }));
+
+  const summary = {
+    pending_assets: pendingAssets.length,
+    context_ranges: ranges.length,
+    context_assets: assets.length,
+    animal_observations: observations.length,
+    closed_clusters: clusters.length,
+    materialized_events: materializedEvents.length,
+    materialized_claimed_assets: materializedClaimedAssetIds.length,
+    written: options.execute ? materializedEvents.length : 0,
+  };
+
+  console.log(JSON.stringify(summary, null, 2));
+
+  if (summaryRows.length) {
+    console.table(summaryRows);
+  }
+
+  return {
+    ...summary,
+    materializedClaimedAssetIds,
+  };
 }
 
 function groupDetectionsByAsset(detections) {
@@ -1053,12 +1274,26 @@ async function main() {
     DEFAULT_CONTEXT_MINUTES
   );
 
-  const maxPendingAssets = parseInteger(
-    argValue("--max-pending-assets") ||
+  const claimBatchSize = parseInteger(
+    argValue("--claim-batch-size") ||
+      argValue("--max-pending-assets") ||
       argValue("--max-assets") ||
+      process.env.MATERIALIZER_CLAIM_BATCH_SIZE ||
       process.env.MATERIALIZER_MAX_PENDING_ASSETS ||
       process.env.MATERIALIZER_MAX_ASSETS,
-    DEFAULT_MAX_PENDING_ASSETS
+    DEFAULT_CLAIM_BATCH_SIZE
+  );
+
+  const claimLeaseMinutes = parseInteger(
+    argValue("--claim-lease-minutes") ||
+      process.env.MATERIALIZER_CLAIM_LEASE_MINUTES,
+    DEFAULT_CLAIM_LEASE_MINUTES
+  );
+
+  const claimRetryAfterMinutes = parseInteger(
+    argValue("--claim-retry-after-minutes") ||
+      process.env.MATERIALIZER_CLAIM_RETRY_AFTER_MINUTES,
+    DEFAULT_CLAIM_RETRY_AFTER_MINUTES
   );
 
   const maxContextAssets = parseInteger(
@@ -1070,6 +1305,11 @@ async function main() {
   const sinceIso = parseDateArg(
     argValue("--since") || process.env.MATERIALIZER_SINCE || null
   );
+
+  const claimedBy =
+    argValue("--claimed-by") ||
+    process.env.MATERIALIZER_INSTANCE_ID ||
+    `${os.hostname()}:${process.pid}`;
 
   const supabase = buildSupabaseClient();
   let runId = null;
@@ -1101,9 +1341,12 @@ async function main() {
       materializerVersion,
       windowMinutes,
       contextMinutes,
-      maxPendingAssets,
+      claimBatchSize,
+      claimLeaseMinutes,
+      claimRetryAfterMinutes,
       maxContextAssets,
       sinceIso,
+      claimedBy,
     };
 
     runId = await createRun(supabase, options);
@@ -1113,7 +1356,7 @@ async function main() {
         {
           tool: "event-materializer",
           mode: execute ? "shadow_execute" : "dry_run",
-          scanMode: "pending_assets",
+          scanMode: execute ? "claiming" : "claiming_preview",
           scopeMode: options.scopeMode,
           configuredOrgSlugs: useExplicitOrgScope ? configuredOrgSlugs : null,
           excludedOrgSlugs,
@@ -1122,146 +1365,112 @@ async function main() {
           materializerVersion,
           windowMinutes,
           contextMinutes,
-          maxPendingAssets,
+          claimBatchSize,
+          claimLeaseMinutes,
+          claimRetryAfterMinutes,
           maxContextAssets,
           sinceIso,
+          claimedBy,
         },
         null,
         2
       )
     );
 
-    const pendingAssets = await fetchPendingAssets(supabase, options);
-    const pendingAssetIds = new Set(pendingAssets.map((asset) => asset.id));
+    const totals = {
+      claim_batches: 0,
+      claimed_assets: 0,
+      completed_claims: 0,
+      released_claims: 0,
+      context_ranges: 0,
+      context_assets: 0,
+      animal_observations: 0,
+      closed_clusters: 0,
+      materialized_events: 0,
+      materialized_claimed_assets: 0,
+      written: 0,
+    };
 
-    if (pendingAssets.length === 0) {
-      console.log(
-        JSON.stringify(
-          {
-            pending_assets: 0,
-            context_assets: 0,
-            animal_observations: 0,
-            closed_clusters: 0,
-            materialized_events: 0,
-            written: 0,
-          },
-          null,
-          2
-        )
-      );
+    while (true) {
+      const pendingAssets = execute
+        ? await claimMaterializerPendingAssets(supabase, options, runId)
+        : await fetchPendingAssetsPreview(supabase, options);
 
-      await finishRun(supabase, runId, {
-        status: "success",
-        scanned_assets: 0,
-        materialized_events: 0,
-      });
+      if (pendingAssets.length === 0) {
+        break;
+      }
 
-      return;
-    }
+      totals.claim_batches += 1;
+      totals.claimed_assets += pendingAssets.length;
 
-    const { ranges, assets } = await fetchContextAssets(
-      supabase,
-      pendingAssets,
-      options
-    );
+      const pendingAssetIds = pendingAssets.map((asset) => asset.id);
 
-    const assetIds = assets.map((asset) => asset.id);
-
-    const detections = await fetchDetections(supabase, assetIds);
-    const legacyEventAssets = await fetchLegacyEventAssets(supabase, assetIds);
-
-    const detectionsByAsset = groupDetectionsByAsset(detections);
-    const legacyEventsByAsset = groupLegacyEventsByAsset(legacyEventAssets);
-
-    const observations = assets
-      .map((asset) => buildImageObservation(asset, detectionsByAsset.get(asset.id) ?? []))
-      .filter((observation) => {
-        return observation.image_evidence.animal_detection_count > 0;
-      });
-
-    const now = new Date();
-    const clusters = buildClusters(observations, windowMinutes, now).filter(
-      (cluster) =>
-        cluster.observations.some((observation) =>
-          pendingAssetIds.has(observation.asset_id)
-        )
-    );
-
-    const materializedEvents = clusters.map((cluster) => {
-      const legacyEventIds = uniqueNonEmpty(
-        cluster.observations.flatMap(
-          (observation) => legacyEventsByAsset.get(observation.asset_id) ?? []
-        ),
-        100
-      );
-
-      const row = buildMaterializedEvent(cluster, legacyEventIds, options);
-
-      return {
-        row,
-        observations: cluster.observations,
-      };
-    });
-
-    const writeResults = [];
-
-    if (execute) {
-      for (const event of materializedEvents) {
-        writeResults.push(
-          await upsertMaterializedEvent(
-            supabase,
-            event.row,
-            event.observations,
-            options
-          )
+      try {
+        const batchResult = await processPendingAssetBatch(
+          supabase,
+          pendingAssets,
+          options
         );
+
+        totals.context_ranges += batchResult.context_ranges;
+        totals.context_assets += batchResult.context_assets;
+        totals.animal_observations += batchResult.animal_observations;
+        totals.closed_clusters += batchResult.closed_clusters;
+        totals.materialized_events += batchResult.materialized_events;
+        totals.materialized_claimed_assets += batchResult.materialized_claimed_assets;
+        totals.written += batchResult.written;
+
+        if (execute) {
+          const completedIds = batchResult.materializedClaimedAssetIds;
+          const completedSet = new Set(completedIds);
+          const releasedIds = pendingAssetIds.filter((assetId) => !completedSet.has(assetId));
+
+          totals.completed_claims += await completeMaterializerClaims(
+            supabase,
+            options,
+            runId,
+            completedIds
+          );
+
+          totals.released_claims += await releaseMaterializerClaims(
+            supabase,
+            options,
+            runId,
+            releasedIds,
+            "no_closed_materialized_cluster_in_batch"
+          );
+
+          if (completedIds.length === 0 && releasedIds.length > 0) {
+            console.warn(
+              JSON.stringify(
+                {
+                  warning: "claimed assets produced no closed materialized cluster; released claims and stopped this run to avoid hot-looping",
+                  released_claims: releasedIds.length,
+                },
+                null,
+                2
+              )
+            );
+            break;
+          }
+        } else {
+          break;
+        }
+      } catch (error) {
+        if (execute) {
+          await failMaterializerClaims(supabase, options, runId, pendingAssetIds, error);
+        }
+
+        throw error;
       }
     }
 
-    const summaryRows = materializedEvents.slice(0, 50).map((event, index) => ({
-      camera_id: event.row.camera_id,
-      start_at: event.row.start_at,
-      end_at: event.row.end_at,
-      assets: event.row.asset_count,
-      species: event.row.event_species_auto,
-      score: Number(event.row.event_species_score.toFixed(4)),
-      margin: event.row.event_species_margin === null
-        ? null
-        : Number(event.row.event_species_margin.toFixed(4)),
-      animals: event.row.event_animal_count_auto,
-      pending_assets: event.observations.filter((observation) =>
-        pendingAssetIds.has(observation.asset_id)
-      ).length,
-      replaced_events: execute
-        ? writeResults[index]?.replacedEventIds?.length ?? 0
-        : 0,
-      legacy_events: event.row.legacy_event_ids.length,
-    }));
-
-    console.log(
-      JSON.stringify(
-        {
-          pending_assets: pendingAssets.length,
-          context_ranges: ranges.length,
-          context_assets: assets.length,
-          animal_observations: observations.length,
-          closed_clusters: clusters.length,
-          materialized_events: materializedEvents.length,
-          written: execute ? materializedEvents.length : 0,
-        },
-        null,
-        2
-      )
-    );
-
-    if (summaryRows.length) {
-      console.table(summaryRows);
-    }
+    console.log(JSON.stringify(totals, null, 2));
 
     await finishRun(supabase, runId, {
       status: "success",
-      scanned_assets: assets.length,
-      materialized_events: execute ? materializedEvents.length : 0,
+      scanned_assets: totals.context_assets,
+      materialized_events: totals.written,
     });
   } catch (error) {
     await finishRun(supabase, runId, {
