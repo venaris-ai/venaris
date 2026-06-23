@@ -1,4 +1,4 @@
-// src/app/orga/reviere/[id]/edit/page.tsx #14
+// src/app/orga/reviere/[id]/edit/page.tsx #15
 import Link from "next/link";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
@@ -13,23 +13,14 @@ import RevierBoundaryUploadForm from "./RevierBoundaryUploadForm";
 import RevierMapObjectsForm, {
   type RevierMapObjectFormRow,
 } from "./RevierMapObjectsForm";
-import RevierSpeciesTargetsForm, {
-  type SpeciesTargetFormRow,
-} from "./RevierSpeciesTargetsForm";
 import {
   LOCALE_COOKIE,
   resolveLanguage,
   type AppLanguage,
 } from "@/lib/i18n";
-import {
-  buildSpeciesMetaMap,
-  getSpeciesLabel,
-  loadSpeciesMeta,
-} from "@/lib/speciesMeta";
 
 const DEFAULT_TIME_ZONE = "Europe/Berlin";
 const MAX_BOUNDARY_FILE_SIZE_BYTES = 2 * 1024 * 1024;
-const MAX_TARGET_PER_100HA = 1000;
 
 type RevierRow = {
   id: string;
@@ -49,11 +40,6 @@ type RevierBoundaryRow = {
   source: string | null;
   updated_at: string;
   geometry: unknown;
-};
-
-type RevierSpeciesTargetRow = {
-  species: string;
-  target_per_100ha: number | string;
 };
 
 type RevierMapObjectRow = {
@@ -98,12 +84,6 @@ function t(language: AppLanguage) {
         areaInvalid: "Area in ha must be a valid positive number.",
         timezoneInvalid: "Invalid time zone.",
         updateFailedPrefix: "Failed to update ground:",
-        targetLoadFailedPrefix: "Failed to load target population values:",
-        targetUpdateFailedPrefix: "Failed to update target population values:",
-        targetRefreshFailedPrefix: "Failed to refresh PopSim snapshot:",
-        targetValueMissing: "A target population value is missing.",
-        targetValueInvalid:
-          "Target population values must be valid numbers between 0 and 1000.",
         boundaryMissingFile: "Please select a GeoJSON file.",
         boundaryFileTooLarge: "The GeoJSON file is too large.",
         boundaryInvalidJson: "The selected file is not valid JSON.",
@@ -131,8 +111,6 @@ function t(language: AppLanguage) {
         intro: "Edit the master data and status of the selected ground here.",
         demoReadOnly: "Demo mode: changes are disabled.",
         boundarySaved: "Ground boundary was saved successfully.",
-        targetsSaved:
-          "Target population values were saved and PopSim updated.",
         nameLabel: "Ground name *",
         areaLabel: "Area in ha *",
         regionLabel: "Region",
@@ -149,9 +127,6 @@ function t(language: AppLanguage) {
         savePending: "Saving...",
         demoMode: "Demo mode",
         cancel: "Cancel",
-        targetsTitle: "Target population by species in this ground",
-        targetsText:
-          "These ground-specific target populations are used by PopSim to calculate the harvest recommendation.",
         boundaryTitle: "Ground boundary",
         boundaryText:
           "Upload a GeoJSON file to display the ground boundary as a layer on the camera map.",
@@ -173,13 +148,6 @@ function t(language: AppLanguage) {
         areaInvalid: "Fläche in ha muss eine gültige positive Zahl sein.",
         timezoneInvalid: "Ungültige Zeitzone.",
         updateFailedPrefix: "Failed to update revier:",
-        targetLoadFailedPrefix: "Fehler beim Laden des Zielbestands:",
-        targetUpdateFailedPrefix: "Fehler beim Speichern des Zielbestands:",
-        targetRefreshFailedPrefix:
-          "Fehler beim Neuberechnen des PopSim-Snapshots:",
-        targetValueMissing: "Ein Zielbestand fehlt.",
-        targetValueInvalid:
-          "Zielbestände müssen gültige Zahlen zwischen 0 und 1000 sein.",
         boundaryMissingFile: "Bitte eine GeoJSON-Datei auswählen.",
         boundaryFileTooLarge: "Die GeoJSON-Datei ist zu groß.",
         boundaryInvalidJson: "Die ausgewählte Datei enthält kein gültiges JSON.",
@@ -211,8 +179,6 @@ function t(language: AppLanguage) {
           "Bearbeite hier die Stammdaten und den Status des ausgewählten Reviers.",
         demoReadOnly: "Demo-Modus: Änderungen sind deaktiviert.",
         boundarySaved: "Revierkontur wurde erfolgreich gespeichert.",
-        targetsSaved:
-          "Zielbestand wurde gespeichert und PopSim aktualisiert.",
         nameLabel: "Reviername *",
         areaLabel: "Fläche in ha *",
         regionLabel: "Region",
@@ -229,9 +195,6 @@ function t(language: AppLanguage) {
         savePending: "Speichert...",
         demoMode: "Demo-Modus",
         cancel: "Abbrechen",
-        targetsTitle: "Zielbestand der Wildarten im Revier",
-        targetsText:
-          "Diese revierbezogenen Zielbestände verwendet PopSim für die Berechnung des Entnahmevorschlags.",
         boundaryTitle: "Revierkontur",
         boundaryText:
           "Lade eine GeoJSON-Datei hoch, um die Revierkontur als Layer auf der Kamerakarte anzuzeigen.",
@@ -389,26 +352,6 @@ function formatDateTime(value: string, language: AppLanguage) {
   }).format(date);
 }
 
-function parseTargetValue(value: FormDataEntryValue | null) {
-  if (typeof value !== "string") return null;
-
-  const normalized = value.trim().replace(",", ".");
-
-  if (!normalized) return null;
-
-  const parsed = Number(normalized);
-
-  if (
-    !Number.isFinite(parsed) ||
-    parsed < 0 ||
-    parsed > MAX_TARGET_PER_100HA
-  ) {
-    return null;
-  }
-
-  return parsed;
-}
-
 const REVIER_MAP_OBJECT_TYPES = [
   "high_seat",
   "ladder",
@@ -464,31 +407,6 @@ function parseRequiredLongitude(value: string, language: AppLanguage) {
   }
 
   return parsed;
-}
-
-function toNumber(value: number | string | null | undefined) {
-  if (typeof value === "number") return value;
-
-  if (typeof value === "string") {
-    const parsed = Number(value);
-    return Number.isFinite(parsed) ? parsed : null;
-  }
-
-  return null;
-}
-
-function sortSpeciesTargetRows(
-  a: SpeciesTargetFormRow,
-  b: SpeciesTargetFormRow,
-  language: AppLanguage
-) {
-  const aIsOther = a.species === "other";
-  const bIsOther = b.species === "other";
-
-  if (aIsOther && !bIsOther) return 1;
-  if (!aIsOther && bIsOther) return -1;
-
-  return a.label.localeCompare(b.label, language === "en" ? "en" : "de");
 }
 
 async function updateRevier(revierId: string, formData: FormData) {
@@ -789,104 +707,6 @@ async function deleteRevierMapObject(revierId: string, formData: FormData) {
   redirect(`/orga/reviere/${revierId}/edit?map_object_deleted=1`);
 }
 
-async function updateRevierSpeciesTargets(
-  revierId: string,
-  formData: FormData
-) {
-  "use server";
-
-  const { ctx, supabase, language } = await resolveUiLanguageForProtectedPath(
-    `/orga/reviere/${revierId}/edit`
-  );
-  redirectIfDemoWrite(ctx, `/orga/reviere/${revierId}/edit?demo_read_only=1`);
-
-  if (!ctx.activeMembership) {
-    throw new Error("Active organization context required");
-  }
-
-  const organization = ctx.activeMembership.organizations;
-  const text = t(language);
-
-  if (!organization) {
-    throw new Error("Active organization not found");
-  }
-
-  const { data: revierData, error: revierError } = await supabase
-    .from("reviers")
-    .select("id")
-    .eq("id", revierId)
-    .eq("organization_id", organization.id)
-    .maybeSingle();
-
-  if (revierError) {
-    throw new Error(`${text.targetUpdateFailedPrefix} ${revierError.message}`);
-  }
-
-  if (!revierData) {
-    throw new Error(text.boundaryTargetNotFound);
-  }
-
-  const { data: existingTargets, error: targetsError } = await supabase
-    .from("revier_species_targets")
-    .select("species")
-    .eq("revier_id", revierId)
-    .eq("organization_id", organization.id)
-    .order("species", { ascending: true });
-
-  if (targetsError) {
-    throw new Error(`${text.targetUpdateFailedPrefix} ${targetsError.message}`);
-  }
-
-  const targetRows = (existingTargets ?? []) as Pick<
-    RevierSpeciesTargetRow,
-    "species"
-  >[];
-
-  const updates = targetRows.map((row) => {
-    const parsedValue = parseTargetValue(formData.get(`target_${row.species}`));
-
-    if (parsedValue === null) {
-      throw new Error(`${text.targetValueInvalid} (${row.species})`);
-    }
-
-    return {
-      organization_id: organization.id,
-      revier_id: revierId,
-      species: row.species,
-      target_per_100ha: parsedValue,
-    };
-  });
-
-  if (updates.length === 0) {
-    throw new Error(text.targetValueMissing);
-  }
-
-  const { error: updateError } = await supabase
-    .from("revier_species_targets")
-    .upsert(updates, { onConflict: "revier_id,species" });
-
-  if (updateError) {
-    throw new Error(`${text.targetUpdateFailedPrefix} ${updateError.message}`);
-  }
-
-  const { error: refreshError } = await supabase.rpc(
-    "refresh_population_estimates_for_revier",
-    {
-      p_revier_id: revierId,
-    }
-  );
-
-  if (refreshError) {
-    throw new Error(`${text.targetRefreshFailedPrefix} ${refreshError.message}`);
-  }
-
-  revalidatePath(`/orga/reviere/${revierId}/edit`);
-  revalidatePath("/orga/reviere");
-  revalidatePath("/wildlife/popsim");
-  revalidatePath("/", "layout");
-  redirect(`/orga/reviere/${revierId}/edit?targets_updated=1`);
-}
-
 async function uploadRevierBoundary(revierId: string, formData: FormData) {
   "use server";
 
@@ -983,7 +803,6 @@ export default async function EditRevierPage({
   searchParams?: Promise<{
     demo_read_only?: string;
     boundary_updated?: string;
-    targets_updated?: string;
     map_objects_updated?: string;
     map_object_deleted?: string;
   }>;
@@ -992,7 +811,6 @@ export default async function EditRevierPage({
   const search = (await searchParams) ?? {};
   const demoReadOnly = search.demo_read_only === "1";
   const boundaryUpdated = search.boundary_updated === "1";
-  const targetsUpdated = search.targets_updated === "1";
   const mapObjectsUpdated = search.map_objects_updated === "1";
   const mapObjectDeleted = search.map_object_deleted === "1";
 
@@ -1027,32 +845,6 @@ export default async function EditRevierPage({
   }
 
   const revier = data as RevierRow;
-
-  const speciesMetaRows = await loadSpeciesMeta();
-  const speciesMetaMap = buildSpeciesMetaMap(speciesMetaRows);
-
-  const { data: targetData, error: targetError } = await supabase
-    .from("revier_species_targets")
-    .select("species,target_per_100ha")
-    .eq("revier_id", revier.id)
-    .eq("organization_id", organization.id)
-    .order("species", { ascending: true });
-
-  if (targetError) {
-    throw new Error(`${text.targetLoadFailedPrefix} ${targetError.message}`);
-  }
-
-  const speciesTargets = ((targetData ?? []) as RevierSpeciesTargetRow[])
-    .map<SpeciesTargetFormRow>((row) => {
-      const targetPer100ha = toNumber(row.target_per_100ha) ?? 0;
-
-      return {
-        species: row.species,
-        label: getSpeciesLabel(row.species, language, speciesMetaMap),
-        targetPer100ha,
-      };
-    })
-    .sort((a, b) => sortSpeciesTargetRows(a, b, language));
 
   const { data: boundaryData, error: boundaryError } = await supabase
     .from("revier_boundaries")
@@ -1111,12 +903,6 @@ export default async function EditRevierPage({
       {boundaryUpdated ? (
         <section className="rounded-[24px] border border-emerald-300/20 bg-emerald-300/10 p-4">
           <p className="text-sm text-emerald-100">{text.boundarySaved}</p>
-        </section>
-      ) : null}
-
-      {targetsUpdated ? (
-        <section className="rounded-[24px] border border-emerald-300/20 bg-emerald-300/10 p-4">
-          <p className="text-sm text-emerald-100">{text.targetsSaved}</p>
         </section>
       ) : null}
 
@@ -1293,24 +1079,6 @@ export default async function EditRevierPage({
         isDemo={isDemo}
         language={language}
       />
-
-      <section className="rounded-[28px] border border-white/10 bg-white/5 p-6 backdrop-blur-sm">
-        <div>
-          <h2 className="text-lg font-medium text-white">
-            {text.targetsTitle}
-          </h2>
-          <p className="mt-1 max-w-3xl text-sm text-white/65">
-            {text.targetsText}
-          </p>
-        </div>
-
-        <RevierSpeciesTargetsForm
-          action={updateRevierSpeciesTargets.bind(null, revier.id)}
-          rows={speciesTargets}
-          isDemo={isDemo}
-          language={language}
-        />
-      </section>
 
       <section className="rounded-[28px] border border-white/10 bg-white/5 p-6 backdrop-blur-sm">
         <div>

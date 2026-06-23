@@ -1,4 +1,4 @@
-// src/app/wildlife/popsim/page.tsx #10
+// src/app/wildlife/popsim/page.tsx #12
 export const runtime = "nodejs";
 
 import { cookies } from "next/headers";
@@ -23,6 +23,10 @@ import {
   DEFAULT_APP_TIME_ZONE,
   formatAppDate,
 } from "@/lib/dateTime";
+import PopSimSpeciesEstimatesPanel, {
+  type PopSimSpeciesEstimateRow,
+  type PopSimSpeciesEstimatesPanelLabels,
+} from "./PopSimSpeciesEstimatesPanel";
 
 type SearchParams = {
   revier?: string;
@@ -50,8 +54,6 @@ type PopulationEstimateRow = {
   harvest_surplus_v0: number | null;
 };
 
-type PopulationStatus = "good" | "low" | "high" | "neutral";
-
 function locale(language: AppLanguage) {
   return language === "en" ? "en-GB" : "de-DE";
 }
@@ -63,41 +65,6 @@ function fmtInt(value: number | null | undefined, language: AppLanguage) {
 
 function getRoundedHarvestSurplus(row: PopulationEstimateRow) {
   return Math.round(row.harvest_surplus_v0 ?? 0);
-}
-
-function getPopulationStatus(
-  estimated: number | null | undefined,
-  target: number | null | undefined
-): PopulationStatus {
-  if (
-    typeof estimated !== "number" ||
-    Number.isNaN(estimated) ||
-    typeof target !== "number" ||
-    Number.isNaN(target) ||
-    target <= 0
-  ) {
-    return "neutral";
-  }
-
-  const lowerBound = target * 0.9;
-  const upperBound = target * 1.1;
-
-  if (estimated < lowerBound) return "low";
-  if (estimated > upperBound) return "high";
-  return "good";
-}
-
-function getPopulationRowClasses(status: PopulationStatus) {
-  switch (status) {
-    case "good":
-      return "bg-emerald-400/8";
-    case "low":
-      return "bg-amber-400/8";
-    case "high":
-      return "bg-rose-400/8";
-    default:
-      return "";
-  }
 }
 
 function t(language: AppLanguage) {
@@ -118,9 +85,6 @@ function t(language: AppLanguage) {
       unresolvedGround: "Ground could not be resolved.",
       latestSnapshotLoadFailed: "Failed to load latest PopSim snapshot:",
       snapshotLoadFailed: "Failed to load PopSim data:",
-      groundSnapshot: "Ground Snapshot",
-      groundSnapshotText:
-        "The most recently calculated PopSim state of the currently selected active ground is always shown.",
       selectedGround: "Selected Ground",
       areaOpen: "Area open",
       snapshotDate: "Snapshot Date",
@@ -151,6 +115,8 @@ function t(language: AppLanguage) {
         "PopSim is not an exact census, but a model-based approximation based on the available ground, camera and species signals.",
       classificationHint:
         "Missing species usually mean no robust output for the newest snapshot in the current state, not necessarily absence in the ground.",
+      classificationTargetHint:
+        "Venaris loads initial target values for each ground. These values can be adjusted per ground directly.",
     };
   }
 
@@ -171,9 +137,6 @@ function t(language: AppLanguage) {
     latestSnapshotLoadFailed:
       "Fehler beim Laden des letzten PopSim-Snapshots:",
     snapshotLoadFailed: "Fehler beim Laden der PopSim-Daten:",
-    groundSnapshot: "Revier-Snapshot",
-    groundSnapshotText:
-      "Es wird immer der zuletzt berechnete PopSim-Stand des aktuell gewählten aktiven Reviers angezeigt.",
     selectedGround: "Ausgewähltes Revier",
     areaOpen: "Fläche",
     snapshotDate: "Snapshot-Datum",
@@ -206,6 +169,8 @@ function t(language: AppLanguage) {
       "PopSim ist kein exakter Zensus, sondern eine modellgestützte Näherung auf Basis der verfügbaren Revier-, Kamera- und Artensignale.",
     classificationHint:
       "Fehlende Arten bedeuten im aktuellen Stand in der Regel: kein belastbarer Output für den neuesten Snapshot, nicht zwingend Abwesenheit im Revier.",
+    classificationTargetHint:
+      "Venaris lädt für jedes Revier Startwerte für Zielbestände. Diese Werte können revierbezogen angepasst werden.",
   };
 }
 
@@ -284,6 +249,15 @@ export default async function PopSimPage({
       </main>
     );
   }
+
+  const activeOrganizationSlug =
+    (activeOrganization as { slug?: string | null }).slug ?? null;
+  const activeRole =
+    (ctx.activeMembership as { role?: string | null } | null | undefined)
+      ?.role ?? null;
+  const isDemo = activeOrganizationSlug === "demo";
+  const canEditTargets =
+    !isDemo && (activeRole === "owner" || activeRole === "admin");
 
   const { data: reviersData, error: reviersError } = await supabase
     .from("reviers")
@@ -428,16 +402,35 @@ export default async function PopSimPage({
     (row) => getRoundedHarvestSurplus(row) > 0
   ).length;
 
+  const speciesEstimateRows: PopSimSpeciesEstimateRow[] = snapshotRows.map(
+    (row) => ({
+      species: row.species,
+      speciesLabel: getSpeciesLabel(row.species, language, speciesMetaMap),
+      estimatedPopulationTotal: row.estimated_population_total,
+      estimatedPopulationPer100ha: row.estimated_population_per_100ha,
+      targetTotal: row.target_total,
+      targetPer100ha: row.target_per_100ha,
+      harvestSurplus: row.harvest_surplus_v0,
+    })
+  );
+
+  const speciesEstimateLabels: PopSimSpeciesEstimatesPanelLabels = {
+    speciesEstimates: text.speciesEstimates,
+    speciesEstimatesText: text.speciesEstimatesText,
+    currentState: text.currentState,
+    targetState: text.targetState,
+    species: text.species,
+    estimatedTotalCol: text.estimatedTotalCol,
+    per100ha: text.per100ha,
+    targetTotal: text.targetTotal,
+    targetPer100ha: text.targetPer100ha,
+    harvestSurplusCol: text.harvestSurplusCol,
+    noSpeciesRows: text.noSpeciesRows,
+  };
+
   return (
     <main className="space-y-8">
       <PageHeader language={language} />
-
-      <section className="rounded-[28px] border border-white/10 bg-white/5 p-5 backdrop-blur-sm">
-        <div>
-          <h2 className="text-lg font-medium text-white">{text.groundSnapshot}</h2>
-          <p className="text-sm text-white/65">{text.groundSnapshotText}</p>
-        </div>
-      </section>
 
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
         <StatCard
@@ -486,113 +479,23 @@ export default async function PopSimPage({
         </section>
       ) : (
         <>
-          <section className="rounded-[28px] border border-white/10 bg-white/5 p-5 backdrop-blur-sm">
-            <div className="mb-4 flex items-center justify-between">
-              <div>
-                <h2 className="text-lg font-medium text-white">{text.speciesEstimates}</h2>
-                <p className="text-sm text-white/65">{text.speciesEstimatesText}</p>
-              </div>
-            </div>
+          <PopSimSpeciesEstimatesPanel
+            revierId={selectedRevier.id}
+            rows={speciesEstimateRows}
+            isDemo={isDemo}
+            canEditTargets={canEditTargets}
+            language={language}
+            labels={speciesEstimateLabels}
+          />
 
-            <div className="overflow-x-auto">
-              <table className="min-w-full border-collapse text-sm">
-                <thead>
-                  <tr className="border-b border-white/8 text-left text-white/55">
-                    <th rowSpan={2} className="px-3 py-2 align-bottom font-medium">
-                      {text.species}
-                    </th>
-                    <th
-                      colSpan={2}
-                      className="px-3 py-2 text-center text-xs font-semibold uppercase tracking-wide text-white/45"
-                    >
-                      {text.currentState}
-                    </th>
-                    <th
-                      colSpan={2}
-                      className="border-l border-white/10 px-3 py-2 text-center text-xs font-semibold uppercase tracking-wide text-white/45"
-                    >
-                      {text.targetState}
-                    </th>
-                    <th
-                      aria-hidden="true"
-                      className="border-l border-white/10 px-3 py-2"
-                    />
-                  </tr>
-                  <tr className="border-b border-white/8 text-left text-white/55">
-                    <th className="px-3 py-2 text-center font-medium">
-                      {text.estimatedTotalCol}
-                    </th>
-                    <th className="px-3 py-2 text-center font-medium">
-                      {text.per100ha}
-                    </th>
-                    <th className="border-l border-white/10 px-3 py-2 text-center font-medium">
-                      {text.targetTotal}
-                    </th>
-                    <th className="px-3 py-2 text-center font-medium">
-                      {text.targetPer100ha}
-                    </th>
-                    <th className="border-l border-white/10 px-3 py-2 text-center font-medium text-white/70">
-                      {text.harvestSurplusCol}
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {snapshotRows.map((row) => {
-                    const populationStatus = getPopulationStatus(
-                      row.estimated_population_total,
-                      row.target_total
-                    );
-                    const populationRowClasses =
-                      getPopulationRowClasses(populationStatus);
-
-                    return (
-                      <tr
-                        key={row.species}
-                        className={`border-b border-white/8 last:border-0 ${populationRowClasses}`}
-                      >
-                        <td className="px-3 py-3 font-medium text-white">
-                          {getSpeciesLabel(row.species, language, speciesMetaMap)}
-                        </td>
-                        <td className="px-3 py-3 text-center text-white/72">
-                          {fmtInt(row.estimated_population_total, language)}
-                        </td>
-                        <td className="px-3 py-3 text-center text-white/72">
-                          {fmtInt(row.estimated_population_per_100ha, language)}
-                        </td>
-                        <td className="border-l border-white/10 px-3 py-3 text-center text-white/72">
-                          {fmtInt(row.target_total, language)}
-                        </td>
-                        <td className="px-3 py-3 text-center text-white/72">
-                          {fmtInt(row.target_per_100ha, language)}
-                        </td>
-                        <td className="border-l border-white/10 px-3 py-3 text-center font-medium text-white/78">
-                          {fmtInt(row.harvest_surplus_v0, language)}
-                        </td>
-                      </tr>
-                    );
-                  })}
-
-                  {snapshotRows.length === 0 && (
-                    <tr>
-                      <td colSpan={6} className="px-3 py-6 text-sm text-white/68">
-                        {text.noSpeciesRows}
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </section>
-
-          <section className="rounded-[28px] border border-white/10 bg-white/5 p-5 backdrop-blur-sm">
-            <h2 className="text-lg font-medium text-white">{text.classification}</h2>
-            <div className="mt-3 space-y-3 text-sm text-white/72">
-              <div>{text.classificationText}</div>
-              <div className="rounded-[20px] border border-white/10 bg-white/5 p-3 text-white/65">
-                {text.classificationHint}
-              </div>
-            </div>
-          </section>
+<section className="rounded-[28px] border border-white/10 bg-white/5 p-5 backdrop-blur-sm">
+  <h2 className="text-lg font-medium text-white">{text.classification}</h2>
+  <div className="mt-3 space-y-2 text-sm text-white/72">
+    <div>{text.classificationText}</div>
+    <div>{text.classificationHint}</div>
+    <div>{text.classificationTargetHint}</div>
+  </div>
+</section>
         </>
       )}
     </main>
