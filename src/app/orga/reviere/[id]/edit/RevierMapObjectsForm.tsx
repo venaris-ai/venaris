@@ -1,4 +1,4 @@
-// src/app/orga/reviere/[id]/edit/RevierMapObjectsForm.tsx #2
+// src/app/orga/reviere/[id]/edit/RevierMapObjectsForm.tsx #3
 import { type AppLanguage } from "@/lib/i18n";
 import RevierMapObjectRowActions from "./RevierMapObjectRowActions";
 import RevierMapObjectRowControls, {
@@ -51,6 +51,7 @@ export default function RevierMapObjectsForm({
   createAction,
   updateAction,
   deleteAction,
+  errorMessage,
   isDemo = false,
   language,
 }: {
@@ -58,6 +59,7 @@ export default function RevierMapObjectsForm({
   createAction: (formData: FormData) => void | Promise<void>;
   updateAction: (formData: FormData) => void | Promise<void>;
   deleteAction: (formData: FormData) => void | Promise<void>;
+  errorMessage?: string | null;
   isDemo?: boolean;
   language: AppLanguage;
 }) {
@@ -69,6 +71,12 @@ export default function RevierMapObjectsForm({
         <h2 className="text-lg font-medium text-white">{text.title}</h2>
         <p className="mt-1 max-w-3xl text-sm text-white/65">{text.text}</p>
       </div>
+
+      {errorMessage ? (
+        <div className="mt-5 rounded-[18px] border border-rose-300/20 bg-rose-300/10 px-4 py-3">
+          <p className="text-sm text-rose-100">{errorMessage}</p>
+        </div>
+      ) : null}
 
       {rows.length === 0 ? (
         <div className="mt-5 rounded-[22px] border border-dashed border-white/10 bg-white/[0.03] px-4 py-4 text-sm text-white/68">

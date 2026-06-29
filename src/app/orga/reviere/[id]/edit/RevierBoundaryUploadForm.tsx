@@ -1,4 +1,4 @@
-// src/app/orga/reviere/[id]/edit/RevierBoundaryUploadForm.tsx #1
+// src/app/orga/reviere/[id]/edit/RevierBoundaryUploadForm.tsx #2
 "use client";
 
 import { useState } from "react";
@@ -70,10 +70,12 @@ function BoundarySubmitButton({
 
 export default function RevierBoundaryUploadForm({
   action,
+  errorMessage,
   isDemo,
   language,
 }: {
   action: (formData: FormData) => void | Promise<void>;
+  errorMessage?: string | null;
   isDemo: boolean;
   language: AppLanguage;
 }) {
@@ -82,6 +84,12 @@ export default function RevierBoundaryUploadForm({
 
   return (
     <form action={action} className="mt-5 space-y-4">
+      {errorMessage ? (
+        <div className="rounded-[18px] border border-rose-300/20 bg-rose-300/10 px-4 py-3">
+          <p className="text-sm text-rose-100">{errorMessage}</p>
+        </div>
+      ) : null}
+
       <div>
         <label
           htmlFor="boundary_file"

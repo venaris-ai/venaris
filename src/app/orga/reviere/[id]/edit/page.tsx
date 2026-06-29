@@ -1,4 +1,4 @@
-// src/app/orga/reviere/[id]/edit/page.tsx #15
+// src/app/orga/reviere/[id]/edit/page.tsx #16
 import Link from "next/link";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
@@ -213,6 +213,94 @@ function t(language: AppLanguage) {
       };
 }
 
+type MapObjectErrorCode =
+  | "name_required"
+  | "type_invalid"
+  | "status_invalid"
+  | "latitude_required"
+  | "latitude_invalid"
+  | "longitude_required"
+  | "longitude_invalid"
+  | "target_not_found";
+
+type BoundaryErrorCode =
+  | "missing_file"
+  | "file_too_large"
+  | "invalid_json"
+  | "invalid_type"
+  | "invalid_geometry"
+  | "target_not_found";
+
+function redirectWithMapObjectError(
+  revierId: string,
+  code: MapObjectErrorCode
+): never {
+  redirect(`/orga/reviere/${revierId}/edit?map_object_error=${code}`);
+}
+
+function redirectWithBoundaryError(
+  revierId: string,
+  code: BoundaryErrorCode
+): never {
+  redirect(`/orga/reviere/${revierId}/edit?boundary_error=${code}`);
+}
+
+function getMapObjectErrorMessage(
+  code: string | undefined,
+  language: AppLanguage
+) {
+  if (!code) return null;
+
+  const text = t(language);
+
+  switch (code) {
+    case "name_required":
+      return text.mapObjectNameRequired;
+    case "type_invalid":
+      return text.mapObjectTypeInvalid;
+    case "status_invalid":
+      return text.mapObjectStatusInvalid;
+    case "latitude_required":
+      return text.mapObjectLatitudeRequired;
+    case "latitude_invalid":
+      return text.mapObjectLatitudeInvalid;
+    case "longitude_required":
+      return text.mapObjectLongitudeRequired;
+    case "longitude_invalid":
+      return text.mapObjectLongitudeInvalid;
+    case "target_not_found":
+      return text.mapObjectTargetNotFound;
+    default:
+      return null;
+  }
+}
+
+function getBoundaryErrorMessage(
+  code: string | undefined,
+  language: AppLanguage
+) {
+  if (!code) return null;
+
+  const text = t(language);
+
+  switch (code) {
+    case "missing_file":
+      return text.boundaryMissingFile;
+    case "file_too_large":
+      return text.boundaryFileTooLarge;
+    case "invalid_json":
+      return text.boundaryInvalidJson;
+    case "invalid_type":
+      return text.boundaryInvalidType;
+    case "invalid_geometry":
+      return text.boundaryInvalidGeometry;
+    case "target_not_found":
+      return text.boundaryTargetNotFound;
+    default:
+      return null;
+  }
+}
+
 function isValidTimeZone(value: string): boolean {
   try {
     new Intl.DateTimeFormat("en-US", { timeZone: value }).format(new Date());
@@ -267,22 +355,20 @@ function geoJsonHasBoundaryGeometry(geoJson: unknown) {
   return false;
 }
 
-function validateBoundaryGeoJson(geoJson: unknown, language: AppLanguage) {
-  const text = t(language);
-
+function validateBoundaryGeoJson(geoJson: unknown): BoundaryErrorCode | null {
   if (!isObject(geoJson) || typeof geoJson.type !== "string") {
-    throw new Error(text.boundaryInvalidType);
+    return "invalid_type";
   }
 
   if (geoJson.type !== "Feature" && geoJson.type !== "FeatureCollection") {
-    throw new Error(text.boundaryInvalidType);
+    return "invalid_type";
   }
 
   if (!geoJsonHasBoundaryGeometry(geoJson)) {
-    throw new Error(text.boundaryInvalidGeometry);
+    return "invalid_geometry";
   }
 
-  return geoJson;
+  return null;
 }
 
 function collectLngLatCoordinates(value: unknown, result: [number, number][]) {
@@ -379,34 +465,36 @@ function isRevierMapObjectStatus(
   );
 }
 
-function parseRequiredLatitude(value: string, language: AppLanguage) {
-  const text = t(language);
+type ParsedCoordinate =
+  | { value: number; error: null }
+  | { value: null; error: MapObjectErrorCode };
+
+function parseRequiredLatitude(value: string): ParsedCoordinate {
   const parsed = parseLatitude(value);
 
   if (parsed === null) {
-    throw new Error(text.mapObjectLatitudeRequired);
+    return { value: null, error: "latitude_required" };
   }
 
   if (!Number.isFinite(parsed) || parsed < -90 || parsed > 90) {
-    throw new Error(text.mapObjectLatitudeInvalid);
+    return { value: null, error: "latitude_invalid" };
   }
 
-  return parsed;
+  return { value: parsed, error: null };
 }
 
-function parseRequiredLongitude(value: string, language: AppLanguage) {
-  const text = t(language);
+function parseRequiredLongitude(value: string): ParsedCoordinate {
   const parsed = parseLongitude(value);
 
   if (parsed === null) {
-    throw new Error(text.mapObjectLongitudeRequired);
+    return { value: null, error: "longitude_required" };
   }
 
   if (!Number.isFinite(parsed) || parsed < -180 || parsed > 180) {
-    throw new Error(text.mapObjectLongitudeInvalid);
+    return { value: null, error: "longitude_invalid" };
   }
 
-  return parsed;
+  return { value: parsed, error: null };
 }
 
 async function updateRevier(revierId: string, formData: FormData) {
@@ -510,7 +598,7 @@ async function createRevierMapObject(revierId: string, formData: FormData) {
   }
 
   if (!revierData) {
-    throw new Error(text.boundaryTargetNotFound);
+    redirectWithMapObjectError(revierId, "target_not_found");
   }
 
   const name = String(formData.get("name") ?? "").trim();
@@ -521,19 +609,31 @@ async function createRevierMapObject(revierId: string, formData: FormData) {
   const status = String(formData.get("status") ?? "active").trim();
 
   if (!name) {
-    throw new Error(text.mapObjectNameRequired);
+    redirectWithMapObjectError(revierId, "name_required");
   }
 
   if (!isRevierMapObjectType(type)) {
-    throw new Error(text.mapObjectTypeInvalid);
+    redirectWithMapObjectError(revierId, "type_invalid");
   }
 
   if (!isRevierMapObjectStatus(status)) {
-    throw new Error(text.mapObjectStatusInvalid);
+    redirectWithMapObjectError(revierId, "status_invalid");
   }
 
-  const latitude = parseRequiredLatitude(latitudeRaw, language);
-  const longitude = parseRequiredLongitude(longitudeRaw, language);
+  const latitudeResult = parseRequiredLatitude(latitudeRaw);
+
+  if (latitudeResult.error) {
+    redirectWithMapObjectError(revierId, latitudeResult.error);
+  }
+
+  const longitudeResult = parseRequiredLongitude(longitudeRaw);
+
+  if (longitudeResult.error) {
+    redirectWithMapObjectError(revierId, longitudeResult.error);
+  }
+
+  const latitude = latitudeResult.value;
+  const longitude = longitudeResult.value;
 
   const { error } = await supabase.from("revier_map_objects").insert({
     organization_id: organization.id,
@@ -586,23 +686,35 @@ async function updateRevierMapObject(revierId: string, formData: FormData) {
   const status = String(formData.get("status") ?? "active").trim();
 
   if (!objectId) {
-    throw new Error(text.mapObjectTargetNotFound);
+    redirectWithMapObjectError(revierId, "target_not_found");
   }
 
   if (!name) {
-    throw new Error(text.mapObjectNameRequired);
+    redirectWithMapObjectError(revierId, "name_required");
   }
 
   if (!isRevierMapObjectType(type)) {
-    throw new Error(text.mapObjectTypeInvalid);
+    redirectWithMapObjectError(revierId, "type_invalid");
   }
 
   if (!isRevierMapObjectStatus(status)) {
-    throw new Error(text.mapObjectStatusInvalid);
+    redirectWithMapObjectError(revierId, "status_invalid");
   }
 
-  const latitude = parseRequiredLatitude(latitudeRaw, language);
-  const longitude = parseRequiredLongitude(longitudeRaw, language);
+  const latitudeResult = parseRequiredLatitude(latitudeRaw);
+
+  if (latitudeResult.error) {
+    redirectWithMapObjectError(revierId, latitudeResult.error);
+  }
+
+  const longitudeResult = parseRequiredLongitude(longitudeRaw);
+
+  if (longitudeResult.error) {
+    redirectWithMapObjectError(revierId, longitudeResult.error);
+  }
+
+  const latitude = latitudeResult.value;
+  const longitude = longitudeResult.value;
 
   const { data: existing, error: existingError } = await supabase
     .from("revier_map_objects")
@@ -617,7 +729,7 @@ async function updateRevierMapObject(revierId: string, formData: FormData) {
   }
 
   if (!existing) {
-    throw new Error(text.mapObjectTargetNotFound);
+    redirectWithMapObjectError(revierId, "target_not_found");
   }
 
   const { error } = await supabase
@@ -668,7 +780,7 @@ async function deleteRevierMapObject(revierId: string, formData: FormData) {
   const objectId = String(formData.get("object_id") ?? "").trim();
 
   if (!objectId) {
-    throw new Error(text.mapObjectTargetNotFound);
+    redirectWithMapObjectError(revierId, "target_not_found");
   }
 
   const { data: existing, error: existingError } = await supabase
@@ -686,7 +798,7 @@ async function deleteRevierMapObject(revierId: string, formData: FormData) {
   }
 
   if (!existing) {
-    throw new Error(text.mapObjectTargetNotFound);
+    redirectWithMapObjectError(revierId, "target_not_found");
   }
 
   const { error } = await supabase
@@ -738,7 +850,7 @@ async function uploadRevierBoundary(revierId: string, formData: FormData) {
   }
 
   if (!revierData) {
-    throw new Error(text.boundaryTargetNotFound);
+    redirectWithBoundaryError(revierId, "target_not_found");
   }
 
   const file = formData.get("boundary_file");
@@ -750,17 +862,17 @@ async function uploadRevierBoundary(revierId: string, formData: FormData) {
     !("text" in file) ||
     typeof file.text !== "function"
   ) {
-    throw new Error(text.boundaryMissingFile);
+    redirectWithBoundaryError(revierId, "missing_file");
   }
 
   const boundaryFile = file as File;
 
   if (boundaryFile.size <= 0) {
-    throw new Error(text.boundaryMissingFile);
+    redirectWithBoundaryError(revierId, "missing_file");
   }
 
   if (boundaryFile.size > MAX_BOUNDARY_FILE_SIZE_BYTES) {
-    throw new Error(text.boundaryFileTooLarge);
+    redirectWithBoundaryError(revierId, "file_too_large");
   }
 
   let parsedGeoJson: unknown;
@@ -768,10 +880,16 @@ async function uploadRevierBoundary(revierId: string, formData: FormData) {
   try {
     parsedGeoJson = JSON.parse(await boundaryFile.text());
   } catch {
-    throw new Error(text.boundaryInvalidJson);
+    redirectWithBoundaryError(revierId, "invalid_json");
   }
 
-  const geometry = validateBoundaryGeoJson(parsedGeoJson, language);
+  const boundaryValidationError = validateBoundaryGeoJson(parsedGeoJson);
+
+  if (boundaryValidationError) {
+    redirectWithBoundaryError(revierId, boundaryValidationError);
+  }
+
+  const geometry = parsedGeoJson;
 
   const { error } = await supabase.from("revier_boundaries").upsert(
     {
@@ -803,8 +921,10 @@ export default async function EditRevierPage({
   searchParams?: Promise<{
     demo_read_only?: string;
     boundary_updated?: string;
+    boundary_error?: string;
     map_objects_updated?: string;
     map_object_deleted?: string;
+    map_object_error?: string;
   }>;
 }) {
   const { id } = await params;
@@ -830,6 +950,14 @@ export default async function EditRevierPage({
   }
 
   const text = t(language);
+  const boundaryErrorMessage = getBoundaryErrorMessage(
+    search.boundary_error,
+    language
+  );
+  const mapObjectErrorMessage = getMapObjectErrorMessage(
+    search.map_object_error,
+    language
+  );
 
   const { data, error } = await supabase
     .from("reviers")
@@ -1076,6 +1204,7 @@ export default async function EditRevierPage({
         createAction={createRevierMapObject.bind(null, revier.id)}
         updateAction={updateRevierMapObject.bind(null, revier.id)}
         deleteAction={deleteRevierMapObject.bind(null, revier.id)}
+        errorMessage={mapObjectErrorMessage}
         isDemo={isDemo}
         language={language}
       />
@@ -1145,6 +1274,7 @@ export default async function EditRevierPage({
 
         <RevierBoundaryUploadForm
           action={uploadRevierBoundary.bind(null, revier.id)}
+          errorMessage={boundaryErrorMessage}
           isDemo={isDemo}
           language={language}
         />
