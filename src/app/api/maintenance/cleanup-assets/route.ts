@@ -1,12 +1,13 @@
-// src/app/api/maintenance/cleanup-assets/route.ts #1
+// src/app/api/maintenance/cleanup-assets/route.ts #2
 export const runtime = "nodejs";
 
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabaseServer";
 
 const STORAGE_BUCKET = "camera-assets";
-const DEFAULT_BATCH_SIZE = 50;
-const MAX_BATCH_SIZE = 200;
+const DEFAULT_BATCH_SIZE = 200;
+const MAX_BATCH_SIZE = 500;
+const DELETE_CONCURRENCY = 10;
 
 type CleanupAssetRow = {
   id: string;
@@ -14,6 +15,13 @@ type CleanupAssetRow = {
   storage_delete_after: string | null;
   storage_delete_reason: string | null;
   camera_id: string;
+};
+
+type CleanupResult = {
+  assetId: string;
+  storagePath: string;
+  status: "deleted" | "failed" | "skipped";
+  error?: string;
 };
 
 function parseBatchSize(req: NextRequest) {
@@ -39,6 +47,66 @@ function isAuthorized(req: NextRequest) {
 
 function jsonError(message: string, status: number) {
   return NextResponse.json({ ok: false, error: message }, { status });
+}
+
+async function deleteAsset(
+  supabase: ReturnType<typeof supabaseServer>,
+  asset: CleanupAssetRow
+): Promise<CleanupResult> {
+  if (!asset.storage_path) {
+    return {
+      assetId: asset.id,
+      storagePath: "",
+      status: "skipped",
+      error: "missing_storage_path",
+    };
+  }
+
+  const { error: removeError } = await supabase.storage
+    .from(STORAGE_BUCKET)
+    .remove([asset.storage_path]);
+
+  if (removeError) {
+    const message = removeError.message || "storage_remove_failed";
+
+    await supabase
+      .from("assets")
+      .update({ storage_delete_error: message })
+      .eq("id", asset.id)
+      .is("storage_deleted_at", null);
+
+    return {
+      assetId: asset.id,
+      storagePath: asset.storage_path,
+      status: "failed",
+      error: message,
+    };
+  }
+
+  const deletedAtIso = new Date().toISOString();
+  const { error: markDeletedError } = await supabase
+    .from("assets")
+    .update({
+      storage_deleted_at: deletedAtIso,
+      storage_delete_error: null,
+    })
+    .eq("id", asset.id)
+    .is("storage_deleted_at", null);
+
+  if (markDeletedError) {
+    return {
+      assetId: asset.id,
+      storagePath: asset.storage_path,
+      status: "failed",
+      error: `storage deleted but DB update failed: ${markDeletedError.message}`,
+    };
+  }
+
+  return {
+    assetId: asset.id,
+    storagePath: asset.storage_path,
+    status: "deleted",
+  };
 }
 
 async function handleCleanup(req: NextRequest) {
@@ -98,86 +166,19 @@ async function handleCleanup(req: NextRequest) {
     });
   }
 
-  const results: Array<{
-    assetId: string;
-    storagePath: string;
-    status: "deleted" | "failed" | "skipped";
-    error?: string;
-  }> = [];
+  const results: CleanupResult[] = [];
 
-  let deleted = 0;
-  let failed = 0;
-  let skipped = 0;
-
-  for (const asset of assets) {
-    if (!asset.storage_path) {
-      skipped += 1;
-      results.push({
-        assetId: asset.id,
-        storagePath: "",
-        status: "skipped",
-        error: "missing_storage_path",
-      });
-      continue;
-    }
-
-    const { error: removeError } = await supabase.storage
-      .from(STORAGE_BUCKET)
-      .remove([asset.storage_path]);
-
-    if (removeError) {
-      failed += 1;
-      const message = removeError.message || "storage_remove_failed";
-
-      await supabase
-        .from("assets")
-        .update({
-          storage_delete_error: message,
-        })
-        .eq("id", asset.id)
-        .is("storage_deleted_at", null);
-
-      results.push({
-        assetId: asset.id,
-        storagePath: asset.storage_path,
-        status: "failed",
-        error: message,
-      });
-
-      continue;
-    }
-
-    const deletedAtIso = new Date().toISOString();
-
-    const { error: markDeletedError } = await supabase
-      .from("assets")
-      .update({
-        storage_deleted_at: deletedAtIso,
-        storage_delete_error: null,
-      })
-      .eq("id", asset.id)
-      .is("storage_deleted_at", null);
-
-    if (markDeletedError) {
-      failed += 1;
-
-      results.push({
-        assetId: asset.id,
-        storagePath: asset.storage_path,
-        status: "failed",
-        error: `storage deleted but DB update failed: ${markDeletedError.message}`,
-      });
-
-      continue;
-    }
-
-    deleted += 1;
-    results.push({
-      assetId: asset.id,
-      storagePath: asset.storage_path,
-      status: "deleted",
-    });
+  for (let i = 0; i < assets.length; i += DELETE_CONCURRENCY) {
+    const chunk = assets.slice(i, i + DELETE_CONCURRENCY);
+    const chunkResults = await Promise.all(
+      chunk.map((asset) => deleteAsset(supabase, asset))
+    );
+    results.push(...chunkResults);
   }
+
+  const deleted = results.filter((result) => result.status === "deleted").length;
+  const failed = results.filter((result) => result.status === "failed").length;
+  const skipped = results.filter((result) => result.status === "skipped").length;
 
   return NextResponse.json({
     ok: failed === 0,
