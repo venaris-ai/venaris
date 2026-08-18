@@ -12,14 +12,23 @@ begin
      and new.status = 'processed'
      and coalesce(new.relevant_user, new.relevant, false) = true
      and new.storage_delete_after is null
-     and coalesce(old.storage_delete_reason, '') not in (
-       'security_detection',
-       'security_detection_disabled'
-     )
   then
-    new.storage_delete_after := new.created_at + interval '3 months';
-    new.storage_delete_reason := 'wildlife_retention_3m';
-    new.storage_delete_error := null;
+    -- Security images intentionally keep their shorter retention even if a later
+    -- manual review marks them relevant. The application currently clears a
+    -- pending delete schedule when relevance is corrected, so restore it here.
+    if coalesce(old.storage_delete_reason, '') in (
+      'security_detection',
+      'security_detection_disabled'
+    ) and old.storage_delete_after is not null
+    then
+      new.storage_delete_after := old.storage_delete_after;
+      new.storage_delete_reason := old.storage_delete_reason;
+      new.storage_delete_error := old.storage_delete_error;
+    else
+      new.storage_delete_after := new.created_at + interval '3 months';
+      new.storage_delete_reason := 'wildlife_retention_3m';
+      new.storage_delete_error := null;
+    end if;
   end if;
 
   return new;
