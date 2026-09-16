@@ -7,6 +7,7 @@ alter table public.camera_ingest_configs
     not (
       is_active = true
       and method = 'smtp'
+      and provisioning_status = 'ready'
       and upper(coalesce(vendor, '')) = 'ZEISS'
     )
     or external_key ~ '^[0-9]{15}$'
