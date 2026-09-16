@@ -1,4 +1,4 @@
-// src/app/api/cameras/create/route.ts #5
+// src/app/api/cameras/create/route.ts #6
 import { NextRequest, NextResponse } from "next/server";
 import crypto from "node:crypto";
 import { supabaseServer } from "@/lib/supabaseServer";
@@ -12,6 +12,7 @@ type Payload = {
   cameraName: string;
   method: Method;
   vendor: string;
+  externalKey?: string | null;
   revierId?: string | null;
   locationName?: string | null;
   latitude?: number | null;
@@ -53,6 +54,9 @@ function t(language: AppLanguage) {
         invalidMethod: "invalid method",
         invalidVendor: "invalid vendor",
         invalidDirectionDeg: "directionDeg must be 0-359",
+        invalidZeissImei: "ZEISS SMTP cameras require a 15-digit IMEI",
+        duplicateZeissImei: "This ZEISS IMEI is already assigned to another active camera",
+        externalKeyUpdateFailed: "failed to store external camera key",
         subscriptionCheckFailed: "subscription check failed",
         noSubscriptionFound: "no subscription found for active organization",
         cameraUsageCheckFailed: "camera usage check failed",
@@ -69,6 +73,9 @@ function t(language: AppLanguage) {
         invalidMethod: "ungültige Methode",
         invalidVendor: "ungültiger Hersteller",
         invalidDirectionDeg: "directionDeg muss zwischen 0 und 359 liegen",
+        invalidZeissImei: "Für ZEISS-SMTP-Kameras ist eine 15-stellige IMEI erforderlich",
+        duplicateZeissImei: "Diese ZEISS-IMEI ist bereits einer anderen aktiven Kamera zugeordnet",
+        externalKeyUpdateFailed: "externer Kameraschlüssel konnte nicht gespeichert werden",
         subscriptionCheckFailed: "Prüfung des Abos fehlgeschlagen",
         noSubscriptionFound: "kein Abo für die aktive Organisation gefunden",
         cameraUsageCheckFailed: "Prüfung der Kamera-Nutzung fehlgeschlagen",
@@ -212,6 +219,17 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    const externalKey =
+      typeof body.externalKey === "string" ? body.externalKey.trim() : "";
+    const isZeissSmtp = body.method === "smtp" && vendor.toUpperCase() === "ZEISS";
+
+    if (isZeissSmtp && !/^\d{15}$/.test(externalKey)) {
+      return NextResponse.json(
+        { error: text.invalidZeissImei },
+        { status: 400 }
+      );
+    }
+
     const supabase = supabaseServer();
 
     const { data: vendorRow, error: vendorError } = await supabase
@@ -226,6 +244,32 @@ export async function POST(req: NextRequest) {
         { error: text.invalidVendor },
         { status: 400 }
       );
+    }
+
+    if (isZeissSmtp) {
+      const { data: existingExternalKey, error: externalKeyLookupError } = await supabase
+        .from("camera_ingest_configs")
+        .select("camera_id")
+        .eq("method", "smtp")
+        .eq("is_active", true)
+        .eq("vendor", vendor)
+        .eq("external_key", externalKey)
+        .limit(1)
+        .maybeSingle();
+
+      if (externalKeyLookupError) {
+        return NextResponse.json(
+          { error: text.provisioningFailed, details: externalKeyLookupError.message },
+          { status: 500 }
+        );
+      }
+
+      if (existingExternalKey) {
+        return NextResponse.json(
+          { error: text.duplicateZeissImei },
+          { status: 409 }
+        );
+      }
     }
 
     if (
@@ -334,6 +378,32 @@ export async function POST(req: NextRequest) {
         { error: text.noProvisioningResult },
         { status: 500 }
       );
+    }
+
+    if (isZeissSmtp) {
+      const { error: externalKeyUpdateError } = await supabase
+        .from("camera_ingest_configs")
+        .update({ external_key: externalKey })
+        .eq("camera_id", row.camera_id)
+        .eq("method", "smtp")
+        .eq("is_active", true);
+
+      if (externalKeyUpdateError) {
+        await updateProvisioningStatus({
+          cameraId: row.camera_id,
+          method: "smtp",
+          provisioningStatus: "failed",
+          lastProvisioningError: externalKeyUpdateError.message,
+        });
+
+        return NextResponse.json(
+          {
+            error: text.externalKeyUpdateFailed,
+            details: externalKeyUpdateError.message,
+          },
+          { status: 500 }
+        );
+      }
     }
 
     if (body.method === "ftp") {

@@ -1,4 +1,4 @@
-// src/app/cameras/new/CreateCameraForm.tsx #15
+// src/app/cameras/new/CreateCameraForm.tsx #16
 "use client";
 
 import { useMemo, useState } from "react";
@@ -70,6 +70,8 @@ type CameraVendorOption = {
   label: string;
 };
 
+const ZEISS_SHARED_ALIAS = "zeiss@cams.venaris.io";
+
 function t(language: AppLanguage) {
   if (language === "en") {
     return {
@@ -98,6 +100,10 @@ function t(language: AppLanguage) {
       direction: "Direction (0–359, optional)",
       latitudePlaceholder: "e.g. N 51.82752",
       longitudePlaceholder: "e.g. E 7.12735",
+      zeissImei: "ZEISS IMEI / device ID",
+      zeissImeiPlaceholder: "e.g. 864004048444407",
+      zeissImeiHint: "15-digit device identifier used to assign ZEISS email images to this camera.",
+      invalidZeissImei: "Please enter the 15-digit ZEISS IMEI.",
       north: "N",
       south: "S",
       east: "E",
@@ -128,8 +134,7 @@ function t(language: AppLanguage) {
       technicalName: "Technical name",
       ingestToken: "Ingest token",
       ftpSetup: "FTP setup",
-      ftpSetupText:
-        "Enter these values into the camera.",
+      ftpSetupText: "Enter these values into the camera.",
       ftpServer: "FTP server",
       ftpPort: "FTP port",
       ftpUsername: "FTP username",
@@ -142,6 +147,8 @@ function t(language: AppLanguage) {
       disabled: "Disabled",
       smtpSetup: "SMTP setup",
       smtpSetupText: "Use this email address in the camera configuration.",
+      zeissSmtpSetupText:
+        "Forward ZEISS photo notifications to this Venaris address. Venaris assigns each image to the camera using the IMEI.",
       smtpAlias: "SMTP alias",
       manualSetup: "Manual import setup",
       manualSetupText:
@@ -155,9 +162,9 @@ function t(language: AppLanguage) {
       coreProvisioningLabel: "Core provisioning",
       ftpSetupLabel: "FTP setup",
       smtpSetupLabel: "SMTP setup",
-manualSetupLabel: "Manual import setup",
-successCreated:
-  "The camera has been created successfully. Scroll down to find the configuration parameters.",
+      manualSetupLabel: "Manual import setup",
+      successCreated:
+        "The camera has been created successfully. Scroll down to find the configuration parameters.",
     };
   }
 
@@ -187,6 +194,11 @@ successCreated:
     direction: "Richtung (0–359, optional)",
     latitudePlaceholder: "z. B. N 51,82752",
     longitudePlaceholder: "z. B. O 7,12735",
+    zeissImei: "ZEISS IMEI / Geräte-ID",
+    zeissImeiPlaceholder: "z. B. 864004048444407",
+    zeissImeiHint:
+      "15-stellige Gerätekennung zur eindeutigen Zuordnung der ZEISS-E-Mail-Bilder zu dieser Kamera.",
+    invalidZeissImei: "Bitte die 15-stellige ZEISS-IMEI eingeben.",
     north: "N",
     south: "S",
     east: "O",
@@ -217,8 +229,7 @@ successCreated:
     technicalName: "Technical Name",
     ingestToken: "Ingest-Token",
     ftpSetup: "FTP-Setup",
-    ftpSetupText:
-      "Bitte diese Werte in der Kamera eintragen.",
+    ftpSetupText: "Bitte diese Werte in der Kamera eintragen.",
     ftpServer: "FTP-Server",
     ftpPort: "FTP-Port",
     ftpUsername: "FTP-Benutzername",
@@ -232,6 +243,8 @@ successCreated:
     smtpSetup: "SMTP-Setup",
     smtpSetupText:
       "Bitte diese E-Mail-Adresse in der Kamera-Konfiguration verwenden.",
+    zeissSmtpSetupText:
+      "Leite die ZEISS-Fotobenachrichtigungen an diese Venaris-Adresse weiter. Venaris ordnet jedes Bild über die IMEI der richtigen Kamera zu.",
     smtpAlias: "SMTP-Alias",
     manualSetup: "Setup manueller Import",
     manualSetupText:
@@ -245,9 +258,9 @@ successCreated:
     coreProvisioningLabel: "Core Provisioning",
     ftpSetupLabel: "FTP-Setup",
     smtpSetupLabel: "SMTP-Setup",
-manualSetupLabel: "Setup manueller Import",
-successCreated:
-  "Die Kamera wurde erfolgreich angelegt. Scrolle nach unten, um die Konfigurationsparameter zu finden.",
+    manualSetupLabel: "Setup manueller Import",
+    successCreated:
+      "Die Kamera wurde erfolgreich angelegt. Scrolle nach unten, um die Konfigurationsparameter zu finden.",
   };
 }
 
@@ -361,6 +374,7 @@ export default function CreateCameraForm({
   const [cameraName, setCameraName] = useState("");
   const [method, setMethod] = useState<"smtp" | "ftp" | "manual">("manual");
   const [vendor, setVendor] = useState<string>(vendors[0]?.key ?? "");
+  const [externalKey, setExternalKey] = useState("");
   const [locationName, setLocationName] = useState("");
   const [latitude, setLatitude] = useState("");
   const [longitude, setLongitude] = useState("");
@@ -376,6 +390,7 @@ export default function CreateCameraForm({
   const usagePercent =
     maxCameras > 0 ? Math.min((currentCameraCount / maxCameras) * 100, 100) : 0;
   const tone = badgeTone(cameraPolicy.allowed);
+  const isZeissSmtp = method === "smtp" && vendor.toUpperCase() === "ZEISS";
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -392,6 +407,11 @@ export default function CreateCameraForm({
 
     if (!revierId) {
       setError(text.selectGround);
+      return;
+    }
+
+    if (isZeissSmtp && !/^\d{15}$/.test(externalKey.trim())) {
+      setError(text.invalidZeissImei);
       return;
     }
 
@@ -435,6 +455,7 @@ export default function CreateCameraForm({
           cameraName,
           method,
           vendor,
+          externalKey: isZeissSmtp ? externalKey.trim() : null,
           locationName: locationName || null,
           latitude: parsedLatitude,
           longitude: parsedLongitude,
@@ -454,6 +475,7 @@ export default function CreateCameraForm({
       router.refresh();
 
       setCameraName("");
+      setExternalKey("");
       setLocationName("");
       setLatitude("");
       setLongitude("");
@@ -483,6 +505,7 @@ export default function CreateCameraForm({
   const camera = result?.camera ?? null;
   const ftpProvisioning = result?.ftpProvisioning ?? null;
   const formDisabled = isDemo || !cameraPolicy.allowed;
+  const smtpDisplayAlias = isZeissSmtp ? ZEISS_SHARED_ALIAS : camera?.routing.smtpAlias;
 
   return (
     <div className="space-y-6">
@@ -708,6 +731,31 @@ export default function CreateCameraForm({
             </div>
           </div>
 
+          {isZeissSmtp ? (
+            <div className="md:col-span-2">
+              <label className="mb-1 block text-sm font-medium text-white">
+                {text.zeissImei} *
+              </label>
+              <input
+                type="text"
+                inputMode="numeric"
+                autoComplete="off"
+                value={externalKey}
+                onChange={(e) =>
+                  setExternalKey(e.target.value.replace(/\D/g, "").slice(0, 15))
+                }
+                className="w-full rounded-[14px] border border-white/10 bg-white/5 px-3 py-2 text-white outline-none placeholder:text-white/35 disabled:bg-white/5 disabled:text-white/35"
+                placeholder={text.zeissImeiPlaceholder}
+                pattern="[0-9]{15}"
+                maxLength={15}
+                required
+                disabled={formDisabled}
+                title={isDemo ? text.demoReadOnly : text.zeissImeiHint}
+              />
+              <p className="mt-1 text-xs text-white/55">{text.zeissImeiHint}</p>
+            </div>
+          ) : null}
+
           <div className="md:col-span-2">
             <label className="mb-1 block text-sm font-medium text-white">
               {text.notes}
@@ -729,11 +777,11 @@ export default function CreateCameraForm({
           </div>
         ) : null}
 
-{result ? (
-  <div className="mt-4 rounded-[24px] border border-emerald-300/20 bg-emerald-300/10 p-4 text-sm text-emerald-100">
-    {text.successCreated}
-  </div>
-) : null}
+        {result ? (
+          <div className="mt-4 rounded-[24px] border border-emerald-300/20 bg-emerald-300/10 p-4 text-sm text-emerald-100">
+            {text.successCreated}
+          </div>
+        ) : null}
 
         <div className="mt-6 flex items-center gap-3">
           <button
@@ -900,7 +948,7 @@ export default function CreateCameraForm({
             </div>
           ) : null}
 
-          {!ftpProvisioning && camera.routing.smtpAlias ? (
+          {!ftpProvisioning && smtpDisplayAlias ? (
             <div className="space-y-4 rounded-[24px] border border-white/10 bg-white/5 p-5">
               <div className="flex items-start justify-between gap-3">
                 <div>
@@ -908,19 +956,16 @@ export default function CreateCameraForm({
                     {text.smtpSetup}
                   </h3>
                   <p className="mt-1 text-sm text-white/68">
-                    {text.smtpSetupText}
+                    {isZeissSmtp ? text.zeissSmtpSetupText : text.smtpSetupText}
                   </p>
                 </div>
                 <button
                   type="button"
                   onClick={() =>
-                    camera.routing.smtpAlias
+                    smtpDisplayAlias
                       ? handleCopy(
                           text.smtpSetup,
-                          buildSmtpProvisioningCopy(
-                            camera.routing.smtpAlias,
-                            language,
-                          ),
+                          buildSmtpProvisioningCopy(smtpDisplayAlias, language),
                         )
                       : undefined
                   }
@@ -935,7 +980,7 @@ export default function CreateCameraForm({
                   <span className="font-medium text-white">
                     {text.smtpAlias}:
                   </span>{" "}
-                  {camera.routing.smtpAlias}
+                  {smtpDisplayAlias}
                 </div>
               </div>
             </div>
@@ -986,4 +1031,3 @@ export default function CreateCameraForm({
     </div>
   );
 }
-

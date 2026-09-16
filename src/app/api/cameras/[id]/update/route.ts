@@ -1,4 +1,4 @@
-// src/app/api/cameras/[id]/update/route.ts #1
+// src/app/api/cameras/[id]/update/route.ts #2
 import { NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
 import { assertNotDemoWrite } from "@/lib/auth";
@@ -19,6 +19,7 @@ type UpdateCameraBody = {
   notes?: string | null;
   isActive?: boolean;
   vendor?: string;
+  externalKey?: string | null;
 };
 
 function normalizeOptionalText(value: unknown) {
@@ -74,6 +75,7 @@ export async function POST(
   const cameraName = normalizeOptionalText(body.cameraName);
   const revierId = normalizeOptionalText(body.revierId);
   const vendor = normalizeOptionalText(body.vendor);
+  const externalKey = normalizeOptionalText(body.externalKey);
 
   if (!cameraName) {
     return NextResponse.json({ error: "cameraName is required" }, { status: 400 });
@@ -114,7 +116,7 @@ export async function POST(
 
   const { data: targetCamera, error: targetCameraError } = await supabase
     .from("cameras")
-    .select("id,organization_id")
+    .select("id,organization_id,import_method")
     .eq("organization_id", activeOrganization.id)
     .eq("id", id)
     .maybeSingle();
@@ -128,6 +130,43 @@ export async function POST(
 
   if (!targetCamera) {
     return NextResponse.json({ error: "Target camera not found" }, { status: 404 });
+  }
+
+  const isZeissSmtp =
+    targetCamera.import_method === "smtp" && vendor.toUpperCase() === "ZEISS";
+
+  if (isZeissSmtp && (!externalKey || !/^\d{15}$/.test(externalKey))) {
+    return NextResponse.json(
+      { error: "ZEISS SMTP cameras require a 15-digit IMEI" },
+      { status: 400 }
+    );
+  }
+
+  if (isZeissSmtp) {
+    const { data: duplicateConfig, error: duplicateError } = await supabase
+      .from("camera_ingest_configs")
+      .select("camera_id")
+      .eq("method", "smtp")
+      .eq("is_active", true)
+      .eq("vendor", vendor)
+      .eq("external_key", externalKey)
+      .neq("camera_id", id)
+      .limit(1)
+      .maybeSingle();
+
+    if (duplicateError) {
+      return NextResponse.json(
+        { error: "Failed to validate ZEISS IMEI", details: duplicateError.message },
+        { status: 500 }
+      );
+    }
+
+    if (duplicateConfig) {
+      return NextResponse.json(
+        { error: "This ZEISS IMEI is already assigned to another active camera" },
+        { status: 409 }
+      );
+    }
   }
 
   const { data: targetRevier, error: targetRevierError } = await supabase
@@ -193,15 +232,18 @@ export async function POST(
 
   const { data: updatedConfig, error: configUpdateError } = await supabase
     .from("camera_ingest_configs")
-    .update({ vendor })
+    .update({
+      vendor,
+      external_key: isZeissSmtp ? externalKey : null,
+    })
     .eq("camera_id", id)
     .eq("is_active", true)
-    .select("camera_id,vendor")
+    .select("camera_id,vendor,external_key")
     .maybeSingle();
 
   if (configUpdateError) {
     return NextResponse.json(
-      { error: "Failed to update camera vendor", details: configUpdateError.message },
+      { error: "Failed to update camera configuration", details: configUpdateError.message },
       { status: 500 }
     );
   }

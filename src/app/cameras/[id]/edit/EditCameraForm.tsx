@@ -1,4 +1,4 @@
-// src/app/cameras/[id]/edit/EditCameraForm.tsx #2
+// src/app/cameras/[id]/edit/EditCameraForm.tsx #3
 "use client";
 
 import Link from "next/link";
@@ -39,6 +39,7 @@ type Props = {
   returnRevier: string;
   vendors: CameraVendorOption[];
   currentVendor: string;
+  currentExternalKey: string;
   isDemo?: boolean;
   language: AppLanguage;
 };
@@ -60,6 +61,10 @@ function t(language: AppLanguage) {
       direction: "Direction (0–359, optional)",
       latitudePlaceholder: "e.g. N 51.82752",
       longitudePlaceholder: "e.g. E 7.12735",
+      zeissImei: "ZEISS IMEI / device ID",
+      zeissImeiPlaceholder: "e.g. 864004048444407",
+      zeissImeiHint: "15-digit device identifier used to assign ZEISS email images to this camera.",
+      invalidZeissImei: "Please enter the 15-digit ZEISS IMEI.",
       north: "N",
       south: "S",
       east: "E",
@@ -103,6 +108,10 @@ function t(language: AppLanguage) {
     direction: "Richtung (0–359, optional)",
     latitudePlaceholder: "z. B. N 51,82752",
     longitudePlaceholder: "z. B. O 7,12735",
+    zeissImei: "ZEISS IMEI / Geräte-ID",
+    zeissImeiPlaceholder: "z. B. 864004048444407",
+    zeissImeiHint: "15-stellige Gerätekennung zur eindeutigen Zuordnung der ZEISS-E-Mail-Bilder zu dieser Kamera.",
+    invalidZeissImei: "Bitte die 15-stellige ZEISS-IMEI eingeben.",
     north: "N",
     south: "S",
     east: "O",
@@ -211,6 +220,7 @@ export default function EditCameraForm({
   returnRevier,
   vendors,
   currentVendor,
+  currentExternalKey,
   isDemo = false,
   language,
 }: Props) {
@@ -219,6 +229,7 @@ export default function EditCameraForm({
 
   const [cameraName, setCameraName] = useState(camera.name);
   const [vendor, setVendor] = useState(currentVendor || vendors[0]?.key || "");
+  const [externalKey, setExternalKey] = useState(currentExternalKey);
   const [revierId, setRevierId] = useState(camera.revier_id);
   const [locationName, setLocationName] = useState(camera.location_name ?? "");
   const [latitude, setLatitude] = useState(formatLatitude(camera.latitude));
@@ -236,6 +247,9 @@ export default function EditCameraForm({
   const [error, setError] = useState("");
   const [showDemoModal, setShowDemoModal] = useState(false);
 
+  const isZeissSmtp =
+    camera.import_method === "smtp" && vendor.toUpperCase() === "ZEISS";
+
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
 
@@ -246,6 +260,11 @@ export default function EditCameraForm({
 
     if (!revierId) {
       setError(text.selectGround);
+      return;
+    }
+
+    if (isZeissSmtp && !/^\d{15}$/.test(externalKey.trim())) {
+      setError(text.invalidZeissImei);
       return;
     }
 
@@ -291,6 +310,7 @@ export default function EditCameraForm({
           notes: notes || null,
           isActive: status === "active",
           vendor,
+          externalKey: isZeissSmtp ? externalKey.trim() : null,
         }),
       });
 
@@ -481,6 +501,31 @@ export default function EditCameraForm({
               </option>
             </select>
           </div>
+
+          {isZeissSmtp ? (
+            <div className="md:col-span-2">
+              <label className="mb-1 block text-sm font-medium text-white">
+                {text.zeissImei} *
+              </label>
+              <input
+                type="text"
+                inputMode="numeric"
+                autoComplete="off"
+                value={externalKey}
+                onChange={(e) =>
+                  setExternalKey(e.target.value.replace(/\D/g, "").slice(0, 15))
+                }
+                className="w-full rounded-[14px] border border-white/10 bg-white/5 px-3 py-2 text-white outline-none placeholder:text-white/35 disabled:bg-white/5 disabled:text-white/35"
+                placeholder={text.zeissImeiPlaceholder}
+                pattern="[0-9]{15}"
+                maxLength={15}
+                required
+                disabled={loading || isDemo}
+                title={isDemo ? text.demoReadOnly : text.zeissImeiHint}
+              />
+              <p className="mt-1 text-xs text-white/55">{text.zeissImeiHint}</p>
+            </div>
+          ) : null}
 
           <div className="md:col-span-2">
             <label className="mb-1 block text-sm font-medium text-white">

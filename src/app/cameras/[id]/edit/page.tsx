@@ -1,4 +1,4 @@
-// src/app/cameras/[id]/edit/page.tsx #1
+// src/app/cameras/[id]/edit/page.tsx #3
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { cookies } from "next/headers";
@@ -34,6 +34,7 @@ type CameraVendorRow = {
 
 type CameraIngestConfigRow = {
   vendor: string | null;
+  external_key: string | null;
 };
 
 type CameraRow = {
@@ -164,7 +165,7 @@ export default async function EditCameraPage(props: {
       .order("sort_order", { ascending: true }),
     supabase
       .from("camera_ingest_configs")
-      .select("vendor")
+      .select("vendor,external_key")
       .eq("camera_id", params.id)
       .eq("is_active", true)
       .limit(1)
@@ -193,7 +194,9 @@ export default async function EditCameraPage(props: {
 
   const reviers = (revierData ?? []) as RevierRow[];
   const vendors = (vendorData ?? []) as CameraVendorRow[];
-  const currentVendor = ((configData as CameraIngestConfigRow | null)?.vendor ?? "").trim();
+  const config = configData as CameraIngestConfigRow | null;
+  const currentVendor = (config?.vendor ?? "").trim();
+  const currentExternalKey = (config?.external_key ?? "").trim();
 
   if (reviers.length === 0) {
     return (
@@ -235,7 +238,6 @@ export default async function EditCameraPage(props: {
             </h1>
             <p className="mt-2 max-w-3xl text-sm text-white/68">{text.intro}</p>
           </div>
-
         </div>
       </section>
 
@@ -245,6 +247,7 @@ export default async function EditCameraPage(props: {
         returnRevier={returnRevier}
         vendors={vendors}
         currentVendor={currentVendor}
+        currentExternalKey={currentExternalKey}
         isDemo={ctx.isDemo}
         language={language}
       />
