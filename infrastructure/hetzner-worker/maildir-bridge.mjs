@@ -1,6 +1,7 @@
 import fs from "fs";
 import path from "path";
 import crypto from "crypto";
+import { inflateSync } from "node:zlib";
 import { simpleParser } from "mailparser";
 import { createClient } from "@supabase/supabase-js";
 
@@ -31,6 +32,23 @@ const INVALID_RETENTION_HOURS = Number(
 );
 const ERROR_RETENTION_HOURS = Number(
   process.env.ERROR_RETENTION_HOURS || "336"
+);
+
+const ZEISS_SHARED_ALIAS = String(
+  process.env.ZEISS_SHARED_ALIAS || "zeiss@cams.venaris.io"
+)
+  .toLowerCase()
+  .trim();
+const ZEISS_NOTIFICATION_SENDER = String(
+  process.env.ZEISS_NOTIFICATION_SENDER || "picture@secacam.email"
+)
+  .toLowerCase()
+  .trim();
+const REMOTE_IMAGE_TIMEOUT_MS = Number(
+  process.env.REMOTE_IMAGE_TIMEOUT_MS || "15000"
+);
+const REMOTE_IMAGE_MAX_BYTES = Number(
+  process.env.REMOTE_IMAGE_MAX_BYTES || "10000000"
 );
 
 const MAILDIR = "/home/venaris/Maildir";
@@ -73,30 +91,53 @@ function extractRecipient(headers) {
   return String(to).toLowerCase().trim();
 }
 
+function extractSender(parsed) {
+  const address = parsed?.from?.value?.[0]?.address;
+  return address ? String(address).toLowerCase().trim() : null;
+}
+
+function cameraConfigSelect() {
+  return [
+    "camera_id",
+    "method",
+    "is_active",
+    "provisioning_status",
+    "smtp_alias",
+    "ingest_token",
+    "vendor",
+    "external_key",
+    "last_provisioning_error",
+  ].join(", ");
+}
+
 async function lookupCamera(alias) {
   const { data, error } = await supabase
     .from("camera_ingest_configs")
-    .select(
-      [
-        "camera_id",
-        "method",
-        "is_active",
-        "provisioning_status",
-        "smtp_alias",
-        "ingest_token",
-        "vendor",
-        "last_provisioning_error",
-      ].join(", ")
-    )
+    .select(cameraConfigSelect())
     .eq("method", "smtp")
     .eq("is_active", true)
     .eq("provisioning_status", "ready")
     .eq("smtp_alias", alias)
     .limit(1)
-    .single();
+    .maybeSingle();
 
   if (error || !data) return null;
+  return data;
+}
 
+async function lookupCameraByExternalKey(vendor, externalKey) {
+  const { data, error } = await supabase
+    .from("camera_ingest_configs")
+    .select(cameraConfigSelect())
+    .eq("method", "smtp")
+    .eq("is_active", true)
+    .eq("provisioning_status", "ready")
+    .eq("vendor", vendor)
+    .eq("external_key", externalKey)
+    .limit(1)
+    .maybeSingle();
+
+  if (error || !data) return null;
   return data;
 }
 
@@ -127,7 +168,148 @@ function guessContentType(filename) {
   return "application/octet-stream";
 }
 
-async function sendToIngest(file, filename, config) {
+function safeFilename(filename, fallback = `image-${Date.now()}.jpg`) {
+  const raw = String(filename || "").replaceAll("\0", "").trim();
+  if (!raw) return fallback;
+  const base = path.basename(raw);
+  return base || fallback;
+}
+
+function decodeRepeatedly(value, maxRounds = 3) {
+  let current = String(value || "");
+
+  for (let i = 0; i < maxRounds; i += 1) {
+    try {
+      const next = decodeURIComponent(current);
+      if (next === current) break;
+      current = next;
+    } catch {
+      break;
+    }
+  }
+
+  return current;
+}
+
+function phpSerializedString(payload, key) {
+  const escapedKey = key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const re = new RegExp(`s:\\d+:"${escapedKey}";s:\\d+:"([^"]*)"`);
+  const match = String(payload || "").match(re);
+  return match?.[1] ?? null;
+}
+
+function decodeZeissImageParam(encodedParam) {
+  const decodedParam = decodeRepeatedly(encodedParam);
+  const compressed = Buffer.from(decodedParam, "base64");
+  const payload = inflateSync(compressed).toString("utf8");
+
+  const imei = phpSerializedString(payload, "imei");
+  const imageName = phpSerializedString(payload, "imagename");
+  const deviceDate = phpSerializedString(payload, "date");
+
+  if (!imei || !/^\d{15}$/.test(imei)) {
+    throw new Error("invalid ZEISS image parameter: missing 15-digit IMEI");
+  }
+
+  return {
+    imei,
+    imageName: imageName ? safeFilename(imageName) : null,
+    deviceDate,
+  };
+}
+
+function extractZeissRemoteImage(html) {
+  if (!html || typeof html !== "string") return null;
+
+  const matches = html.match(
+    /https:\/\/media\.secacam\.com\/getImage\/param\/[^"'<>\s]+/gi
+  );
+
+  if (!matches?.length) return null;
+
+  for (const rawMatch of matches) {
+    const normalized = rawMatch.replaceAll("&amp;", "&");
+
+    try {
+      const url = new URL(normalized);
+      if (url.protocol !== "https:") continue;
+      if (url.hostname.toLowerCase() !== "media.secacam.com") continue;
+      if (!url.pathname.startsWith("/getImage/param/")) continue;
+
+      const encodedParam = url.pathname.slice("/getImage/param/".length);
+      if (!encodedParam) continue;
+
+      const decoded = decodeZeissImageParam(encodedParam);
+      return {
+        url: url.toString(),
+        ...decoded,
+      };
+    } catch {
+      // Try the next matching URL, if any.
+    }
+  }
+
+  return null;
+}
+
+async function downloadRemoteImage(remoteUrl) {
+  const url = new URL(remoteUrl);
+
+  if (
+    url.protocol !== "https:" ||
+    url.hostname.toLowerCase() !== "media.secacam.com" ||
+    !url.pathname.startsWith("/getImage/param/")
+  ) {
+    throw new Error("remote image URL is not allowed");
+  }
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), REMOTE_IMAGE_TIMEOUT_MS);
+
+  try {
+    const resp = await fetch(url, {
+      method: "GET",
+      redirect: "error",
+      signal: controller.signal,
+      headers: {
+        accept: "image/*",
+        "user-agent": "Venaris-Maildir-Bridge/1.0",
+      },
+    });
+
+    if (!resp.ok) {
+      throw new Error(`remote image download failed ${resp.status}`);
+    }
+
+    const contentType = String(resp.headers.get("content-type") || "")
+      .split(";", 1)[0]
+      .trim()
+      .toLowerCase();
+
+    if (!contentType.startsWith("image/")) {
+      throw new Error(`remote response is not an image: ${contentType || "unknown"}`);
+    }
+
+    const contentLength = Number(resp.headers.get("content-length") || "0");
+    if (contentLength > REMOTE_IMAGE_MAX_BYTES) {
+      throw new Error(`remote image too large: ${contentLength} bytes`);
+    }
+
+    const buf = Buffer.from(await resp.arrayBuffer());
+    if (!buf.length) {
+      throw new Error("remote image is empty");
+    }
+    if (buf.length > REMOTE_IMAGE_MAX_BYTES) {
+      throw new Error(`remote image too large: ${buf.length} bytes`);
+    }
+
+    return { buf, contentType };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function sendToIngest(file, filename, config, extraMetadata = {}) {
   if (!config.ingest_token) {
     throw new Error("missing ingest_token on ready smtp config");
   }
@@ -144,6 +326,7 @@ async function sendToIngest(file, filename, config) {
     form.append(
       "metadata",
       JSON.stringify({
+        ...extraMetadata,
         source: "smtp",
         vendor: config.vendor,
         camera_id: config.camera_id,
@@ -237,6 +420,51 @@ function cleanupMaildir() {
   cleanupFolder(ERROR_DIR, ERROR_RETENTION_HOURS, "error");
 }
 
+async function processAttachmentImages(recipient, images, config) {
+  for (const img of images) {
+    const buf = img.content;
+    const filename = safeFilename(img.filename);
+
+    const res = await sendToIngest(buf, filename, config, {
+      mail_recipient: recipient,
+      transport: "mime_attachment",
+    });
+
+    console.log(
+      `[${recipient}] ok batchId=${res.batchId ?? "?"} accepted=${res.accepted ?? "?"} skippedDup=${res.skippedDuplicates ?? "?"} source=${res.source ?? "?"} transport=attachment file=${filename} sha=${sha256(buf).slice(0, 12)}`
+    );
+  }
+}
+
+async function processZeissRemoteImage(recipient, parsed, zeissImage) {
+  const sender = extractSender(parsed);
+  if (sender !== ZEISS_NOTIFICATION_SENDER) {
+    throw new Error(
+      `unexpected ZEISS shared-alias sender: ${sender || "missing"}`
+    );
+  }
+
+  const config = await lookupCameraByExternalKey("ZEISS", zeissImage.imei);
+  if (!config) {
+    throw new Error(`no active ZEISS SMTP config for IMEI ${zeissImage.imei}`);
+  }
+
+  const { buf } = await downloadRemoteImage(zeissImage.url);
+  const filename = safeFilename(zeissImage.imageName);
+
+  const res = await sendToIngest(buf, filename, config, {
+    mail_recipient: recipient,
+    transport: "html_remote_image",
+    external_key: zeissImage.imei,
+    zeiss_device_time: zeissImage.deviceDate,
+    remote_image_host: "media.secacam.com",
+  });
+
+  console.log(
+    `[${recipient}] ZEISS ok imei=${zeissImage.imei} camera=${config.camera_id} batchId=${res.batchId ?? "?"} accepted=${res.accepted ?? "?"} skippedDup=${res.skippedDuplicates ?? "?"} file=${filename} sha=${sha256(buf).slice(0, 12)}`
+  );
+}
+
 async function processMail(filePath) {
   const raw = fs.readFileSync(filePath);
   const parsed = await simpleParser(raw);
@@ -251,47 +479,67 @@ async function processMail(filePath) {
 
   console.log(`mail for ${recipient}`);
 
-  const config = await lookupCamera(recipient);
-
-  if (!config) {
-    console.log(`unknown or not-ready smtp alias: ${recipient}`);
-    moveTo(INVALID_DIR, filePath);
-    return;
-  }
-
-  if (!config.ingest_token) {
-    console.log(`invalid smtp config without ingest_token: ${recipient}`);
-    moveTo(ERROR_DIR, filePath);
-    return;
-  }
-
   const attachments = parsed.attachments || [];
-  if (!attachments.length) {
-    console.log(`invalid mail without attachments: ${recipient}`);
-    moveTo(INVALID_DIR, filePath);
-    return;
-  }
-
   const images = attachments.filter((a) => isImage(a.contentType, a.filename));
-  if (!images.length) {
-    console.log(`invalid mail without image attachments: ${recipient}`);
-    moveTo(INVALID_DIR, filePath);
-    return;
-  }
+  const html = typeof parsed.html === "string" ? parsed.html : "";
+  const zeissImage = extractZeissRemoteImage(html);
 
   try {
-    for (const img of images) {
-      const buf = img.content;
-      const filename = img.filename || `image-${Date.now()}.jpg`;
+    if (recipient === ZEISS_SHARED_ALIAS) {
+      if (!zeissImage) {
+        console.log(`invalid ZEISS mail without supported image URL: ${recipient}`);
+        moveTo(INVALID_DIR, filePath);
+        return;
+      }
 
-      const res = await sendToIngest(buf, filename, config);
-
-      console.log(
-        `[${recipient}] ok batchId=${res.batchId ?? "?"} accepted=${res.accepted ?? "?"} skippedDup=${res.skippedDuplicates ?? "?"} source=${res.source ?? "?"} file=${filename} sha=${sha256(buf).slice(0, 12)}`
-      );
+      await processZeissRemoteImage(recipient, parsed, zeissImage);
+      moveTo(PROCESSED_DIR, filePath);
+      return;
     }
 
-    moveTo(PROCESSED_DIR, filePath);
+    const config = await lookupCamera(recipient);
+
+    if (!config) {
+      console.log(`unknown or not-ready smtp alias: ${recipient}`);
+      moveTo(INVALID_DIR, filePath);
+      return;
+    }
+
+    if (!config.ingest_token) {
+      console.log(`invalid smtp config without ingest_token: ${recipient}`);
+      moveTo(ERROR_DIR, filePath);
+      return;
+    }
+
+    if (images.length > 0) {
+      await processAttachmentImages(recipient, images, config);
+      moveTo(PROCESSED_DIR, filePath);
+      return;
+    }
+
+    // Remote image fallback for camera-specific SMTP aliases. This preserves the
+    // existing alias routing while supporting providers that embed the actual
+    // trail-camera image in HTML instead of attaching it as MIME content.
+    if (zeissImage) {
+      const { buf } = await downloadRemoteImage(zeissImage.url);
+      const filename = safeFilename(zeissImage.imageName);
+      const res = await sendToIngest(buf, filename, config, {
+        mail_recipient: recipient,
+        transport: "html_remote_image",
+        external_key: zeissImage.imei,
+        zeiss_device_time: zeissImage.deviceDate,
+        remote_image_host: "media.secacam.com",
+      });
+
+      console.log(
+        `[${recipient}] ok batchId=${res.batchId ?? "?"} accepted=${res.accepted ?? "?"} skippedDup=${res.skippedDuplicates ?? "?"} source=${res.source ?? "?"} transport=remote file=${filename} sha=${sha256(buf).slice(0, 12)}`
+      );
+      moveTo(PROCESSED_DIR, filePath);
+      return;
+    }
+
+    console.log(`invalid mail without supported image content: ${recipient}`);
+    moveTo(INVALID_DIR, filePath);
   } catch (err) {
     console.error(`[${recipient}] ingest failed: ${err?.message ?? err}`);
     moveTo(ERROR_DIR, filePath);
@@ -303,7 +551,7 @@ async function main() {
   let loopCount = 0;
 
   console.log(
-    `Venaris Maildir Bridge started. poll=${POLL_SECONDS}s ingest=${ingestUrlForLog}`
+    `Venaris Maildir Bridge started. poll=${POLL_SECONDS}s ingest=${ingestUrlForLog} zeissAlias=${ZEISS_SHARED_ALIAS}`
   );
 
   while (true) {
