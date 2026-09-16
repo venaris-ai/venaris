@@ -1,4 +1,4 @@
-// src/app/cameras/[id]/edit/page.tsx #2
+// src/app/cameras/[id]/edit/page.tsx #3
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { cookies } from "next/headers";
@@ -168,7 +168,6 @@ export default async function EditCameraPage(props: {
       .select("vendor,external_key")
       .eq("camera_id", params.id)
       .eq("is_active", true)
-      .eq("method", cameraData?.import_method ?? "smtp")
       .limit(1)
       .maybeSingle(),
   ]);
