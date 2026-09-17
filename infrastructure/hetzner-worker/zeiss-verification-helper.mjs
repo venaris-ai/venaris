@@ -39,6 +39,14 @@ function extractEmailAddresses(value) {
   ).map((address) => address.toLowerCase());
 }
 
+function extractParsedAddressObject(value) {
+  if (!value || !Array.isArray(value.value)) return [];
+
+  return value.value
+    .map((entry) => String(entry?.address || "").toLowerCase().trim())
+    .filter(Boolean);
+}
+
 function hasSharedRecipient(parsed) {
   const headerValues = [
     parsed.headers.get("x-original-to"),
@@ -47,15 +55,21 @@ function hasSharedRecipient(parsed) {
     parsed.headers.get("to"),
   ];
 
-  return headerValues
-    .flatMap((value) => extractEmailAddresses(value))
-    .includes(ZEISS_SHARED_ALIAS);
+  const recipients = [
+    ...headerValues.flatMap((value) => extractEmailAddresses(value)),
+    ...extractParsedAddressObject(parsed.to),
+  ];
+
+  return recipients.includes(ZEISS_SHARED_ALIAS);
 }
 
 function isZeissVerificationMail(parsed) {
   if (!hasSharedRecipient(parsed)) return false;
 
-  const senders = extractEmailAddresses(parsed.headers.get("from"));
+  const senders = [
+    ...extractEmailAddresses(parsed.headers.get("from")),
+    ...extractParsedAddressObject(parsed.from),
+  ];
   if (!senders.includes("info@secacam.email")) return false;
 
   const subject = String(parsed.subject || "").trim().toLowerCase();
