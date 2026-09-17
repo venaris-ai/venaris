@@ -1,0 +1,10 @@
+[Unit]
+Description=Venaris ZEISS Email Verification Helper
+After=network-online.target venaris-maildir-bridge.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=venaris
+WorkingDirectory=/opt/venaris-worker
+ExecStart=/usr/bin/node /opt/venaris-worker/zeiss-verification-helper.mjs
