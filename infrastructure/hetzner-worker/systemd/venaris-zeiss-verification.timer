@@ -1,0 +1,12 @@
+[Unit]
+Description=Run Venaris ZEISS Email Verification Helper every minute
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=1min
+AccuracySec=5s
+Persistent=true
+Unit=venaris-zeiss-verification.service
+
+[Install]
+WantedBy=timers.target
