@@ -57,14 +57,26 @@ function buildIngestUrl() {
 }
 
 function extractRecipient(headers) {
-  const original = headers.get("x-original-to");
-  if (original) return String(original).toLowerCase().trim();
+  const values = [
+    headers.get("x-original-to"),
+    headers.get("to"),
+  ].filter(Boolean).map(String);
 
-  const to = headers.get("to");
-  if (!to) return null;
+  const addresses = values
+    .flatMap((value) =>
+      value.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi) || []
+    )
+    .map((value) => value.toLowerCase());
 
-  const match = String(to).match(/<([^>]+)>/);
-  return (match?.[1] || String(to)).toLowerCase().trim();
+  if (addresses.includes(ZEISS_SHARED_ALIAS)) {
+    return ZEISS_SHARED_ALIAS;
+  }
+
+  const venarisAlias = addresses.find((address) =>
+    address.endsWith("@cams.venaris.io")
+  );
+
+  return venarisAlias || addresses[0] || null;
 }
 
 function configColumns() {
