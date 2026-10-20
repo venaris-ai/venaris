@@ -3,6 +3,7 @@ import Link from "next/link";
 import { cookies } from "next/headers";
 import { requirePathAccess, canAccessPath } from "@/lib/authz";
 import { supabaseServer } from "@/lib/supabaseServer";
+import { getProfilePreferredLanguage } from "@/lib/profileLanguage";
 import { getBillingPlan } from "@/lib/billing/plans";
 import {
   resolveSubscriptionState,
@@ -464,15 +465,10 @@ export default async function HomePage() {
     throw new Error("Active organization context required");
   }
 
-  const { data: profileData } = await supabase
-    .from("profiles")
-    .select("preferred_language")
-    .eq("id", ctx.user.id)
-    .maybeSingle();
-
+  const profileLanguage = await getProfilePreferredLanguage(ctx.user.id);
   const language = resolveLanguage({
     cookieLanguage: cookieStore.get(LOCALE_COOKIE)?.value,
-    profileLanguage: profileData?.preferred_language,
+    profileLanguage,
   });
 
   const text = t(language);
