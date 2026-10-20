@@ -15,6 +15,8 @@ function t(language: AppLanguage) {
         sending: "Sending...",
         signIn: "Sign in",
         signingIn: "Signing in...",
+        opening: "Opening workspace...",
+        signInFailure: "Sign-in failed. Please try again.",
         enterEmailFirst: "Please enter your email address first.",
         resetMessage:
           "If an account exists for this email address, a password reset email has been sent.",
@@ -25,7 +27,9 @@ function t(language: AppLanguage) {
         forgotPassword: "Passwort vergessen?",
         sending: "Sende...",
         signIn: "Anmelden",
-        signingIn: "Meldet an...",
+        signingIn: "Anmeldung wird geprüft …",
+        opening: "Angemeldet – Workspace wird geöffnet …",
+        signInFailure: "Die Anmeldung ist fehlgeschlagen. Bitte versuche es erneut.",
         enterEmailFirst: "Bitte zuerst Deine E-Mail-Adresse eingeben.",
         resetMessage:
           "Wenn für diese E-Mail ein Account existiert, wurde eine Nachricht zum Zurücksetzen des Passworts versendet.",
@@ -44,33 +48,42 @@ export default function LoginForm({ language }: Props) {
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [signInPhase, setSignInPhase] = useState<"idle" | "authenticating" | "opening">("idle");
   const [resetLoading, setResetLoading] = useState(false);
   const [error, setError] = useState("");
   const [resetMessage, setResetMessage] = useState("");
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    setLoading(true);
+    if (signInPhase !== "idle") return;
+
+    setSignInPhase("authenticating");
     setError("");
     setResetMessage("");
 
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
+    try {
+      const { error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
 
-    const next = searchParams.get("next");
+      if (error) {
+        setError(error.message);
+        setSignInPhase("idle");
+        return;
+      }
 
-    setLoading(false);
+      // Keep the button busy until navigation completes, not merely until Auth responds.
+      const next = searchParams.get("next");
+      const safeNext = next?.startsWith("/") && !next.startsWith("//") ? next : "/";
 
-    if (error) {
-      setError(error.message);
-      return;
+      setSignInPhase("opening");
+      router.push(safeNext);
+      router.refresh();
+    } catch (error) {
+      setError(error instanceof Error ? error.message : text.signInFailure);
+      setSignInPhase("idle");
     }
-
-    router.push(next || "/");
-    router.refresh();
   }
 
   async function onForgotPassword() {
@@ -126,7 +139,7 @@ export default function LoginForm({ language }: Props) {
           <button
             type="button"
             onClick={onForgotPassword}
-            disabled={resetLoading}
+            disabled={resetLoading || signInPhase !== "idle"}
             className="text-xs text-white/60 underline underline-offset-2 hover:text-white disabled:opacity-50"
           >
             {resetLoading ? text.sending : text.forgotPassword}
@@ -156,10 +169,14 @@ export default function LoginForm({ language }: Props) {
 
       <button
         type="submit"
-        disabled={loading}
+        disabled={signInPhase !== "idle"}
         className="w-full rounded-[14px] bg-[#c9952e] px-4 py-2 text-sm font-medium text-[#102018] disabled:opacity-50"
       >
-        {loading ? text.signingIn : text.signIn}
+        {signInPhase === "authenticating"
+          ? text.signingIn
+          : signInPhase === "opening"
+            ? text.opening
+            : text.signIn}
       </button>
     </form>
   );
