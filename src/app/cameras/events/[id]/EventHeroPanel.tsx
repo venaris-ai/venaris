@@ -1,7 +1,7 @@
 // src/app/cameras/events/[id]/EventHeroPanel.tsx #8
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { type AppLanguage } from "@/lib/i18n";
 
 type AssetItem = {
@@ -49,6 +49,16 @@ function EventHeroImage({
   const [loaded, setLoaded] = useState(false);
   const [failed, setFailed] = useState(false);
 
+  const imageRef = useRef<HTMLImageElement>(null);
+  useEffect(() => {
+    // A cached image can finish downloading before React hydrates.
+    // In that case there is no onLoad event left to handle.
+    const image = imageRef.current;
+    if (!image?.complete) return;
+    if (image.naturalWidth > 0) setLoaded(true);
+    else setFailed(true);
+  }, [src]);
+
   return (
     <div className="relative aspect-[4/3] w-full overflow-hidden rounded-[22px] bg-white/5">
       {!loaded && !failed ? (
@@ -65,6 +75,7 @@ function EventHeroImage({
       ) : (
         // eslint-disable-next-line @next/next/no-img-element
         <img
+          ref={imageRef}
           src={src}
           alt={alt}
           loading="eager"
