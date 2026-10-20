@@ -5,5 +5,8 @@
       "path": "/api/maintenance/cleanup-assets",
       "schedule": "30 1 * * *"
     }
+  ],
+  "regions": [
+    "dub1"
   ]
 }
