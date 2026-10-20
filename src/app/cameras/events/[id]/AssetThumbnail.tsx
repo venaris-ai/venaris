@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 export default function AssetThumbnail({
   src,
@@ -16,6 +16,16 @@ export default function AssetThumbnail({
   const [loaded, setLoaded] = useState(false);
   const [failed, setFailed] = useState(false);
 
+  const imageRef = useRef<HTMLImageElement>(null);
+  useEffect(() => {
+    // A cached image can finish downloading before React hydrates.
+    // In that case there is no onLoad event left to handle.
+    const image = imageRef.current;
+    if (!image?.complete) return;
+    if (image.naturalWidth > 0) setLoaded(true);
+    else setFailed(true);
+  }, [src]);
+
   return (
     <div className="relative h-full w-full bg-white/5">
       {!loaded && !failed ? (
@@ -30,6 +40,7 @@ export default function AssetThumbnail({
       ) : (
         // eslint-disable-next-line @next/next/no-img-element
         <img
+          ref={imageRef}
           src={src}
           alt={alt}
           loading={selected ? "eager" : "lazy"}
