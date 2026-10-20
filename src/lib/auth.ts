@@ -1,5 +1,6 @@
 // src/lib/auth.ts #4
 import { redirect } from "next/navigation";
+import { cache } from "react";
 import { supabaseServer } from "@/lib/supabaseServer";
 import { supabaseAuthServer } from "@/lib/supabaseAuthServer";
 import { cookies } from "next/headers";
@@ -22,14 +23,23 @@ type MembershipRow = {
 
 const ACTIVE_ORG_COOKIE = "venaris_active_org";
 
-export async function requireUser() {
+// React cache deduplicates identical Auth and membership requests during one
+// server render (for example, RootLayout + HomePage or RootLayout + EventPage).
+// It is request-scoped: do not cache authentication across users or requests.
+const getUserForRequest = cache(async () => {
   const supabase = await supabaseAuthServer();
   const {
     data: { user },
     error,
   } = await supabase.auth.getUser();
 
-  if (error || !user) {
+  return error ? null : user;
+});
+
+export async function requireUser() {
+  const user = await getUserForRequest();
+
+  if (!user) {
     redirect("/login");
   }
 
@@ -37,20 +47,10 @@ export async function requireUser() {
 }
 
 export async function getOptionalUser() {
-  const supabase = await supabaseAuthServer();
-  const {
-    data: { user },
-    error,
-  } = await supabase.auth.getUser();
-
-  if (error || !user) {
-    return null;
-  }
-
-  return user;
+  return getUserForRequest();
 }
 
-export async function getMembershipsForUser(userId: string) {
+export const getMembershipsForUser = cache(async (userId: string) => {
   const supabase = supabaseServer();
 
   const { data, error } = await supabase
@@ -75,7 +75,7 @@ export async function getMembershipsForUser(userId: string) {
   }
 
   return (data ?? []) as unknown as MembershipRow[];
-}
+});
 
 function normalizeOrganization(
   organizations: MembershipRow["organizations"]
