@@ -83,6 +83,8 @@ export default function AssetGrid({
       <img
         src={asset.previewUrl}
         alt={text.previewAlt}
+        loading="lazy"
+        decoding="async"
         className="h-full w-full object-cover"
       />
     </>
