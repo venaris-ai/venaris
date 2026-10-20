@@ -764,18 +764,45 @@ export default async function CameraEventDetailPage(props: {
   }
 
   const signedUrlsByAssetId: Record<string, string> = {};
-  for (const asset of assets) {
-    const url = await resolveAssetPreviewUrl({
-      asset: {
-        id: asset.id,
-        camera_id: asset.camera_id,
-        storage_path: asset.storage_path ?? null,
-      },
-      isDemo: Boolean(activeOrganization.is_demo),
-    });
 
-    if (url) {
-      signedUrlsByAssetId[asset.id] = url;
+  if (activeOrganization.is_demo) {
+    // Demo previews are intentionally selected by species and count in
+    // demoAssetResolver. Preserve that behavior and the /demo/start flow.
+    for (const asset of assets) {
+      const url = await resolveAssetPreviewUrl({
+        asset: {
+          id: asset.id,
+          camera_id: asset.camera_id,
+          storage_path: asset.storage_path ?? null,
+        },
+        isDemo: true,
+      });
+
+      if (url) {
+        signedUrlsByAssetId[asset.id] = url;
+      }
+    }
+  } else {
+    // Real camera assets map directly to their own storage paths.
+    // Sign all URLs in one Storage request instead of list()+sign per asset.
+    const assetsWithStoragePath = assets.filter((asset) => Boolean(asset.storage_path));
+    const paths = assetsWithStoragePath.map((asset) => asset.storage_path as string);
+
+    if (paths.length > 0) {
+      const { data: signedUrls, error: signingError } = await supabase.storage
+        .from("camera-assets")
+        .createSignedUrls(paths, 60 * 20);
+
+      if (signingError) {
+        console.error("Failed to sign event preview URLs:", signingError.message);
+      }
+
+      for (const [index, asset] of assetsWithStoragePath.entries()) {
+        const signedUrl = signedUrls?.[index]?.signedUrl;
+        if (signedUrl) {
+          signedUrlsByAssetId[asset.id] = signedUrl;
+        }
+      }
     }
   }
 

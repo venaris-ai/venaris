@@ -8,6 +8,7 @@ import LogoutButton from "@/components/LogoutButton";
 import AppShellGate from "@/components/AppShellGate";
 import DemoSessionGuard from "@/components/DemoSessionGuard";
 import { getOptionalActiveOrganization } from "@/lib/auth";
+import { getProfilePreferredLanguage } from "@/lib/profileLanguage";
 import { supabaseServer } from "@/lib/supabaseServer";
 import PlanSelectionCards from "@/components/PlanSelectionCards";
 import { BILLING_PLANS, type BillingCycle } from "@/lib/billing/plans";
@@ -136,22 +137,11 @@ export default async function RootLayout({
   const isDemo = ctx?.isDemo ?? false;
 
   const cookieLanguage = normalizeLanguage(cookieStore.get(LOCALE_COOKIE)?.value);
-  let profileLanguage: AppLanguage | undefined;
-
-  if (ctx?.user.id) {
-    const { data: profileData } = await supabase
-      .from("profiles")
-      .select("preferred_language")
-      .eq("id", ctx.user.id)
-      .maybeSingle();
-
-    profileLanguage = normalizeLanguage(profileData?.preferred_language);
-  }
-
-  const language = resolveLanguage({
-    cookieLanguage,
-    profileLanguage,
-  });
+  // Begin loading preferences immediately; do not block subscription checks on it.
+  const profileLanguagePromise = ctx?.user.id
+    ? getProfilePreferredLanguage(ctx.user.id)
+    : Promise.resolve(null);
+  let language = resolveLanguage({ cookieLanguage });
 
   if (organization) {
     const nowIso = new Date().toISOString();
@@ -222,6 +212,11 @@ export default async function RootLayout({
       );
     }
 
+    language = resolveLanguage({
+      cookieLanguage,
+      profileLanguage: normalizeLanguage(await profileLanguagePromise),
+    });
+
     const subscription = subscriptionResult.data;
 
     if (subscription) {
@@ -289,6 +284,13 @@ export default async function RootLayout({
         );
       }
     }
+  }
+
+  if (!organization) {
+    language = resolveLanguage({
+      cookieLanguage,
+      profileLanguage: normalizeLanguage(await profileLanguagePromise),
+    });
   }
 
   const header = (

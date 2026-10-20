@@ -2,6 +2,7 @@
 "use client";
 
 import { type AppLanguage } from "@/lib/i18n";
+import AssetThumbnail from "./AssetThumbnail";
 
 type AssetItem = {
   id: string;
@@ -77,22 +78,19 @@ export default function AssetGrid({
             </div>
 
 <div className="mt-2 aspect-video w-full overflow-hidden rounded-[16px] bg-white/5">
-  {asset.previewUrl ? (
-    <>
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        src={asset.previewUrl}
-        alt={text.previewAlt}
-        className="h-full w-full object-cover"
-      />
-    </>
-  ) : (
-    <div className="flex h-full items-center justify-center text-sm text-white/45">
-      {text.previewMissing}
-    </div>
-  )}
-</div>
-
+              {asset.previewUrl ? (
+                <AssetThumbnail
+                  src={asset.previewUrl}
+                  alt={text.previewAlt}
+                  selected={isSelected}
+                  language={language}
+                />
+              ) : (
+                <div className="flex h-full items-center justify-center text-sm text-white/45">
+                  {text.previewMissing}
+                </div>
+              )}
+            </div>
 
           </button>
         );

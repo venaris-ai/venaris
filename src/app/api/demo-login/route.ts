@@ -52,21 +52,15 @@ export async function GET(request: NextRequest) {
     }
   );
 
-  const { error: signInError } = await supabase.auth.signInWithPassword({
+  const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
     email: demoEmail,
     password: demoPassword,
   });
 
-  if (signInError) {
-    return NextResponse.redirect(new URL("/login?error=demo_login_failed", request.url));
-  }
-
-  const {
-    data: { user },
-    error: userError,
-  } = await supabase.auth.getUser();
-
-  if (userError || !user) {
+  // signInWithPassword already returns the authenticated user.
+  // Avoid a second round trip to Auth during the demo transition.
+  const user = signInData?.user;
+  if (signInError || !user) {
     return NextResponse.redirect(new URL("/login?error=demo_login_failed", request.url));
   }
 
