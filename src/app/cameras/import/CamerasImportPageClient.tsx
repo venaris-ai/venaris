@@ -5,10 +5,12 @@ import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import {
   MANUAL_IMPORT_ACCEPT,
-  MANUAL_IMPORT_MAX_BYTES,
+  MANUAL_IMPORT_MAX_FILES,
   MANUAL_IMPORT_MAX_LABEL,
   isManualImportAllowedFileLike,
+  manualImportLimitState,
 } from "@/lib/manualImportLimits";
+import { isTransientUploadError, runManualImport, withTransientRetry } from "@/lib/manualImportFlow";
 import { supabaseBrowser } from "@/lib/supabaseBrowser";
 import { type AppLanguage } from "@/lib/i18n";
 
@@ -23,7 +25,7 @@ type MessageTone = "success" | "error" | "info" | "warning";
 type PreparedUploadFile = {
   clientId: string;
   uploadId: string;
-  status: "upload_required";
+  status: "upload_required" | "already_uploaded";
   uploadStrategy?: "signed_standard";
   bucket: string;
   storagePath: string;
@@ -45,28 +47,20 @@ type CompletedUpload = {
   uploadId: string;
 };
 
-const COMPLETE_BATCH_SIZE = 10;
-const TRANSIENT_RETRY_DELAYS_MS = [1500, 4000, 9000];
-
-class UploadInterruptedError extends Error {
-  constructor() {
-    super("upload_interrupted");
-    this.name = "UploadInterruptedError";
-  }
-}
-
 function formatMb(bytes: number) {
-  return `${Math.round((bytes / 1024 / 1024) * 10) / 10} MB`;
+  return `${Math.round((bytes / 1_000_000) * 10) / 10} MB`;
 }
 
-function createClientId(file: File, index: number) {
-  return [
-    index,
-    file.name,
-    file.size,
-    file.lastModified,
-    crypto.randomUUID(),
-  ].join(":");
+function createClientId(_file: File, index: number) {
+  return String(index);
+}
+
+type ImportRequest = { fingerprint: string; requestId: string };
+const REQUEST_STORAGE_KEY = "venaris:manual-import-request:";
+async function getImportFingerprint(cameraId: string, files: File[]) {
+  const manifest = JSON.stringify([cameraId, files.map(f => [f.name, f.size, f.type, f.lastModified])]);
+  const hash = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(manifest));
+  return Array.from(new Uint8Array(hash), b => b.toString(16).padStart(2, "0")).join("");
 }
 
 function t(language: AppLanguage) {
@@ -93,7 +87,11 @@ function t(language: AppLanguage) {
       finalizing: "Finalizing import…",
       interruptedUploadTitle: "Upload temporarily interrupted",
       interruptedUploadText:
-        "Please start the import again. Already uploaded images will be handled automatically.",
+        "Please restart with the same selection to resume this import. Already uploaded images will not be uploaded again.",
+      retrying: "Server busy – retrying automatically…",
+      busyImport: "Another import is still uploading in this organization. Wait until it is uploaded, then retry this selection.",
+      expiredImport: "This upload session has expired. Start again; already imported images are deduplicated.",
+      tooManyFiles: `Select no more than ${MANUAL_IMPORT_MAX_FILES} images per import.`,
       startImport: "Start import",
       demoMode: "Demo mode",
       selectCamera: "Please select a camera.",
@@ -103,7 +101,7 @@ function t(language: AppLanguage) {
       successTitle: "Import queued",
       successText:
         "The selected files were uploaded successfully and are now being processed.",
-      maxImportSize: `Max. ${MANUAL_IMPORT_MAX_LABEL} per import`,
+      maxImportSize: `Max. ${MANUAL_IMPORT_MAX_LABEL} and ${MANUAL_IMPORT_MAX_FILES} images per import`,
       importTooLarge: `The import is larger than ${MANUAL_IMPORT_MAX_LABEL}. Please split the selection into multiple imports.`,
       unsupportedFilesSkipped: (count: number) =>
         `${count} unsupported file(s) were ignored. Supported formats: JPG, PNG, WEBP.`,
@@ -140,7 +138,11 @@ function t(language: AppLanguage) {
     finalizing: "Import wird abgeschlossen…",
     interruptedUploadTitle: "Upload kurzzeitig unterbrochen",
     interruptedUploadText:
-      "Bitte starte den Import erneut. Bereits hochgeladene Bilder werden automatisch berücksichtigt.",
+      "Bitte starte den Import mit derselben Auswahl erneut. Bereits hochgeladene Bilder werden nicht erneut übertragen.",
+    retrying: "Server ausgelastet – erneuter Versuch automatisch…",
+    busyImport: "Ein anderer Import dieser Organisation läuft noch. Bitte warte auf dessen Upload-Abschluss und versuche es erneut.",
+    expiredImport: "Die Upload-Sitzung ist abgelaufen. Bitte starte erneut; bereits importierte Bilder werden nicht doppelt gespeichert.",
+    tooManyFiles: `Maximal ${MANUAL_IMPORT_MAX_FILES} Bilder pro Import auswählen.`,
     startImport: "Import starten",
     demoMode: "Demo-Modus",
     selectCamera: "Bitte eine Kamera auswählen.",
@@ -150,7 +152,7 @@ function t(language: AppLanguage) {
     successTitle: "Import eingereiht",
     successText:
       "Die ausgewählten Dateien wurden erfolgreich hochgeladen und werden jetzt verarbeitet.",
-    maxImportSize: `Max. ${MANUAL_IMPORT_MAX_LABEL} pro Import`,
+    maxImportSize: `Max. ${MANUAL_IMPORT_MAX_LABEL} und ${MANUAL_IMPORT_MAX_FILES} Bilder pro Import`,
     importTooLarge: `Der Import ist größer als ${MANUAL_IMPORT_MAX_LABEL}. Bitte die Auswahl auf mehrere Importvorgänge aufteilen.`,
     unsupportedFilesSkipped: (count: number) =>
       `${count} nicht unterstützte Datei(en) wurden ignoriert. Unterstützte Formate: JPG, PNG, WEBP.`,
@@ -167,6 +169,8 @@ function t(language: AppLanguage) {
 function normalizeApiErrorMessage(message: string, language: AppLanguage) {
   const text = t(language);
 
+  if (message.includes("MANUAL_IMPORT_BUSY")) return text.busyImport;
+  if (message.includes("MANUAL_IMPORT_EXPIRED")) return text.expiredImport;
   if (message.includes("Demo mode is read-only")) {
     return text.demoReadOnly;
   }
@@ -206,55 +210,6 @@ function getErrorStatusCode(error: unknown) {
   const n = typeof raw === "string" ? Number.parseInt(raw, 10) : raw;
 
   return typeof n === "number" && Number.isFinite(n) ? n : null;
-}
-
-function isTransientUploadError(error: unknown) {
-  const status = getErrorStatusCode(error);
-
-  if (status === 502 || status === 503 || status === 504) {
-    return true;
-  }
-
-  const message = getErrorMessage(error).toLowerCase();
-
-  return (
-    message.includes("http 502") ||
-    message.includes("http 503") ||
-    message.includes("http 504") ||
-    message.includes("bad gateway") ||
-    message.includes("service unavailable") ||
-    message.includes("gateway timeout") ||
-    message.includes("failed to fetch") ||
-    message.includes("networkerror") ||
-    message.includes("network error") ||
-    message.includes("timeout") ||
-    message.includes("temporarily")
-  );
-}
-
-function sleep(ms: number) {
-  return new Promise((resolve) => {
-    window.setTimeout(resolve, ms);
-  });
-}
-
-async function withTransientRetry<T>(operation: () => Promise<T>) {
-  for (let attempt = 0; attempt <= TRANSIENT_RETRY_DELAYS_MS.length; attempt++) {
-    try {
-      return await operation();
-    } catch (error: unknown) {
-      const shouldRetry =
-        isTransientUploadError(error) && attempt < TRANSIENT_RETRY_DELAYS_MS.length;
-
-      if (!shouldRetry) {
-        throw error;
-      }
-
-      await sleep(TRANSIENT_RETRY_DELAYS_MS[attempt]);
-    }
-  }
-
-  throw new UploadInterruptedError();
 }
 
 function alertTone(tone: MessageTone) {
@@ -307,6 +262,9 @@ async function uploadFileToSignedUrl({
 
   if (error) {
     const status = getErrorStatusCode(error);
+    // A lost success response can make a repeated signed upload report a
+    // duplicate. /complete verifies the exact object and its size before queuing.
+    if (status === 409 || /already exists|duplicate/i.test(error.message)) return;
     const message = status ? `HTTP ${status}: ${error.message}` : error.message;
 
     throw new Error(message);
@@ -333,11 +291,13 @@ export default function CamerasImportPageClient({
   const [dragOver, setDragOver] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const busyRef = useRef(false);
+  const requestRef = useRef<ImportRequest | null>(null);
   const text = t(language);
 
   const selectedBytes = files.reduce((sum, file) => sum + file.size, 0);
   const selectedMb = formatMb(selectedBytes);
-  const importTooLarge = selectedBytes > MANUAL_IMPORT_MAX_BYTES;
+  const { importTooLarge, tooManyFiles } = manualImportLimitState(files.length, selectedBytes);
 
   async function loadCameras() {
     const params = new URLSearchParams();
@@ -410,7 +370,7 @@ export default function CamerasImportPageClient({
     e.target.value = "";
   }
 
-  async function prepareUpload(clientIds: string[]) {
+  async function prepareUpload(clientIds: string[], requestId: string, offset: number) {
     const res = await fetch("/api/upload/prepare", {
       method: "POST",
       headers: {
@@ -418,6 +378,8 @@ export default function CamerasImportPageClient({
       },
       body: JSON.stringify({
         cameraId,
+        requestId,
+        offset,
         files: files.map((file, index) => ({
           clientId: clientIds[index],
           name: file.name,
@@ -431,15 +393,7 @@ export default function CamerasImportPageClient({
     const json = await parseApiResponse(res);
 
     if (!res.ok || !json.ok) {
-      throw new Error(
-        normalizeApiErrorMessage(
-          json.error ||
-            json.details ||
-            json.rawText ||
-            `HTTP ${res.status}: ${text.prepareFailed}`,
-          language
-        )
-      );
+      throw new Error(`HTTP ${res.status}: ${json.error || text.prepareFailed} ${json.details || json.rawText || ""}`);
     }
 
     return json as PrepareUploadResponse;
@@ -462,19 +416,12 @@ export default function CamerasImportPageClient({
     const json = await parseApiResponse(res);
 
     if (!res.ok || !json.ok) {
-      throw new Error(
-        normalizeApiErrorMessage(
-          json.error ||
-            json.details ||
-            json.rawText ||
-            `HTTP ${res.status}: ${text.completeFailed}`,
-          language
-        )
-      );
+      throw new Error(`HTTP ${res.status}: ${json.error || text.completeFailed} ${json.details || json.rawText || ""}`);
     }
   }
 
   async function startImport() {
+    if (busyRef.current) return;
     setMsg("");
     setUploadProgress(0);
 
@@ -496,94 +443,84 @@ export default function CamerasImportPageClient({
       return;
     }
 
-    if (importTooLarge) {
+    if (importTooLarge || tooManyFiles) {
       setMsgTone("error");
-      setMsg(text.importTooLarge);
+      setMsg(tooManyFiles ? text.tooManyFiles : text.importTooLarge);
       return;
     }
 
+    busyRef.current = true;
     setBusy(true);
     setBusyLabel(text.preparing);
-
-    const pendingComplete: CompletedUpload[] = [];
+    let storageKey = "";
+    const retry = () => setBusyLabel(text.retrying);
 
     try {
+      const fingerprint = await getImportFingerprint(cameraId, files);
+      storageKey = REQUEST_STORAGE_KEY + fingerprint;
+      let savedRequest: string | null = null;
+      try {
+        savedRequest = sessionStorage.getItem(storageKey);
+      } catch { /* storage can be unavailable; use this page's ref */ }
+      const requestId = requestRef.current?.fingerprint === fingerprint
+        ? requestRef.current.requestId
+        : savedRequest || crypto.randomUUID();
+      requestRef.current = { fingerprint, requestId };
+      try { sessionStorage.setItem(storageKey, requestId); } catch { /* optional */ }
       const clientIds = files.map(createClientId);
-      const prepared = await prepareUpload(clientIds);
-      const preparedByClientId = new Map(
-        prepared.files.map((preparedFile) => [
-          preparedFile.clientId,
-          preparedFile,
-        ])
-      );
 
-      async function completePendingUploads() {
-        if (pendingComplete.length === 0) return;
-
-        const chunk = [...pendingComplete];
-        await withTransientRetry(() => completeUpload(prepared.batchId, chunk));
-        pendingComplete.splice(0, pendingComplete.length);
+      let lastLeaseRenewal = 0;
+      async function renewIfNeeded() {
+        if (Date.now() - lastLeaseRenewal < 60_000) return;
+        const res = await fetch("/api/upload/prepare", {
+          method: "PATCH", headers: { "content-type": "application/json" },
+          body: JSON.stringify({ requestId }),
+        });
+        const json = await parseApiResponse(res);
+        if (!res.ok || !json.ok) throw new Error(`HTTP ${res.status}: ${json.error || json.rawText || ""}`);
+        lastLeaseRenewal = Date.now();
       }
+      await runManualImport(files.length, {
+        prepare: async offset => {
+          const result = await prepareUpload(clientIds, requestId, offset);
+          lastLeaseRenewal = Date.now();
+          return result;
+        },
+        upload: async (index, prepared) => {
+          await renewIfNeeded();
+          await uploadFileToSignedUrl({ file: files[index], prepared });
+        },
+        complete: completeUpload,
+        phase: phase => setBusyLabel(text[phase]),
+        progress: uploaded => setUploadProgress(Math.min(99, Math.round(uploaded / files.length * 100))),
+        retry: operation => withTransientRetry(operation, retry),
+        mappingError: text.preparedFileMissing,
+      });
 
-      setBusyLabel(text.uploading);
-
-      for (let index = 0; index < files.length; index++) {
-        const file = files[index];
-        const clientId = clientIds[index];
-        const preparedFile = preparedByClientId.get(clientId);
-
-        if (!preparedFile) {
-          throw new Error(text.preparedFileMissing);
-        }
-
-        try {
-          await withTransientRetry(() =>
-            uploadFileToSignedUrl({ file, prepared: preparedFile })
-          );
-        } catch (error: unknown) {
-          if (isTransientUploadError(error)) {
-            if (pendingComplete.length > 0) {
-              try {
-                await completePendingUploads();
-              } catch {
-                // The next user retry is still safe because manual import deduplicates
-                // files by camera and hash during finalization.
-              }
-            }
-
-            throw new UploadInterruptedError();
-          }
-
-          throw error;
-        }
-
-        pendingComplete.push({ uploadId: preparedFile.uploadId });
-
-        if (pendingComplete.length >= COMPLETE_BATCH_SIZE) {
-          await completePendingUploads();
-        }
-
-        setUploadProgress(
-          Math.min(99, Math.round(((index + 1) / files.length) * 100))
-        );
-      }
-
-      setBusyLabel(text.finalizing);
-      await completePendingUploads();
-
+      try { sessionStorage.removeItem(storageKey); } catch { /* optional */ }
+      requestRef.current = null;
       setUploadProgress(100);
       setFiles([]);
       setMsgTone("success");
       setMsg(text.successText);
     } catch (error: unknown) {
-      if (error instanceof UploadInterruptedError || isTransientUploadError(error)) {
+      const message = getErrorMessage(error);
+      if (message.includes("MANUAL_IMPORT_EXPIRED")) {
+        try { sessionStorage.removeItem(storageKey); } catch { /* optional */ }
+        requestRef.current = null;
+      }
+      if (message.includes("MANUAL_IMPORT_BUSY")) {
+        setMsgTone("warning");
+        setMsg(text.busyImport);
+      } else if (isTransientUploadError(error)) {
         setMsgTone("warning");
         setMsg(text.interruptedUploadText);
       } else {
         setMsgTone("error");
-        setMsg(normalizeApiErrorMessage(getErrorMessage(error), language));
+        setMsg(normalizeApiErrorMessage(message, language));
       }
     } finally {
+      busyRef.current = false;
       setBusy(false);
       setBusyLabel("");
       setDragOver(false);
@@ -611,7 +548,7 @@ export default function CamerasImportPageClient({
   }
 
   const canImport =
-    !!cameraId && files.length > 0 && !busy && !isDemo && !importTooLarge;
+    !!cameraId && files.length > 0 && !busy && !isDemo && !importTooLarge && !tooManyFiles;
   const messageTone = alertTone(msgTone);
   const messageTitle =
     msgTone === "success"
@@ -783,13 +720,14 @@ export default function CamerasImportPageClient({
                   <span className="font-medium text-white">{selectedMb}</span>
                 </div>
                 <div
-                  className={importTooLarge ? "text-rose-200" : "text-white/45"}
+                  className={importTooLarge || tooManyFiles ? "text-rose-200" : "text-white/45"}
                 >
                   {text.maxImportSize}
                 </div>
+                {tooManyFiles ? <div className="text-rose-200">{text.tooManyFiles}</div> : null}
               </div>
             ) : (
-              <span className="text-sm text-white/45">{text.noneSelected}</span>
+              <div className="space-y-1 text-sm text-white/45"><div>{text.noneSelected}</div><div>{text.maxImportSize}</div></div>
             )}
           </div>
 
@@ -833,3 +771,4 @@ export default function CamerasImportPageClient({
     </main>
   );
 }
+

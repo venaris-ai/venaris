@@ -74,7 +74,7 @@ export async function POST(req: NextRequest) {
       uploaded.map((item) => item?.uploadId ?? item)
     );
 
-    if (uploadIds.length === 0) {
+    if (uploadIds.length === 0 || uploadIds.length > 500) {
       return NextResponse.json(
         { error: text.uploadedRequired },
         { status: 400 }
@@ -83,58 +83,22 @@ export async function POST(req: NextRequest) {
 
     const supabase = supabaseServer();
 
-    const { data: rows, error: rowsError } = await supabase
-      .from("manual_import_files")
-      .select(
-        "id, organization_id, camera_id, ingest_batch_id, status, storage_path"
-      )
-      .eq("organization_id", activeOrganization.id)
-      .eq("ingest_batch_id", batchId)
-      .in("id", uploadIds);
-
-    if (rowsError) {
-      return NextResponse.json({ error: rowsError.message }, { status: 500 });
+    const { data: result, error } = await supabase.rpc("complete_manual_import_chunk", {
+      p_org: activeOrganization.id,
+      p_batch: batchId,
+      p_ids: uploadIds,
+    });
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    if (result?.state === "not_found") {
+      return NextResponse.json({ error: text.uploadRowsNotFound }, { status: 404 });
     }
-
-    if (!rows || rows.length !== uploadIds.length) {
-      return NextResponse.json(
-        { error: text.uploadRowsNotFound },
-        { status: 404 }
-      );
+    if (result?.state !== "ok") {
+      return NextResponse.json({ error: "MANUAL_IMPORT_OBJECT_MISSING" }, { status: 409 });
     }
-
-    const disallowed = rows.find(
-      (row) => row.organization_id !== activeOrganization.id
-    );
-
-    if (disallowed) {
-      return NextResponse.json({ error: text.notAllowed }, { status: 403 });
-    }
-
-    const preparedIds = rows
-      .filter((row) => row.status === "prepared")
-      .map((row) => row.id);
-
-    if (preparedIds.length > 0) {
-      const { error: updateError } = await supabase
-        .from("manual_import_files")
-        .update({
-          status: "finalize_pending",
-          uploaded_at: new Date().toISOString(),
-          error_summary: null,
-        })
-        .in("id", preparedIds);
-
-      if (updateError) {
-        return NextResponse.json({ error: updateError.message }, { status: 500 });
-      }
-    }
-
     return NextResponse.json({
-      ok: true,
-      batchId,
-      finalizedQueued: preparedIds.length,
-      alreadyQueued: rows.length - preparedIds.length,
+      ok: true, batchId,
+      finalizedQueued: result.finalizedQueued,
+      alreadyQueued: result.alreadyQueued,
     });
   } catch (error: unknown) {
     const message = getErrorMessage(error);

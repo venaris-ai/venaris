@@ -4,6 +4,12 @@ export const MANUAL_IMPORT_MAX_BYTES = 50_000_000;
 export const MANUAL_IMPORT_MAX_LABEL = "50 MB";
 export const MANUAL_IMPORT_MAX_FILES = 500;
 
+export function manualImportLimitState(fileCount: number, totalBytes: number) {
+  const tooManyFiles = fileCount > MANUAL_IMPORT_MAX_FILES;
+  const importTooLarge = totalBytes > MANUAL_IMPORT_MAX_BYTES;
+  return { tooManyFiles, importTooLarge, withinLimits: !tooManyFiles && !importTooLarge };
+}
+
 export const MANUAL_IMPORT_ALLOWED_MIME_TYPES = [
   "image/jpeg",
   "image/png",
