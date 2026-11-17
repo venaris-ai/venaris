@@ -57,49 +57,27 @@ function safeMessage(error) {
   return error instanceof Error ? error.message : String(error);
 }
 
-async function expireOldPreparedRows() {
-  const { data: expiredRows, error: selectError } = await supabase
-    .from("manual_import_files")
-    .select("id, ingest_batch_id")
-    .eq("status", "prepared")
-    .lt("expires_at", new Date().toISOString());
+function isTransientError(error) {
+  return /429|502|503|504|too many connections|max_client_conn|connection pool|timeout|network|failed to fetch|temporarily|service unavailable|bad gateway/i.test(safeMessage(error));
+}
 
-  if (selectError) {
-    console.warn(
-      `[${WORKER_ID}] expire old prepared rows select failed`,
-      selectError.message
-    );
-    return;
+async function withRetry(operation) {
+  const delays = [1500, 4000, 9000, 15000, 30000];
+  for (let attempt = 0; ; attempt++) {
+    try { return await operation(); }
+    catch (error) {
+      if (!isTransientError(error) || attempt >= delays.length) throw error;
+      await sleep(delays[attempt] + Math.random() * 500);
+    }
   }
+}
 
-  if (!expiredRows?.length) return;
-
-  const expiredIds = expiredRows.map((row) => row.id);
-
-  const { error: updateError } = await supabase
-    .from("manual_import_files")
-    .update({
-      status: "expired",
-      error_summary: "signed upload token expired before completion",
-      finalized_at: new Date().toISOString(),
-    })
-    .in("id", expiredIds);
-
-  if (updateError) {
-    console.warn(
-      `[${WORKER_ID}] expire old prepared rows update failed`,
-      updateError.message
-    );
-    return;
-  }
-
-  const batchIds = [
-    ...new Set(expiredRows.map((row) => row.ingest_batch_id).filter(Boolean)),
-  ];
-
-  for (const batchId of batchIds) {
-    await updateBatchSummary(batchId);
-  }
+async function recoverPreparedRows() {
+  const { data, error } = await supabase.rpc("recover_manual_import_uploads");
+  if (error) throw new Error(`recover_manual_import_uploads_failed:${error.message}`);
+  const expiredBatches = new Set((data || [])
+    .filter(row => row.recovered_status === "expired").map(row => row.batch_id));
+  for (const batchId of expiredBatches) await updateBatchSummary(batchId);
 }
 
 async function claimBatch() {
@@ -128,7 +106,8 @@ async function downloadStorageBytes(bucket, storagePath) {
 
 async function markRowFailed(row, errorMessage) {
   const attempts = Number(row.attempts || 1);
-  const terminal = attempts >= MAX_ATTEMPTS;
+  const transient = isTransientError(errorMessage);
+  const terminal = !transient && attempts >= MAX_ATTEMPTS;
 
   const patch = terminal
     ? {
@@ -138,6 +117,7 @@ async function markRowFailed(row, errorMessage) {
       }
     : {
         status: "finalize_pending",
+        ...(transient ? { attempts: Math.max(0, attempts - 1) } : {}),
         error_summary: errorMessage,
         worker_id: null,
         finalize_started_at: null,
@@ -152,9 +132,6 @@ async function markRowFailed(row, errorMessage) {
     throw new Error(`manual_import_files_fail_update_failed:${error.message}`);
   }
 
-  if (terminal) {
-    await updateBatchSummary(row.ingest_batch_id);
-  }
 }
 
 async function updateCameraHealth(cameraId) {
@@ -188,10 +165,7 @@ async function fetchAssetStoragePath(assetId) {
     .maybeSingle();
 
   if (error) {
-    console.warn(
-      `[${WORKER_ID}] asset storage path lookup failed asset=${assetId}: ${error.message}`
-    );
-    return null;
+    throw new Error(`asset_storage_path_lookup_failed:${error.message}`);
   }
 
   return data?.storage_path ?? null;
@@ -323,8 +297,6 @@ async function processRow(row) {
     await removeStorageObject(bucket, row.storage_path);
   }
 
-  await updateCameraHealth(row.camera_id);
-  await updateBatchSummary(row.ingest_batch_id);
 
   return {
     action: finalStatus,
@@ -346,10 +318,14 @@ async function main() {
   });
 
   let idlePollSeconds = POLL_SECONDS;
+  let nextRecovery = 0;
 
   while (true) {
     try {
-      await expireOldPreparedRows();
+      if (Date.now() >= nextRecovery) {
+        await recoverPreparedRows();
+        nextRecovery = Date.now() + 60_000;
+      }
 
       const rows = await claimBatch();
 
@@ -361,11 +337,13 @@ async function main() {
 
       idlePollSeconds = POLL_SECONDS;
 
+      const successfulCameras = new Set();
       for (const row of rows) {
         const t0 = Date.now();
 
         try {
-          const result = await processRow(row);
+          const result = await withRetry(() => processRow(row));
+          successfulCameras.add(row.camera_id);
 
           console.log(
             `[${WORKER_ID}] finalized upload=${row.id} batch=${row.ingest_batch_id} camera=${row.camera_id} action=${result.action} asset=${result.assetId} bytes=${result.bytes} sha=${result.fileHash.slice(
@@ -381,7 +359,8 @@ async function main() {
           );
 
           try {
-            await markRowFailed(row, msg);
+            await withRetry(() => markRowFailed(row, msg));
+            if (isTransientError(msg)) await sleep(5000);
           } catch (inner) {
             console.error(
               `[${WORKER_ID}] failed to mark upload=${row.id} failed: ${safeMessage(
@@ -391,6 +370,8 @@ async function main() {
           }
         }
       }
+      for (const cameraId of successfulCameras) await updateCameraHealth(cameraId);
+      for (const batchId of new Set(rows.map(row => row.ingest_batch_id))) await updateBatchSummary(batchId);
     } catch (error) {
       console.error(`[${WORKER_ID}] loop error`, safeMessage(error));
       await sleep(idlePollSeconds * 1000);

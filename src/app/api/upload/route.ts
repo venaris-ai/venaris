@@ -2,6 +2,7 @@
 export const runtime = "nodejs";
 
 import { NextRequest, NextResponse } from "next/server";
+import { randomUUID } from "node:crypto";
 import {
   MANUAL_IMPORT_MAX_BYTES,
   MANUAL_IMPORT_MAX_FILES,
@@ -161,19 +162,26 @@ export async function POST(req: NextRequest) {
       max_import_bytes: MANUAL_IMPORT_MAX_BYTES,
     };
 
-    const result = await ingestFiles({
-      supabase,
-      cameraId,
-      files,
-      metadata,
-      capturedAtOverride,
-    });
-
-    return NextResponse.json({
-      ...result,
-      file_count: files.length,
-      channel,
-    });
+    const requestId = randomUUID();
+    const leaseArgs = { p_org: activeOrganization.id, p_request: requestId };
+    const { data: acquired, error: leaseError } = await supabase.rpc(
+      "claim_legacy_manual_import", { ...leaseArgs, p_release: false }
+    );
+    if (leaseError) throw new Error(leaseError.message);
+    if (!acquired) {
+      return NextResponse.json({ error: "MANUAL_IMPORT_BUSY" }, { status: 409, headers: { "Retry-After": "10" } });
+    }
+    try {
+      const result = await ingestFiles({ supabase, cameraId, files, metadata, capturedAtOverride });
+      return NextResponse.json({ ...result, file_count: files.length, channel });
+    } finally {
+      try {
+        const { error } = await supabase.rpc("claim_legacy_manual_import", { ...leaseArgs, p_release: true });
+        if (error) console.error("legacy manual import lease release failed", error.message);
+      } catch (error) {
+        console.error("legacy manual import lease release failed", error);
+      }
+    }
   } catch (error: unknown) {
     const message = getErrorMessage(error);
 

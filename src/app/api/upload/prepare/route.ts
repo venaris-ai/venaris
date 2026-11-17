@@ -14,9 +14,10 @@ import {
 import { assertNotDemoWrite, requireOrganizationRole } from "@/lib/auth";
 import { getLanguageFromRequest, type AppLanguage } from "@/lib/i18n";
 import { supabaseServer } from "@/lib/supabaseServer";
+import { MANUAL_IMPORT_CHUNK_SIZE } from "@/lib/manualImportFlow";
 
 const BUCKET = "camera-assets";
-const SIGNED_UPLOAD_TTL_HOURS = 2;
+const CHUNK_SIZE = MANUAL_IMPORT_CHUNK_SIZE;
 
 type PrepareFileInput = {
   clientId?: unknown;
@@ -80,7 +81,7 @@ function normalizeContentType(name: string, type: unknown) {
 
 function parsePositiveSize(value: unknown) {
   const n = Number(value);
-  return Number.isFinite(n) && n > 0 ? Math.floor(n) : null;
+  return Number.isSafeInteger(n) && n > 0 ? n : null;
 }
 
 function getSignedUploadDiagnostics(data: unknown) {
@@ -119,6 +120,29 @@ function extractSignedUploadToken(data: unknown) {
   return typeof d?.token === "string" && d.token.length > 0 ? d.token : null;
 }
 
+export async function PATCH(req: NextRequest) {
+  try {
+    const ctx = await requireOrganizationRole(["owner", "admin", "member"]);
+    assertNotDemoWrite(ctx);
+    const org = ctx.activeMembership.organizations;
+    const body = await req.json().catch(() => null);
+    const requestId = String(body?.requestId ?? "");
+    if (!org || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(requestId)) {
+      return NextResponse.json({ error: "Invalid import request" }, { status: 400 });
+    }
+    const { data, error } = await supabaseServer().rpc("renew_manual_import_lease", {
+      p_org: org.id, p_request: requestId,
+    });
+    if (error) throw new Error(error.message);
+    if (data?.state === "ok") return NextResponse.json({ ok: true });
+    if (data?.state === "busy") return NextResponse.json({ error: "MANUAL_IMPORT_BUSY" }, { status: 409 });
+    return NextResponse.json({ error: "MANUAL_IMPORT_EXPIRED" }, { status: 409 });
+  } catch (error) {
+    const message = getErrorMessage(error);
+    return NextResponse.json({ error: message }, { status: message === "Demo mode is read-only" ? 403 : 500 });
+  }
+}
+
 export async function POST(req: NextRequest) {
   const language = getLanguageFromRequest(req);
   const text = t(language);
@@ -139,6 +163,11 @@ export async function POST(req: NextRequest) {
 
     const body = await req.json().catch(() => null);
 
+    const requestId = String(body?.requestId ?? "").trim();
+    const offset = Number(body?.offset ?? 0);
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(requestId) || !Number.isSafeInteger(offset) || offset < 0) {
+      return NextResponse.json({ error: "Invalid import request" }, { status: 400 });
+    }
     const cameraId = String(body?.cameraId ?? "").trim();
     if (!cameraId) {
       return NextResponse.json({ error: text.cameraIdRequired }, { status: 400 });
@@ -148,7 +177,7 @@ export async function POST(req: NextRequest) {
       ? (body.files as PrepareFileInput[])
       : [];
 
-    if (inputFiles.length === 0) {
+    if (inputFiles.length === 0 || offset >= inputFiles.length) {
       return NextResponse.json({ error: text.filesRequired }, { status: 400 });
     }
 
@@ -172,7 +201,7 @@ export async function POST(req: NextRequest) {
       };
     });
 
-    if (files.some((file) => !file.name || !file.size)) {
+    if (files.some((file) => !file.name || !file.size) || new Set(files.map(f => f.clientId)).size !== files.length) {
       return NextResponse.json({ error: text.filesRequired }, { status: 400 });
     }
 
@@ -216,131 +245,64 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: text.notAllowed }, { status: 403 });
     }
 
-    const { data: batch, error: batchError } = await supabase
-      .from("ingest_batches")
-      .insert({
-        camera_id: cameraId,
-        source: "manual",
-        file_count: files.length,
-        status: "processing",
-        meta: {
-          source: "manual",
-          channel: "import",
-          adapter: "signed_standard",
-          file_count: files.length,
-          total_bytes: totalBytes,
-          max_import_bytes: MANUAL_IMPORT_MAX_BYTES,
-        },
-      })
-      .select("id")
-      .single();
-
-    if (batchError || !batch?.id) {
-      throw new Error(batchError?.message ?? "failed to create ingest batch");
-    }
-
-    const rows = files.map((file, index) => {
-      const ext = getManualImportFileExtension(file.name) || ".jpg";
-      const objectId = crypto.randomUUID();
-
-      return {
-        organization_id: activeOrganization.id,
-        camera_id: cameraId,
-        ingest_batch_id: batch.id,
-        storage_bucket: BUCKET,
-        storage_path: `${cameraId}/manual-import/${batch.id}/${String(
-          index + 1
-        ).padStart(4, "0")}-${objectId}${ext}`,
-        original_filename: file.name,
-        content_type: file.type,
-        expected_size_bytes: file.size,
-        status: "prepared",
-        expires_at: new Date(
-          Date.now() + SIGNED_UPLOAD_TTL_HOURS * 60 * 60 * 1000
-        ).toISOString(),
-      };
-    });
-
-    const { data: insertedRows, error: insertError } = await supabase
-      .from("manual_import_files")
-      .insert(rows)
-      .select(
-        "id, storage_path, original_filename, content_type, expected_size_bytes"
-      );
-
-    if (insertError || !insertedRows || insertedRows.length !== rows.length) {
-      throw new Error(insertError?.message ?? "failed to create import rows");
-    }
-
-    const preparedFiles = [];
-
-    try {
-      for (let i = 0; i < insertedRows.length; i++) {
-        const row = insertedRows[i];
-        const original = files[i];
-
-        const { data: signed, error: signedError } = await supabase.storage
-          .from(BUCKET)
-          .createSignedUploadUrl(row.storage_path, { upsert: false });
-
-        const token = extractSignedUploadToken(signed);
-
-        if (signedError || !token) {
-          const diagnostics = getSignedUploadDiagnostics(signed);
-
-          console.error("SIGNED_UPLOAD_TOKEN_DIAGNOSTICS", {
-            uploadId: row.id,
-            storagePath: row.storage_path,
-            diagnostics,
-            signedError: signedError?.message ?? null,
-          });
-
-          throw new Error(
-            signedError?.message ??
-              `${text.signedUploadUrlFailed}: ${row.id}; token diagnostics=${JSON.stringify(
-                diagnostics
-              )}`
-          );
-        }
-
-        preparedFiles.push({
-          clientId: original.clientId,
-          uploadId: row.id,
-          status: "upload_required",
-          uploadStrategy: "signed_standard",
-          bucket: BUCKET,
-          storagePath: row.storage_path,
-          token,
-          contentType: row.content_type,
-          expectedSizeBytes: row.expected_size_bytes,
-        });
+    // The full manifest is bound to one durable request; signing is limited
+    // to a small chunk so no request performs hundreds of storage calls.
+    const manifest = files.map((file) => ({
+      ...file,
+      ext: getManualImportFileExtension(file.name),
+    }));
+    const hash = crypto.createHash("sha256")
+      .update(JSON.stringify({ cameraId, manifest })).digest("hex");
+    const { data: session, error: sessionError } = await supabase.rpc(
+      "prepare_manual_import_chunk", {
+        p_org: activeOrganization.id, p_camera: cameraId,
+        p_request: requestId, p_hash: hash, p_files: manifest,
+        p_offset: offset, p_limit: CHUNK_SIZE,
       }
-    } catch (error) {
-      await supabase
-        .from("manual_import_files")
-        .update({
-          status: "failed",
-          error_summary: getErrorMessage(error),
-        })
-        .eq("ingest_batch_id", batch.id);
-
-      await supabase
-        .from("ingest_batches")
-        .update({
-          status: "failed",
-          error_summary: getErrorMessage(error),
-        })
-        .eq("id", batch.id);
-
-      throw error;
+    );
+    if (sessionError) throw new Error(sessionError.message);
+    if (session?.state !== "ok") {
+      const busy = session?.state === "busy";
+      const expired = session?.state === "expired";
+      return NextResponse.json({
+        error: busy ? "MANUAL_IMPORT_BUSY" : expired ? "MANUAL_IMPORT_EXPIRED" : "MANUAL_IMPORT_CONFLICT",
+      }, { status: 409, ...(busy ? { headers: { "Retry-After": "10" } } : {}) });
     }
-
+    const preparedFiles = [];
+    for (const row of session.rows as Array<{
+      id: string; index: number; status: string; uploaded_at: string | null;
+      storage_path: string; content_type: string; expected_size_bytes: number;
+    }>) {
+      const original = files[row.index];
+      if (!original) throw new Error("invalid import row index");
+      if (row.status !== "prepared") {
+        if (!row.uploaded_at) {
+          return NextResponse.json({ error: "MANUAL_IMPORT_EXPIRED" }, { status: 409 });
+        }
+        preparedFiles.push({ clientId: original.clientId, uploadId: row.id, status: "already_uploaded" });
+        continue;
+      }
+      const { data: signed, error: signedError } = await supabase.storage
+        .from(BUCKET).createSignedUploadUrl(row.storage_path, { upsert: false });
+      const token = extractSignedUploadToken(signed);
+      if (signedError || !token) {
+        // Do not fail the manifest: the next request uses the same batch and paths.
+        const diagnostics = getSignedUploadDiagnostics(signed);
+        console.error("SIGNED_UPLOAD_TOKEN_DIAGNOSTICS", {
+          uploadId: row.id, diagnostics, signedError: signedError?.message ?? null,
+        });
+        throw new Error(signedError?.message ?? text.signedUploadUrlFailed);
+      }
+      preparedFiles.push({
+        clientId: original.clientId, uploadId: row.id, status: "upload_required",
+        uploadStrategy: "signed_standard", bucket: BUCKET,
+        storagePath: row.storage_path, token,
+        contentType: row.content_type, expectedSizeBytes: row.expected_size_bytes,
+      });
+    }
     return NextResponse.json({
-      ok: true,
-      batchId: batch.id,
-      bucket: BUCKET,
-      uploadStrategy: "signed_standard",
-      maxBytes: MANUAL_IMPORT_MAX_BYTES,
+      ok: true, batchId: session.batchId, bucket: BUCKET,
+      uploadStrategy: "signed_standard", maxBytes: MANUAL_IMPORT_MAX_BYTES,
       files: preparedFiles,
     });
   } catch (error: unknown) {
@@ -363,3 +325,4 @@ export async function POST(req: NextRequest) {
     );
   }
 }
+
