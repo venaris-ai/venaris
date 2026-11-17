@@ -84,11 +84,9 @@ function t(language: AppLanguage) {
       running: "Import running…",
       preparing: "Preparing upload…",
       uploading: "Uploading…",
-      finalizing: "Finalizing import…",
       interruptedUploadTitle: "Upload temporarily interrupted",
       interruptedUploadText:
         "Please restart with the same selection to resume this import. Already uploaded images will not be uploaded again.",
-      retrying: "Server busy – retrying automatically…",
       busyImport: "Another import is still uploading in this organization. Wait until it is uploaded, then retry this selection.",
       expiredImport: "This upload session has expired. Start again; already imported images are deduplicated.",
       tooManyFiles: `Select no more than ${MANUAL_IMPORT_MAX_FILES} images per import.`,
@@ -135,11 +133,9 @@ function t(language: AppLanguage) {
     running: "Import läuft…",
     preparing: "Upload wird vorbereitet…",
     uploading: "Upload läuft…",
-    finalizing: "Import wird abgeschlossen…",
     interruptedUploadTitle: "Upload kurzzeitig unterbrochen",
     interruptedUploadText:
       "Bitte starte den Import mit derselben Auswahl erneut. Bereits hochgeladene Bilder werden nicht erneut übertragen.",
-    retrying: "Server ausgelastet – erneuter Versuch automatisch…",
     busyImport: "Ein anderer Import dieser Organisation läuft noch. Bitte warte auf dessen Upload-Abschluss und versuche es erneut.",
     expiredImport: "Die Upload-Sitzung ist abgelaufen. Bitte starte erneut; bereits importierte Bilder werden nicht doppelt gespeichert.",
     tooManyFiles: `Maximal ${MANUAL_IMPORT_MAX_FILES} Bilder pro Import auswählen.`,
@@ -286,7 +282,7 @@ export default function CamerasImportPageClient({
   const [msg, setMsg] = useState("");
   const [msgTone, setMsgTone] = useState<MessageTone>("info");
   const [busy, setBusy] = useState(false);
-  const [busyLabel, setBusyLabel] = useState("");
+  const [uploadStarted, setUploadStarted] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [dragOver, setDragOver] = useState(false);
 
@@ -451,9 +447,8 @@ export default function CamerasImportPageClient({
 
     busyRef.current = true;
     setBusy(true);
-    setBusyLabel(text.preparing);
+    setUploadStarted(false);
     let storageKey = "";
-    const retry = () => setBusyLabel(text.retrying);
 
     try {
       const fingerprint = await getImportFingerprint(cameraId, files);
@@ -491,9 +486,10 @@ export default function CamerasImportPageClient({
           await uploadFileToSignedUrl({ file: files[index], prepared });
         },
         complete: completeUpload,
-        phase: phase => setBusyLabel(text[phase]),
+        // Subsequent chunks and automatic retries are internal details.
+        phase: phase => { if (phase === "uploading") setUploadStarted(true); },
         progress: uploaded => setUploadProgress(Math.min(99, Math.round(uploaded / files.length * 100))),
-        retry: operation => withTransientRetry(operation, retry),
+        retry: operation => withTransientRetry(operation),
         mappingError: text.preparedFileMissing,
       });
 
@@ -522,7 +518,7 @@ export default function CamerasImportPageClient({
     } finally {
       busyRef.current = false;
       setBusy(false);
-      setBusyLabel("");
+      setUploadStarted(false);
       setDragOver(false);
     }
   }
@@ -701,13 +697,12 @@ export default function CamerasImportPageClient({
             {busy ? (
               <div className="space-y-2">
                 <div className="text-sm text-white/72">
-                  {busyLabel || text.running}
-                  {uploadProgress > 0 ? ` · ${uploadProgress}%` : ""}
+                  {uploadStarted ? `${text.uploading} · ${uploadProgress}%` : text.preparing}
                 </div>
                 <div className="h-1.5 overflow-hidden rounded-full bg-white/10">
                   <div
                     className="h-full rounded-full bg-[#c9952e] transition-all"
-                    style={{ width: `${Math.max(uploadProgress, 8)}%` }}
+                    style={{ width: `${uploadStarted ? uploadProgress : 8}%` }}
                   />
                 </div>
               </div>
